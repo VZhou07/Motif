@@ -23,8 +23,19 @@ export function observeGestures(models: readonly GestureModel[], frame: FeatureF
   const active = projections.filter(({ model, distance }) => distance >= model.activationThreshold)
   if (active.length !== 1) return { kind: 'uncertain' }
   const winner = active[0]!
-  if (projections.some(({ model, distance }) => model.id !== winner.model.id && distance > model.releaseThreshold)) return { kind: 'uncertain' }
+  // Release means ready to rearm, not a second recognized action. Incidental
+  // movement below its own activation must not veto the single active gesture.
   return { kind: 'active', gestureId: winner.model.id }
+}
+
+/** Keep existing arming through positive onset bands; this never arms or emits. */
+function positiveOnset(models: readonly GestureModel[], frame: FeatureFrame): boolean {
+  const projections = models.map((model) => ({ model, distance: model.direction * (frame.values[model.feature]! - model.baselineCenter) }))
+  const rising = projections.filter(({ model, distance }) => distance > model.releaseThreshold && distance < model.activationThreshold)
+  return rising.length > 0 && projections.every(({ model, distance }) =>
+    Math.abs(distance) <= model.releaseThreshold
+    || (distance > model.releaseThreshold && distance < model.activationThreshold)
+    || (distance < -model.releaseThreshold && rising.some((other) => other.model.feature === model.feature && other.model.direction !== model.direction)))
 }
 
 /** The one model in its transition band (above release, nothing at activation), if exactly one is. */
@@ -86,7 +97,7 @@ export class GestureRuntime {
     // Smoothing makes genuine motion traverse this band. It cannot start a dwell or arm
     // control, but it must not erase an already established neutral arming state.
     const band = observation.kind === 'uncertain' ? transitionBandModel(this.models, frame) : undefined
-    if (observation.kind === 'uncertain' && this.phase === 'armed' && band) {
+    if (observation.kind === 'uncertain' && this.phase === 'armed' && positiveOnset(this.models, frame)) {
       this.neutralSince = undefined
       return this.snapshot
     }

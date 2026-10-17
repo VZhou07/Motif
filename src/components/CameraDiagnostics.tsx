@@ -16,7 +16,8 @@ function format(value: number | null | undefined, feature?: FeatureId | null): s
 /** Select the actual expected model, including old-movement cross-checks and saved-profile rechecks. */
 function currentModel(snapshot: SessionSnapshot): GestureModel | null {
   const failedAttempt = snapshot.failure?.kind === 'verification' ? snapshot.cycles.at(-1)?.heldOut.at(-1) : undefined;
-  const id = snapshot.capture?.modelId ?? failedAttempt?.expectedId;
+  const previewId = snapshot.capture?.prompt === 'Rest' ? snapshot.capture.nextModelId : null;
+  const id = previewId ?? snapshot.capture?.modelId ?? failedAttempt?.expectedId;
   const models = [...snapshot.setupModels, ...snapshot.approvedModels,
     ...(snapshot.candidate ? [snapshot.candidate] : []), ...(snapshot.diagnosticModel ? [snapshot.diagnosticModel] : [])];
   if (id) return models.find((model) => model.id === id) ?? null;
@@ -39,10 +40,13 @@ function trackingBlocker(snapshot: SessionSnapshot): string | null {
 export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
   const capture = snapshot.capture;
   const model = currentModel(snapshot);
+  const previewModel = capture?.prompt === 'Rest' && capture.nextModelId === model?.id ? model : null;
+  const preparing = capture?.prompt === 'Rest' && !!capture.nextMovement
+    && (capture.kind === 'training' || !!previewModel);
   const failedTraining = snapshot.failure?.kind === 'training';
   const report = snapshot.calibrationReport;
-  const feature = capture?.feature ?? (failedTraining ? report?.feature : null) ?? model?.feature ?? snapshot.choice?.feature ?? null;
-  const direction = capture?.direction ?? (failedTraining ? report?.direction : null) ?? model?.direction ?? snapshot.choice?.direction ?? 1;
+  const feature = previewModel?.feature ?? capture?.feature ?? (failedTraining ? report?.feature : null) ?? model?.feature ?? snapshot.choice?.feature ?? null;
+  const direction = previewModel?.direction ?? capture?.direction ?? (failedTraining ? report?.direction : null) ?? model?.direction ?? snapshot.choice?.direction ?? 1;
   const definition = FEATURE_DEFINITIONS.find((item) => item.id === feature);
   const statistics = feature ? snapshot.baseline?.statistics[feature] : null;
   const center = model?.baselineCenter ?? (failedTraining ? report?.baselineCenter : undefined) ?? statistics?.center;
@@ -59,25 +63,21 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
   if (!explanation && feature && (typeof value !== 'number' || !Number.isFinite(value))) explanation = 'The selected signal is unavailable. This input does not count.';
   if (!explanation && !feature) explanation = snapshot.stage === 'baseline' ? 'Recording your resting variation. Keep a comfortable, relaxed position.' : 'Choose a movement after the rest check to see its signal here.';
   if (!explanation && snapshot.failure) explanation = 'Setup is stopped. The recorded reason is shown below.';
-  const movementName = capture?.movement ?? model?.label ?? snapshot.choice?.label ?? definition?.label ?? 'the movement';
-  if (!explanation && !model && capture?.prompt === 'Rest' && distance !== null && distance > 0.35) {
-    explanation = `This already looks like Action. Stay relaxed through Rest, then make “${movementName}” only during Action.`;
-  }
-  if (!explanation && !model && capture?.prompt === 'Action' && distance !== null && distance < 0.12) {
-    explanation = `This still looks like rest. Make and hold “${movementName}” until Rest.`;
-  }
+  const movementName = (preparing ? capture.nextMovement : null) ?? capture?.movement ?? model?.label ?? snapshot.choice?.label ?? definition?.label ?? 'the movement';
   if (!explanation && !model) explanation = 'Recording only. Activation and release thresholds are not learned yet.';
   if (!explanation && observation?.kind === 'uncertain') {
-    const anotherMovement = frame && observedModels.some((other) => other.id !== model?.id
-      && other.direction * (frame.values[other.feature]! - other.baselineCenter) > other.releaseThreshold);
-    explanation = model && distance !== null && distance > 0 && distance < model.activationThreshold && !anotherMovement
-      ? 'Below activation. The chosen signal is between rest and action thresholds. No action is confirmed.'
-      : 'The signals are between thresholds, moving in the opposite direction, or conflicting. No action is confirmed.';
+    const active = frame ? observedModels.filter((other) =>
+      other.direction * (frame.values[other.feature]! - other.baselineCenter) >= other.activationThreshold) : [];
+    explanation = active.length >= 2
+      ? `Conflicting movements: ${active.map((other) => `“${other.label}”`).join(' and ')} reached their action thresholds together. No action is confirmed.`
+      : model && distance !== null && distance > 0 && distance < model.activationThreshold
+        ? 'Below activation. The chosen signal is between rest and action thresholds. No action is confirmed.'
+        : 'The signals are between thresholds or moving in the opposite direction. No action is confirmed.';
   }
   if (!explanation && observation?.kind === 'invalid') explanation = 'A signal needed by the recognizer is invalid. No action is confirmed.';
   if (!explanation && model && distance !== null) {
     explanation = Math.abs(distance) <= model.releaseThreshold ? 'Inside the learned rest range. Fresh rest is needed before each action.'
-      : distance < model.activationThreshold ? 'Below activation. The chosen signal has not reached its learned action threshold.'
+      : distance < model.activationThreshold ? 'Below activation. The chosen signal has not reached its learned action threshold. No action is confirmed for this movement.'
         : `Above activation. A steady ${model.activationMs} ms hold is required; this reading alone does not confirm an action.`;
   }
   const failedAttempt = snapshot.failure?.kind === 'verification' ? snapshot.cycles.at(-1)?.heldOut.at(-1) : null;
@@ -92,6 +92,7 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
         {capture && <span aria-hidden="true">{Math.max(0, Math.ceil(capture.remainingMs / 1_000))} s · {capture.index}/{capture.total}</span>}
       </div>
       <p className="diagnostics-tracking">Tracking: {snapshot.tracking}{interval ? ` · ${Math.round(interval)} ms · ${(1_000 / interval).toFixed(1)} fps` : ' · frame rate unavailable'}</p>
+      {preparing && <p className="diagnostics-feature">Next Action: <strong>{capture.nextMovement}</strong>. Stay relaxed until Action.</p>}
       {snapshot.failure && <div className="diagnostics-failure">
         <strong>Why this attempt stopped</strong>
         <ul>{snapshot.failure.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
@@ -108,7 +109,7 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
         {negative && <p>Everyday check: {negative.eventCount} activation events in {(negative.validDurationMs / 1_000).toFixed(1)} armed seconds.</p>}
       </div>}
       {feature && <>
-        <p className="diagnostics-feature"><strong>{capture?.movement ?? model?.label ?? snapshot.choice?.label ?? definition?.label}</strong> · {direction === 1 ? 'increase' : 'decrease'}<span>{definition?.label}</span></p>
+        <p className="diagnostics-feature"><strong>{movementName}</strong> · {direction === 1 ? 'increase' : 'decrease'}<span>{definition?.label}</span></p>
         <dl className="diagnostics-values">
           <div><dt>Live, smoothed</dt><dd>{format(value, feature)}</dd></div>
           <div><dt>Resting baseline</dt><dd>{format(center, feature)}</dd></div>

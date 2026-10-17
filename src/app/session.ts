@@ -9,7 +9,7 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
+import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, VERIFICATION_POLICY_VERSION, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
   type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
@@ -376,7 +376,7 @@ export class MotifSession {
     cycle.heldOut.push({ attempt: cycle.heldOut.length + 1, passed: result.passed, eventCount: result.eventCount,
       validDurationMs: result.validDurationMs, reasons: result.reasons, expected: this.labelOf(expectedId), expectedId, kind });
     if (!result.passed) {
-      this.fail('verification', kind === 'cross-check' ? `The new movement interfered with “${this.labelOf(expectedId)}”`
+      this.fail('verification', kind === 'cross-check' ? `“${this.labelOf(expectedId)}” did not pass its combined check`
         : kind === 'recheck' ? `“${this.labelOf(expectedId)}” did not pass its re-check` : 'A check attempt did not pass', result.reasons);
       return;
     }
@@ -424,8 +424,13 @@ export class MotifSession {
   private cue(prompt: CapturePrompt): void {
     if (prompt === this.lastPrompt) return;
     this.lastPrompt = prompt;
-    this.announce(prompt);
-    if (this.spokenPrompts) this.speech.speak(prompt);
+    const capture = prompt === 'Rest' ? this.captureStatus() : null;
+    // Rest always states the target, including after a dropped preparation.
+    // A previously announced next gesture must not survive an interrupted retry.
+    const instruction = capture?.nextMovement
+      ? `Rest. Next Action: ${capture.nextMovement}.` : prompt;
+    this.announce(instruction);
+    if (this.spokenPrompts) this.speech.speak(instruction);
     if (!this.hidden && this.camera === 'running' && (prompt === 'Rest' || prompt === 'Action')) this.cues?.play(prompt === 'Rest' ? 'rest' : 'action');
   }
   // ── Stages and restricted setup scanners ─────────────────────────────────
@@ -984,7 +989,7 @@ export class MotifSession {
       const at = this.checkedAt.get(modelKey(model));
       if (at !== undefined) movementAt[model.id] = at;
     }
-    return { ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
+    return { policyVersion: VERIFICATION_POLICY_VERSION, ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
   }
 
   /** R17 B1: after a failed restore, never skip that profile's checks again until fresh ones pass. */
@@ -1115,7 +1120,7 @@ export class MotifSession {
     this.choice = null;
     const models = profile.models.map((model) => ({ ...model }));
     // R17: Continue reuses only times stored with this profile; Re-check and a forgotten profile reuse nothing.
-    const reuse = quick && !this.noReuse.has(profile.name.trim().toLowerCase());
+    const reuse = quick && profile.checks?.policyVersion === VERIFICATION_POLICY_VERSION && !this.noReuse.has(profile.name.trim().toLowerCase());
     this.checkedAt.clear();
     if (reuse) {
       for (const model of models) {
@@ -1422,8 +1427,12 @@ export class MotifSession {
       const expected = training ? this.choice?.label ?? null : this.labelOf(this.verifyPlan[done] ?? '');
       const modelId = training ? null : this.verifyPlan[done] ?? null;
       const selected = training ? this.choice : this.mappingSet().find((model) => model.id === modelId);
+      const trailingRest = status.prompt === 'Rest' && status.elapsedMs >= CAPTURE_TIMING.restMs + CAPTURE_TIMING.moveMs;
+      const nextModelId = training ? null : this.verifyPlan[done + (trailingRest ? 1 : 0)] ?? null;
+      const nextMovement = training ? this.choice?.label ?? null : nextModelId ? this.labelOf(nextModelId) : null;
       return { ...base, movement: expected, feature: selected?.feature ?? null, direction: selected?.direction ?? null,
-        modelId, kind: training ? 'training' : 'verification', index: done + 1,
+        modelId, nextMovement: status.prompt === 'Rest' ? nextMovement : null,
+        nextModelId: status.prompt === 'Rest' ? nextModelId : null, kind: training ? 'training' : 'verification', index: done + 1,
         total: training ? SESSION_LIMITS.trainingTrials : this.verifyPlan.length,
         prompt: status.prompt, phaseProgress: status.phaseProgress, overallProgress: status.overallProgress, validMs: status.elapsedMs,
         remainingMs: status.remainingMs, nextPrompt: !training && done === this.verifyPlan.length - 1 && status.elapsedMs >= CAPTURE_TIMING.restMs + CAPTURE_TIMING.moveMs ? null : status.nextPrompt };
