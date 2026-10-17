@@ -11,7 +11,7 @@ export type Stage =
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
 /** `assisted` is the clearly labeled Space/mouse path; it never produces calibration evidence. */
 export type InputMode = 'gesture' | 'assisted';
-export type CapturePrompt = 'Rest' | 'Move' | 'Return to rest' | 'Everyday activity' | 'Explore freely';
+export type CapturePrompt = 'Rest' | 'Get ready' | 'Move' | 'Return to rest' | 'Everyday activity' | 'Explore freely';
 
 export interface CaptureStatus {
   kind: 'baseline' | 'training' | 'verification' | 'negative' | 'discovery';
@@ -21,6 +21,10 @@ export interface CaptureStatus {
   prompt: CapturePrompt;
   phaseProgress: number;
   overallProgress: number;
+  /** Remaining valid-frame time; the recorder owns the displayed countdown. */
+  remainingMs: number;
+  /** Preview only: the user acts on `prompt`, never this upcoming cue. */
+  nextPrompt: CapturePrompt | null;
   /** Valid recorded milliseconds in the current recording or armed negative span. */
   validMs: number;
   interruptions: number;

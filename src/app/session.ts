@@ -300,11 +300,17 @@ export class MotifSession {
     if (!recorder || !cycle || !this.baseline) return;
     const update = recorder.push(frame);
     if (update.kind === 'interrupted') {
-      this.interrupted(update.reason, this.stage === 'training' ? 'training' : 'verification');
+      this.speech.cancel();
+      this.lastPrompt = null;
+      if (!this.interrupted(update.reason, this.stage === 'training' ? 'training' : 'verification')) this.cue('Get ready');
       return;
     }
-    this.cue(recorder.status().prompt);
-    if (update.kind !== 'complete') return;
+    if (update.kind !== 'complete') {
+      this.cue(recorder.status().prompt);
+      return;
+    }
+    // Completion clears recorder frames. Only cue a fresh attempt after deciding
+    // what actually comes next, so the final check cannot flash/speak Get ready.
     this.processor.reset();
     this.lastPrompt = null;
     if (this.stage === 'training') {
@@ -312,6 +318,7 @@ export class MotifSession {
       this.trials.push(update.value.trial);
       if (this.trials.length < SESSION_LIMITS.trainingTrials) {
         this.announce(`Training attempt ${this.trials.length} recorded.`);
+        this.cue('Get ready');
         return;
       }
       const fitted = fitGesture({ baseline: this.baseline, trials: this.trials, feature: this.choice.feature,
@@ -323,6 +330,7 @@ export class MotifSession {
       this.setStage('verify');
       this.trialRecorder = new TrialRecorder();
       this.announce(`Movement learned. Now ${this.verifyPlan.length} new check attempts; they do not change what was learned.`);
+      this.cue('Get ready');
       return;
     }
     const expectedId = this.verifyPlan[cycle.heldOut.length];
@@ -340,6 +348,7 @@ export class MotifSession {
     const next = this.verifyPlan[cycle.heldOut.length];
     if (next) {
       this.announce(`Check attempt ${cycle.heldOut.length} passed. Next: ${this.labelOf(next)}.`);
+      this.cue('Get ready');
       return;
     }
     this.setStage('negative');
@@ -531,6 +540,7 @@ export class MotifSession {
     this.setStage('training');
     this.trialRecorder = new TrialRecorder();
     this.announce(`Training "${choice.label}": three attempts. Rest, move when prompted and hold, then return to rest.`);
+    this.cue('Get ready');
   }
 
   /** Choosing a proposal never arms it; it opens an explicit confirmation step. */
@@ -925,6 +935,7 @@ export class MotifSession {
     this.setStage('verify');
     this.trialRecorder = new TrialRecorder();
     this.announce(`Rest fits. Now ${this.verifyPlan.length} re-check attempts with your saved movements; nothing is adjusted.`);
+    this.cue('Get ready');
   }
 
   private offerSavedControls(): void {
@@ -1128,10 +1139,12 @@ export class MotifSession {
   private announce(text: string): void { this.announcement = text; }
 
   private captureStatus(): CaptureStatus | null {
-    const base = { interruptions: this.stageInterruptions, notice: this.notice, movement: null as string | null };
+    const base = { interruptions: this.stageInterruptions, notice: this.notice, movement: null as string | null,
+      nextPrompt: null as CapturePrompt | null };
     if (this.stage === 'baseline' && this.baselineRecorder) {
       const progress = this.baselineRecorder.progress;
-      return { ...base, kind: 'baseline', index: 1, total: 1, prompt: 'Rest', phaseProgress: progress, overallProgress: progress, validMs: this.baselineRecorder.elapsedMs };
+      return { ...base, kind: 'baseline', index: 1, total: 1, prompt: 'Rest', phaseProgress: progress, overallProgress: progress,
+        remainingMs: Math.max(0, CAPTURE_TIMING.baselineMs - this.baselineRecorder.elapsedMs), validMs: this.baselineRecorder.elapsedMs };
     }
     if ((this.stage === 'training' || this.stage === 'verify') && this.trialRecorder) {
       const status = this.trialRecorder.status();
@@ -1141,16 +1154,19 @@ export class MotifSession {
       const expected = training ? this.choice?.label ?? null : this.labelOf(this.verifyPlan[done] ?? '');
       return { ...base, movement: expected, kind: training ? 'training' : 'verification', index: done + 1,
         total: training ? SESSION_LIMITS.trainingTrials : this.verifyPlan.length,
-        prompt: status.prompt, phaseProgress: status.phaseProgress, overallProgress: status.overallProgress, validMs: status.elapsedMs };
+        prompt: status.prompt, phaseProgress: status.phaseProgress, overallProgress: status.overallProgress, validMs: status.elapsedMs,
+        remainingMs: status.remainingMs, nextPrompt: status.nextPrompt };
     }
     if (this.stage === 'discover') {
       const progress = Math.min(1, this.discoverValidMs / DISCOVERY.captureMs);
-      return { ...base, kind: 'discovery', index: 1, total: 1, prompt: 'Explore freely', phaseProgress: progress, overallProgress: progress, validMs: this.discoverValidMs };
+      return { ...base, kind: 'discovery', index: 1, total: 1, prompt: 'Explore freely', phaseProgress: progress, overallProgress: progress,
+        remainingMs: Math.max(0, DISCOVERY.captureMs - this.discoverValidMs), validMs: this.discoverValidMs };
     }
     if (this.stage === 'negative' && this.negativeMonitor) {
       const progress = Math.min(1, this.negativeMonitor.armedMs / CAPTURE_TIMING.negativeMs);
       return { ...base, kind: 'negative', index: 1, total: 1, prompt: 'Everyday activity', phaseProgress: progress,
-        overallProgress: progress, validMs: this.negativeMonitor.armedMs, interruptions: this.negativeMonitor.restarts };
+        overallProgress: progress, validMs: this.negativeMonitor.armedMs, interruptions: this.negativeMonitor.restarts,
+        remainingMs: Math.max(0, CAPTURE_TIMING.negativeMs - this.negativeMonitor.armedMs) };
     }
     return null;
   }

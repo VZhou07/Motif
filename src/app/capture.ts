@@ -4,8 +4,8 @@ import { GestureRuntime } from '../engine/recognition';
 import { evaluateNegativeWindow } from '../engine/verification';
 import type { CapturePrompt } from './types';
 
-/** Valid-frame durations from the approved protocol (R5). */
-export const CAPTURE_TIMING = { baselineMs: 10_000, restMs: 2_000, moveMs: 3_000, returnMs: 2_500, negativeMs: 10_000 } as const;
+/** Valid-frame durations; guided trials use the steady ready/move/relax cadence (R11). */
+export const CAPTURE_TIMING = { baselineMs: 10_000, restMs: 3_000, moveMs: 3_000, returnMs: 3_000, negativeMs: 10_000 } as const;
 
 export type RecorderUpdate<T> =
   | { kind: 'progress' }
@@ -43,7 +43,14 @@ export class BaselineRecorder {
   }
 }
 
-export interface TrialStatus { prompt: CapturePrompt; phaseProgress: number; overallProgress: number; elapsedMs: number }
+export interface TrialStatus {
+  prompt: CapturePrompt;
+  phaseProgress: number;
+  overallProgress: number;
+  elapsedMs: number;
+  remainingMs: number;
+  nextPrompt: CapturePrompt | null;
+}
 
 /**
  * Records one uninterrupted rest → move → return-to-rest attempt on valid frame time.
@@ -58,9 +65,12 @@ export class TrialRecorder {
     const { restMs, moveMs, returnMs } = CAPTURE_TIMING;
     const elapsedMs = this.frames.length ? this.frames[this.frames.length - 1]!.timestampMs - this.frames[0]!.timestampMs : 0;
     const overallProgress = Math.min(1, elapsedMs / this.totalMs);
-    if (elapsedMs < restMs) return { prompt: 'Rest', phaseProgress: elapsedMs / restMs, overallProgress, elapsedMs };
-    if (elapsedMs < restMs + moveMs) return { prompt: 'Move', phaseProgress: (elapsedMs - restMs) / moveMs, overallProgress, elapsedMs };
-    return { prompt: 'Return to rest', phaseProgress: Math.min(1, (elapsedMs - restMs - moveMs) / returnMs), overallProgress, elapsedMs };
+    if (elapsedMs < restMs) return { prompt: 'Get ready', phaseProgress: elapsedMs / restMs, overallProgress, elapsedMs,
+      remainingMs: restMs - elapsedMs, nextPrompt: 'Move' };
+    if (elapsedMs < restMs + moveMs) return { prompt: 'Move', phaseProgress: (elapsedMs - restMs) / moveMs, overallProgress, elapsedMs,
+      remainingMs: restMs + moveMs - elapsedMs, nextPrompt: 'Return to rest' };
+    return { prompt: 'Return to rest', phaseProgress: Math.min(1, (elapsedMs - restMs - moveMs) / returnMs), overallProgress, elapsedMs,
+      remainingMs: Math.max(0, this.totalMs - elapsedMs), nextPrompt: null };
   }
 
   push(frame: FeatureFrame): RecorderUpdate<{ trial: TrainingTrial; frames: FeatureFrame[] }> {
