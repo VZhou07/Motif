@@ -78,6 +78,7 @@ const PROMPT_TITLES: Record<CapturePrompt, ReactNode> = {
 export function CaptureView({ snapshot, session }: ViewProps) {
   const capture = snapshot.capture;
   if (!capture) return null;
+  const upcomingMovement = capture.prompt === 'Rest' ? capture.nextMovement : null;
   const seconds = Math.max(0, Math.ceil(capture.remainingMs / 1_000));
   const nextInstruction = capture.nextPrompt === 'Action' ? 'Next: Action. Stay relaxed until the Action cue.'
     : capture.nextPrompt === 'Rest' ? 'Next: Rest. Relax when the Rest cue appears.' : null;
@@ -96,7 +97,9 @@ export function CaptureView({ snapshot, session }: ViewProps) {
   return (
     <>
       <Heading eyebrow={eyebrow} title={PROMPT_TITLES[capture.prompt]} lead={lead} />
-      {capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
+      {upcomingMovement
+        ? <p className="status-notice">Next Action: <strong>{upcomingMovement}</strong>. Stay relaxed until Action.</p>
+        : capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
       <div className={`recording-card ${capture.prompt === 'Action' ? 'recording-move' : ''}`}>
         <div><span className="recording-dot" /><span>{capture.prompt}</span></div>
         <strong className="timer" aria-hidden="true">{seconds}<small>{timerLabel}</small></strong>

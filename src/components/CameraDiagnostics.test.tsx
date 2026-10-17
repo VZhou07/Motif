@@ -127,10 +127,13 @@ describe('live camera diagnostics (R13)', () => {
     expect(panel().textContent).toContain('Open mouth');
   });
 
-  it('warns during Rest when the live signal already looks like Action', () => {
+  it('shows an unlearned signal without guessing an action from a global threshold', () => {
     const snapshot = trialSnapshot();
     render(<CameraDiagnostics snapshot={{ ...snapshot, frame: frameAt(12_000, { browOuterUpLeft: 0.8 }) }} />);
-    expect(panel().textContent).toContain('This already looks like Action');
+    expect(panel().textContent).toContain('Live, smoothed0.800');
+    expect(panel().textContent).toContain('Toward Action0.700');
+    expect(panel().textContent).toContain('Recording only. Activation and release thresholds are not learned yet.');
+    expect(panel().textContent).not.toMatch(/looks like Action|looks like rest/);
   });
 
   it('keeps frozen thresholds from diagnosticModel after candidate is cleared', () => {
