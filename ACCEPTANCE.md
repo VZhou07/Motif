@@ -86,7 +86,7 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | 8.5 | Dim the room lights / turn on a lamp behind the person during use. | No selections without a deliberate hold; recalibrate if the movement stops working. | | | | | |
 | 8.6 | Use for 10 minutes. | Note any fatigue; Pause, Slower and "A movement is tiring" are enough to continue. | | | | | |
 | 8.7 | Turn on the OS "reduce motion" setting; check high-contrast readability at arm's length. | No animations; text readable. | | | | | |
-| 8.8 | DevTools Network during a full session. | No requests leave the device (only the local server). | | | | | |
+| 8.8 | DevTools Network during a full session longer than two minutes, including Stop camera. | No requests leave the device (only the local server); MediaPipe's usage log is never sent. | | | | | |
 | 8.9 | Browser without a local voice. | Message stays on screen with an explanation; nothing is spoken remotely. | | | | | |
 
 ## Evidence map (plan W8 item → automated evidence → manual row)
@@ -96,7 +96,8 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | Demo Person A and B without code changes | `src/app/hardening.test.ts` "two people with different movements save, restore and communicate…" | 8.1 | both |
 | One-gesture fallback | same test (mouth-only mapping); `session.test.ts` "a one-movement mapping ignores the unmapped movement…" | 8.2 | both |
 | Zero gestures | same test (assisted Space); browser check "assisted Space adds the highlighted phrase" | 8.4 | both |
-| Permission errors | browser checks "camera denial is explained", "no camera device", "camera in use elsewhere", "camera API unsupported", "model file blocked", "model runtime blocked" | 8.3 | both |
+| Permission errors | browser checks "camera permission refused", "camera blocked by the browser is explained", "no camera device", "camera in use elsewhere", "camera API unsupported", "model file blocked", "model runtime blocked" | 8.3 | both |
+| Nothing leaves the device | browser checks "usage logging and other outside requests are blocked inside the app", "no requests leave this device", "no Content-Security-Policy refusals were needed"; `src/tracker/offline.test.ts` | 8.8 | both |
 | Tracking loss | `hardening.test.ts` "flickering tracking never acts…"; `session.test.ts` "communication safety" tests | 4.7, 2.4 | both |
 | Noisy lighting | `hardening.test.ts` light/medium jitter, heavy wander rejected, "a lighting shift after calibration is not adapted to…" | 8.5, 7a.3 | both |
 | Reload | browser checks "reload starts clean", "a corrupted saved payload is reported", "a restored profile stays unarmed…" | 7a.2 | both |

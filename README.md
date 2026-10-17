@@ -58,6 +58,7 @@ Keyboard: in assisted mode Space is the switch. Use **Enter** to press a focused
 ## Privacy
 
 - The camera image is processed on this device by the bundled MediaPipe model. No video, image or measurement leaves the device, and nothing is sent to any server (there is no backend).
+- MediaPipe's face-landmarker library has built-in usage logging (performance counters, no images) that would send to Google every minute and when the camera stops. Motif blocks it: the app refuses every request to another site before it reaches the network, and a Content-Security-Policy refuses any outside connection as a second layer. Builds before 2026-10-17 (commit `b070ba2`) did not block it.
 - Nothing is stored unless you choose **Save on this device**. A saved profile holds only movement settings (numbers relative to your face measurements), controls, phrases and scan speed. It never holds video, images, messages or what was spoken. **Delete** and **Delete all saved profiles** remove it.
 - Speech uses only voices the browser marks as local. Without one, the message stays on screen and Motif says so; it never uses a remote voice.
 
