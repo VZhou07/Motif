@@ -178,7 +178,7 @@ describe('1.6 assisted input and helper settings unchanged', () => {
     mount(h);
     expect(screen.getByRole('button', { name: /Use assisted input/ })).toBeTruthy();
     expect(screen.getByText(/Helper settings/)).toBeTruthy();
-    expect(screen.getByRole('textbox', { name: 'Phrase 1' })).toBeTruthy();
+    expect(screen.getByRole('textbox', { name: 'Quick phrase 1' })).toBeTruthy();
   });
 
   it('1.6 Use assisted input still enters assisted mode without starting the camera', () => {

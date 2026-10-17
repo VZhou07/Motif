@@ -41,6 +41,20 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | 4.8 | Recalibrate → Keep current setup; then Recalibrate → full new setup. | Keep returns safely; a new movement replaces the old one only after approval. | | | | | |
 | 4.9 | Speech audibility: speak a message at normal volume. | Clearly audible to a listener 2 m away. | | | | | |
 
+## C1 — Grouped phrases and Favourites
+
+| # | Steps | Expected | Observed | Pass/Fail | Date | Browser | Device |
+|---|---|---|---|---|---|---|---|
+| C1.1 | With one movement and automatic scanning, time how long it takes to add "Please help me" and Speak it. | Faster and less tiring than one long list; note the seconds. | | | | | |
+| C1.2 | With one movement, time reaching Recalibrate (main list → More → Recalibrate). | Reachable with the movement alone; note the seconds. | | | | | |
+| C1.3 | Open a group and do nothing. | After two full passes it goes back to the main list; say whether that feels too fast or too slow. | | | | | |
+| C1.4 | Select Pause from inside a group and inside More; resume with the movement. | Pauses at once; resumes in the same list from its first item, without selecting. | | | | | |
+| C1.5 | Build a message, More → Save message to Favourites → Save. Then Favourites. | The message appears in Favourites; only the select movement can confirm. | | | | | |
+| C1.6 | Undo, then Say again after speaking. | Undo removes only the last phrase; Say again repeats the last spoken message. | | | | | |
+| C1.7 | A helper edits groups during setup and while paused. | Changes show on the board; Resume after a change starts from the main list. | | | | | |
+| C1.8 | With a movement approved, save a favourite; reload; Continue (and separately: Set up again). | Favourites come back both ways (kept with Last setup); DevTools Application shows no message or spoken text stored. Delete removes them. | | | | | |
+| C1.9 | Do the default groups (Quick, Needs) make sense to the person? | Note what they would change. | | | | | |
+
 ## W6 — Two or more movements
 
 | # | Steps | Expected | Observed | Pass/Fail | Date | Browser | Device |
@@ -56,7 +70,7 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 
 | # | Steps | Expected | Observed | Pass/Fail | Date | Browser | Device |
 |---|---|---|---|---|---|---|---|
-| 7a.1 | Save on this device with a name; check DevTools → Application → Local Storage. | Only `motif.profiles` with movement numbers, controls, phrases, scan speed; no images or messages. | | | | | |
+| 7a.1 | Approve a movement (the setup is kept automatically as Last setup; there is no named Save button since main's start-screen change); check DevTools → Application → Local Storage. | Only `motif.profiles` with movement numbers, controls, phrase groups including Favourites, scan speed, summary resting numbers and check times; no images or messages. | | | | | |
 | 7a.2 | Reload; Restore the profile. | Rest check, a re-check of each movement and the everyday check run before "Approve these controls". | | | | | |
 | 7a.3 | Restore after moving the camera or changing lighting a lot. | Either passes the re-checks or fails honestly ("does not fit today's rest"). | | | | | |
 | 7a.4 | Delete one profile; Delete all. | Each asks for confirmation; removed from Local Storage. | | | | | |
@@ -97,7 +111,7 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 |---|---|---|---|
 | Demo Person A and B without code changes | `src/app/hardening.test.ts` "two people with different movements save, restore and communicate…" | 8.1 | both |
 | One-gesture fallback | same test (mouth-only mapping); `session.test.ts` "a one-movement mapping ignores the unmapped movement…" | 8.2 | both |
-| Zero gestures | same test (assisted Space); browser check "assisted Space adds the highlighted phrase" | 8.4 | both |
+| Zero gestures | same test (assisted Space); browser check "assisted Space opens a group and adds its highlighted phrase" | 8.4 | both |
 | Permission errors | browser checks "camera permission refused", "camera blocked by the browser is explained", "no camera device", "camera in use elsewhere", "camera API unsupported", "model file blocked", "model runtime blocked" | 8.3 | both |
 | Nothing leaves the device | browser checks "usage logging and other outside requests are blocked inside the app", "no requests leave this device", "no Content-Security-Policy refusals were needed"; `src/tracker/offline.test.ts` | 8.8 | both |
 | Tracking loss | `hardening.test.ts` "flickering tracking never acts…"; `session.test.ts` "communication safety" tests | 4.7, 2.4 | both |
@@ -108,5 +122,6 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | Keyboard focus | browser checks "keyboard focus is visible at every Tab stop", "Tab order completes without a trap" | 8.4 | both |
 | Contrast and text size | browser checks "contrast AA on every visible text", "text at least 12 px", "buttons at least 44 × 44 px", "scan highlight outline reaches 3:1" | 8.7 | both |
 | Reduced motion | browser check "reduced motion disables transitions" | 8.7 | both |
+| Grouped scanning and Favourites (C1) | `session.levels.test.ts`, `session.composer.test.ts`, `navigation.test.ts`, `vocabulary.test.ts`, `Phrases.test.tsx`; profile versions in `profiles.test.ts`; browser checks "a confirmed favourite appears on the main list and is not written to browser storage" and the More / confirm / Needs / paused-editor audits | C1.1–C1.9 | both |
 | Accessible names | `App.test.tsx` "gives every control on each screen an accessible name…" | 8.4 | automated |
 | Supported environment and limitations | [README.md](README.md) "Requirements" and "Limits" | — | documentation |

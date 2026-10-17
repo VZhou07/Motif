@@ -147,17 +147,39 @@ async function focusWalk(page, label) {
   check(`Tab order completes without a trap: ${label}`, completed);
 }
 
-/** A valid saved profile built with the app's own validator, so it always matches the current schema. */
+/** main UX slice 1: the start screen has one Get started button; other screens keep the camera panel's Start camera. */
+const startCamera = (page) => page.getByRole('button', { name: /Get started|Start camera|Retry camera/ }).first().click();
+
+const highlighted = (page, text) => page.locator('[aria-current="true"]', { hasText: text }).waitFor({ timeout: 30_000 });
+
+/** Assisted Space through the R14 levels: wait for the Quick tile, open it, then add its first phrase ("Yes"). */
+async function addYesBySpace(page) {
+  await highlighted(page, 'Open Quick');
+  await page.keyboard.press('Space');
+  await highlighted(page, 'Yes');
+  const level = await page.locator('.level-heading').textContent();
+  await page.keyboard.press('Space');
+  return level;
+}
+
+/**
+ * A saved profile in the version 1 entry format earlier builds wrote (six flat phrases), so the browser
+ * exercises migration on read (R14). Built with the app's own validator, then turned back into version 1.
+ */
 async function seededProfile() {
   const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
   try {
-    const { buildProfile } = await vite.ssrLoadModule('/src/app/profiles.ts');
+    const { buildProfile, parseProfile } = await vite.ssrLoadModule('/src/app/profiles.ts');
     const { STARTER_PHRASES } = await vite.ssrLoadModule('/src/app/types.ts');
+    const { defaultVocabulary } = await vite.ssrLoadModule('/src/app/vocabulary.ts');
     const model = { id: 'browOuterUpLeft:1:1', label: 'Raise left outer eyebrow', feature: 'browOuterUpLeft', direction: 1,
       baselineCenter: 0.1, activationThreshold: 0.3, releaseThreshold: 0.15, activationMs: 250, releaseMs: 350 };
-    const built = buildProfile({ name: 'Seeded', models: [model], mapping: { assignments: { [model.id]: 'select' }, mode: 'auto' }, phrases: STARTER_PHRASES, scanIntervalMs: 2_000 });
+    const built = buildProfile({ name: 'Last setup', models: [model], mapping: { assignments: { [model.id]: 'select' }, mode: 'auto' }, vocabulary: defaultVocabulary(), scanIntervalMs: 2_000 });
     if (!built.ok) throw new Error(built.reasons.join('; '));
-    return JSON.stringify({ version: 1, profiles: [built.value] });
+    const { vocabulary: _vocabulary, ...rest } = built.value;
+    const v1 = { ...rest, version: 1, phrases: STARTER_PHRASES };
+    if (!parseProfile(v1).ok) throw new Error('seeded version 1 profile does not migrate');
+    return JSON.stringify({ version: 1, profiles: [v1] });
   } finally { await vite.close(); }
 }
 
@@ -176,9 +198,9 @@ try {
   await focusWalk(page, 'welcome');
   await page.getByText('Helper settings: spoken prompts and phrases').click();
   await auditScreen(page, 'helper settings open');
-  await page.getByRole('button', { name: /Start camera/ }).first().click();
+  await startCamera(page);
   await page.getByText('Live · local').waitFor({ timeout: 45_000 });
-  check('local model and fake camera start', true);
+  check('local model and fake camera start (Get started)', true);
   await page.getByRole('button', { name: 'Movement signal dashboard' }).click();
   await page.getByText(/Tracking: missing\./).waitFor({ timeout: 20_000 });
   check('real inference runs and reports no face in the synthetic pattern', true);
@@ -191,10 +213,12 @@ try {
   });
   check('usage logging and other outside requests are blocked inside the app', offline.blocked >= 2 && offline.probe === 'blocked' && offline.csp === 0
     && log.external.length === 0, JSON.stringify(offline));
-  await page.getByRole('button', { name: /Start camera/ }).first().click();
+  await startCamera(page);
   await page.getByText('Live · local').waitFor({ timeout: 45_000 });
   await auditScreen(page, 'camera running, dashboard open');
-  await page.getByRole('button', { name: /Start the rest check/ }).click();
+  // Get started begins the rest check by itself; start it here only if this screen still offers it.
+  const startRest = page.getByRole('button', { name: /Start the rest check/ });
+  if (await startRest.count()) await startRest.first().click();
   await page.waitForTimeout(3_000);
   const progress = await page.getByRole('progressbar', { name: /baseline recording progress/ }).getAttribute('value');
   check('no face produces no rest-check progress (fails closed)', progress === '0', `progress=${progress}`);
@@ -206,9 +230,27 @@ try {
   await page.setViewportSize({ width: 900, height: 900 });
   await auditScreen(page, 'assisted communication, empty message 900 px');
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.keyboard.press('Space');
+  const level = await addYesBySpace(page);
   const message = await page.getByRole('region', { name: 'Message' }).textContent();
-  check('assisted Space adds the highlighted phrase', /Yes/.test(message ?? ''), message ?? '');
+  check('assisted Space opens a group and adds its highlighted phrase', /Quick · 3 phrases/.test(level ?? '') && /Yes/.test(message ?? ''), `${level} / ${message}`);
+  // R14: a helper saves the message to Favourites through More; nothing reaches storage before a profile Save.
+  await page.getByRole('button', { name: 'More options' }).click();
+  await auditScreen(page, 'assisted communication, More options');
+  await page.getByRole('button', { name: 'Save message to Favourites' }).click();
+  await auditScreen(page, 'assisted communication, confirm favourite');
+  await page.getByRole('button', { name: 'Save “Yes” to Favourites' }).click();
+  const favouriteTile = await page.getByRole('button', { name: 'Open Favourites, 1 phrase' }).count();
+  const afterFavourite = await page.evaluate(() => localStorage.length);
+  check('assisted only (no movement setup): a confirmed favourite appears on the main list and is not written to browser storage', favouriteTile === 1 && afterFavourite === 0,
+    `tile=${favouriteTile} localStorage=${afterFavourite}`);
+  await page.getByRole('button', { name: 'Needs', exact: true }).click();
+  await auditScreen(page, 'assisted communication, Needs group');
+  await page.getByRole('button', { name: 'Main list' }).click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.getByText('Edit phrases (helper)').click();
+  await auditScreen(page, 'paused, phrase editor open');
+  await page.getByText('Edit phrases (helper)').click();
+  await page.getByRole('button', { name: 'Resume' }).click();
   await auditScreen(page, 'assisted communication 1280 px');
   await focusWalk(page, 'assisted communication');
   const storage = await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length,
@@ -233,14 +275,14 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => localStorage.setItem('motif.profiles', '{not json'));
   await page.reload();
-  check('a corrupted saved payload is reported as unreadable', await page.getByText(/could not be read. Use Delete all/).isVisible());
+  check('a corrupted saved payload is reported as unreadable', await page.getByText(/The saved setup on this device could not be read/).isVisible());
   await page.evaluate((value) => localStorage.setItem('motif.profiles', value), seeded);
   await page.reload();
-  const restore = page.getByRole('button', { name: 'Restore “Seeded”' });
-  check('a saved profile is listed and needs the camera to restore', await restore.isDisabled());
-  await page.getByRole('button', { name: /Start camera/ }).first().click();
-  await page.getByText('Live · local').waitFor({ timeout: 45_000 });
+  // The seeded Last setup is a version 1 entry; offering Continue means it migrated on read (R18/R19).
+  const restore = page.getByRole('button', { name: 'Continue with your last setup' });
+  check('a saved version 1 Last setup is offered as Continue', await restore.isVisible() && await restore.isEnabled());
   await restore.click();
+  await page.getByText('Live · local').waitFor({ timeout: 45_000 });
   await page.waitForTimeout(2_000);
   check('a restored profile stays unarmed in the rest check without a face', await page.getByText('STEP 1 · YOUR RESTING BASELINE').isVisible()
     && await page.getByRole('button', { name: 'Speak message' }).count() === 0
@@ -252,7 +294,7 @@ try {
   const denied = await launch(['--deny-permission-prompts']);
   const { page: deniedPage } = await openPage(denied);
   await deniedPage.goto(ORIGIN);
-  await deniedPage.getByRole('button', { name: /Start camera/ }).first().click();
+  await startCamera(deniedPage);
   const alert = deniedPage.getByRole('alert').first();
   await alert.waitFor({ timeout: 45_000 });
   const alertText = await alert.textContent();
@@ -276,7 +318,7 @@ try {
     const { page: failing, log: failingLog } = await openPage(failures, { init: scenario.init });
     if (scenario.route) await failing.route(scenario.route, (route) => route.abort());
     await failing.goto(ORIGIN);
-    await failing.getByRole('button', { name: /Start camera/ }).first().click();
+    await startCamera(failing);
     const text = await failing.getByRole('alert').first().textContent({ timeout: 45_000 }).catch(() => '');
     const assisted = await failing.getByRole('button', { name: /assisted input/i }).first().isVisible();
     const pageErrors = failingLog.errors.filter((error) => error.startsWith('pageerror'));
@@ -294,7 +336,7 @@ try {
   await blocked.goto(ORIGIN);
   const heading = await blocked.getByRole('heading', { level: 1 }).textContent();
   await blocked.getByRole('button', { name: /Use assisted input/ }).click();
-  await blocked.keyboard.press('Space');
+  await addYesBySpace(blocked);
   const storageNotice = await blocked.getByText(/Saved profiles/).count();
   check('blocked browser storage: the app loads, shows no saved-profile error, and assisted input works', /Your movement/.test(heading ?? '') && storageNotice === 0
     && /Yes/.test(await blocked.getByRole('region', { name: 'Message' }).textContent() ?? '') && blockedLog.errors.length === 0, blockedLog.errors.slice(0, 2).join(' | '));
@@ -312,7 +354,7 @@ try {
   });
   await silent.goto(ORIGIN);
   await silent.getByRole('button', { name: /Use assisted input/ }).click();
-  await silent.keyboard.press('Space');
+  await addYesBySpace(silent);
   await silent.getByRole('button', { name: 'Speak message' }).click();
   const shown = await silent.getByRole('region', { name: 'Message' }).textContent();
   check('no local voice: message stays on screen, limitation explained, no speech call',
@@ -329,7 +371,7 @@ try {
   const connected = new Promise((resolve) => devPage.on('console', (message) => { if (/\[vite\] connected/.test(message.text())) resolve(true); }));
   await devPage.goto(`http://127.0.0.1:${PORT + 1}`);
   const hot = await Promise.race([connected, new Promise((resolve) => setTimeout(() => resolve(false), 20_000))]);
-  await devPage.getByRole('button', { name: /Start camera/ }).first().click();
+  await startCamera(devPage);
   await devPage.getByText('Live · local').waitFor({ timeout: 60_000 });
   check('dev server: hot reload connects and the model loads under the security policy', hot === true
     && await devPage.evaluate(() => window.cspViolations) === 0 && devLog.external.length === 0,

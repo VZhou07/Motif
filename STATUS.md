@@ -1,11 +1,11 @@
 # Motif build update
 
-**What works now:** the caregiver dashboard is part of the app. Open Motif and choose **Caregiver dashboard** in the top bar, or go to `http://127.0.0.1:5173/#/caregiver`. **Back to Motif** returns to the person's screen. Their unsaved setup is kept, and the camera has to be turned on again. The caregiver page never uses the camera. The 7 failing tests were fixed; they were out of date after the new one-step approve screen. 672 tests, the typecheck and the production build pass.
+**Branch `staging`:** all four open pull requests merged on top of `main`, in this order: #7 `feature/request-relay` (accounts and request foundation), #9 `feature/participant-requests`, #10 `feature/caregiver-dashboard`, #8 `ethan-features` (grouped phrases and Favourites). Local only; nothing is pushed.
 
-**To sign in for real:** put the Supabase project URL and public key in `.env.local` and restart (see `docs/supabase-setup.md`). Without them, the caregiver page says it is not set up yet.
+**What works:** the grouped phrase menu (**Speak · Undo · Favourites · Quick · Needs · Pause · More**), Favourites kept with Last setup, and the caregiver dashboard at `#/caregiver` (needs Supabase settings in `.env.local`; see `docs/supabase-setup.md`).
 
-**What is missing:** the person's screen for pairing and sending a request (Agent 1) has not been built, so a caregiver can create invitations, but nobody can use them in the app yet. The browser companion (Agent 4) has not been built either. The browser smoke-test script still clicks a button that no longer exists and needs updating.
+**Not connected yet:** the person's pairing and request buttons are merged but not wired into the communication screen (steps in `docs/workstreams/participant-requests/integration.md`). The browser companion has not been built.
+
+**Checked (automated):** typecheck PASS; 857 tests PASS; production build PASS. The fake-camera browser check was not run.
 
 **Untested:** the real Supabase project, two real devices, and the camera with a real person (camera covered).
-
-Nothing has been pushed.

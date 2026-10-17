@@ -2,13 +2,18 @@ import { FEATURE_IDS, type Baseline, type GestureModel, type Result } from '../d
 import { isGestureModel } from '../engine/recognition';
 import { validateMapping, type Assignments, type Mapping } from './mapping';
 import { STARTER_PHRASES } from './types';
+import { FAVOURITES_ID, parseVocabulary, type Vocabulary } from './vocabulary';
 
 /**
- * Local profiles (R7). Only approved movement thresholds, controls, phrases, scan speed, the
- * automatic setup's resting summary numbers and the times its checks last passed (R17) are
- * stored; never video, frames, evidence or messages.
+ * Local profiles (R7). Only approved movement thresholds, controls, phrase groups (including
+ * Favourites), scan speed, the automatic setup's resting summary numbers and the times its checks
+ * last passed (R17) are stored; never video, frames, evidence or messages.
+ * The storage wrapper and each entry carry separate versions (R18, numbered R14 on ethan-features):
+ * the wrapper stays 1 so older builds can still open the store, and entries are 2 (phrase groups).
+ * Version 1 entries migrate on read (R19: keeping their optional resting numbers and check times).
  */
-export const PROFILE_VERSION = 1;
+export const CONTAINER_VERSION = 1;
+export const PROFILE_VERSION = 2;
 /** Bump when recognition or verification rules change; never upgrade old evidence. */
 export const VERIFICATION_POLICY_VERSION = 1;
 export const PROFILE_KEY = 'motif.profiles';
@@ -20,7 +25,8 @@ export const FEATURE_SCHEMA = FEATURE_IDS.join(',');
 export const PROFILE_SCAN = { minMs: 1_000, maxMs: 6_000, stepMs: 500 } as const;
 export const NAME_MAX = 40;
 const LABEL_MAX = 60;
-const PHRASE_MAX = 60;
+/** Version 1 entries held exactly six phrases of at most this length. */
+const V1_PHRASE_MAX = 60;
 
 export interface StoredProfile {
   version: typeof PROFILE_VERSION;
@@ -28,7 +34,7 @@ export interface StoredProfile {
   name: string;
   models: GestureModel[];
   mapping: { assignments: Assignments };
-  phrases: string[];
+  vocabulary: Vocabulary;
   scanIntervalMs: number;
   /** Summary numbers of the resting face (never frames), so Continue can skip the rest check. Absent in older profiles. */
   baseline?: Baseline;
@@ -43,8 +49,12 @@ export function modelKey(model: GestureModel): string {
   return JSON.stringify(MODEL_KEYS.map((key) => model[key as keyof GestureModel]));
 }
 
-const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
+const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'vocabulary', 'scanIntervalMs'];
+const V1_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
 export const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
+/** Present only when saved: resting numbers and check times (R17). */
+const OPTIONAL_KEYS = ['baseline', 'checks'];
+const keysOf = (value: Record<string, unknown>, required: readonly string[]) => [...required, ...OPTIONAL_KEYS.filter((key) => Object.hasOwn(value, key))];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -86,13 +96,38 @@ function isChecks(value: unknown, ids: ReadonlySet<string>): value is StoredChec
   return isRecord(movementAt) && Object.entries(movementAt).every(([id, at]) => ids.has(id) && time(at));
 }
 
-/** Strict validation of anything read from storage (R7 revision 2, B3). */
-export function parseProfile(value: unknown): Result<StoredProfile> {
-  if (!isRecord(value)) return { ok: false, reasons: ['A saved profile is not readable.'] };
+/**
+ * A version 1 entry becomes version 2 with its six phrases kept, in order, as one group called "Phrases"
+ * (no guessing at groups). Repeats are dropped because a group cannot hold the same phrase twice.
+ * Optional resting numbers and check times are carried over unchanged and validated as version 2.
+ * Only the parsed copy changes; the stored bytes stay as they are until the entry is saved again.
+ */
+function migrateV1(value: Record<string, unknown>): Result<Record<string, unknown>> {
+  if (!hasExactKeys(value, keysOf(value, V1_KEYS))) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  const { phrases, ...rest } = value;
+  if (!Array.isArray(phrases) || phrases.length !== STARTER_PHRASES.length
+    || !phrases.every((phrase) => typeof phrase === 'string' && phrase.trim().length > 0 && phrase.length <= V1_PHRASE_MAX)) {
+    return { ok: false, reasons: [`A version 1 profile must hold exactly ${STARTER_PHRASES.length} phrases of 1–${V1_PHRASE_MAX} characters.`] };
+  }
+  const kept: string[] = [];
+  for (const phrase of phrases as string[]) if (!kept.some((entry) => sameName(entry, phrase))) kept.push(phrase.trim());
+  return { ok: true, value: { ...rest, version: PROFILE_VERSION, vocabulary: { groups: [
+    { id: FAVOURITES_ID, name: 'Favourites', phrases: [] }, { id: 'g1', name: 'Phrases', phrases: kept }] } } };
+}
+
+/** Strict validation of anything read from storage (R7 revision 2, B3); version 1 entries are migrated first. */
+export function parseProfile(input: unknown): Result<StoredProfile> {
+  if (!isRecord(input)) return { ok: false, reasons: ['A saved profile is not readable.'] };
+  let value = input;
+  if (input.version === 1) {
+    const migrated = migrateV1(input);
+    if (!migrated.ok) return migrated;
+    value = migrated.value;
+  }
   if (value.version !== PROFILE_VERSION) return { ok: false, reasons: ['This profile was made by a different version of Motif.'] };
   const withBaseline = Object.hasOwn(value, 'baseline');
   const withChecks = Object.hasOwn(value, 'checks');
-  if (!hasExactKeys(value, [...PROFILE_KEYS, ...(withBaseline ? ['baseline'] : []), ...(withChecks ? ['checks'] : [])])) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  if (!hasExactKeys(value, keysOf(value, PROFILE_KEYS))) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
   if (value.featureSchema !== FEATURE_SCHEMA) return { ok: false, reasons: ['This profile uses a different set of face measurements.'] };
   const reasons: string[] = [];
   const name = value.name;
@@ -117,11 +152,8 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
     const valid = validateMapping(models as GestureModel[], mapping.assignments as Assignments);
     if (!valid.ok) reasons.push(...valid.reasons);
   }
-  const phrases = value.phrases;
-  if (!Array.isArray(phrases) || phrases.length !== STARTER_PHRASES.length
-    || !phrases.every((phrase) => typeof phrase === 'string' && phrase.trim().length > 0 && phrase.length <= PHRASE_MAX)) {
-    reasons.push(`A profile must hold exactly ${STARTER_PHRASES.length} phrases of 1–${PHRASE_MAX} characters.`);
-  }
+  const vocabulary = parseVocabulary(value.vocabulary);
+  if (!vocabulary.ok) reasons.push(...vocabulary.reasons);
   if (withBaseline && !isBaseline(value.baseline)) reasons.push('The saved resting numbers are not readable.');
   const ids = new Set(Array.isArray(models) ? models.map((model) => (isRecord(model) ? model.id : undefined)).filter((id): id is string => typeof id === 'string') : []);
   if (withChecks && !isChecks(value.checks, ids)) reasons.push('The saved check times are not readable.');
@@ -129,11 +161,11 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
   if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < PROFILE_SCAN.minMs || interval > PROFILE_SCAN.maxMs || interval % PROFILE_SCAN.stepMs !== 0) {
     reasons.push('The saved scan speed is out of range.');
   }
-  if (reasons.length) return { ok: false, reasons };
-  return { ok: true, value: value as unknown as StoredProfile };
+  if (reasons.length || !vocabulary.ok) return { ok: false, reasons };
+  return { ok: true, value: { ...(value as unknown as StoredProfile), vocabulary: vocabulary.value } };
 }
 
-export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; phrases: readonly string[]; scanIntervalMs: number; baseline?: Baseline | null; checks?: StoredChecks | null }
+export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; vocabulary: Vocabulary; scanIntervalMs: number; baseline?: Baseline | null; checks?: StoredChecks | null }
 
 /** Explicit fields only, so nothing extra attached to a live baseline is ever stored. */
 function copyBaseline(baseline: Baseline): Baseline {
@@ -154,7 +186,7 @@ export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
     name: fields.name.trim(),
     models: fields.models.map((model) => Object.fromEntries(MODEL_KEYS.map((key) => [key, model[key as keyof GestureModel]]))),
     mapping: { assignments: { ...fields.mapping.assignments } },
-    phrases: [...fields.phrases],
+    vocabulary: fields.vocabulary,
     scanIntervalMs: fields.scanIntervalMs,
     ...(fields.baseline ? { baseline: copyBaseline(fields.baseline) } : {}),
     ...(fields.checks ? { checks: { ...(fields.checks.policyVersion !== undefined ? { policyVersion: fields.checks.policyVersion } : {}), ...(fields.checks.restAt !== undefined ? { restAt: fields.checks.restAt } : {}), movementAt: { ...fields.checks.movementAt } } } : {}),
@@ -203,7 +235,7 @@ export function createLocalProfileStore(getStorage: () => StorageLike | null | u
     if (raw === null) return { kind: 'ok', entries: [] };
     try {
       const parsed: unknown = JSON.parse(raw);
-      if (!isRecord(parsed) || parsed.version !== PROFILE_VERSION || !Array.isArray(parsed.profiles) || !hasExactKeys(parsed, ['version', 'profiles'])) return { kind: 'unreadable' };
+      if (!isRecord(parsed) || parsed.version !== CONTAINER_VERSION || !Array.isArray(parsed.profiles) || !hasExactKeys(parsed, ['version', 'profiles'])) return { kind: 'unreadable' };
       return { kind: 'ok', entries: parsed.profiles };
     } catch { return { kind: 'unreadable' }; }
   };
@@ -211,7 +243,7 @@ export function createLocalProfileStore(getStorage: () => StorageLike | null | u
   const write = (entries: unknown[]): StoreResult => {
     const store = storage();
     if (!store) return { ok: false, code: 'unavailable', reason: UNAVAILABLE };
-    try { store.setItem(PROFILE_KEY, JSON.stringify({ version: PROFILE_VERSION, profiles: entries })); return { ok: true }; } catch {
+    try { store.setItem(PROFILE_KEY, JSON.stringify({ version: CONTAINER_VERSION, profiles: entries })); return { ok: true }; } catch {
       return { ok: false, code: 'unavailable', reason: UNAVAILABLE };
     }
   };

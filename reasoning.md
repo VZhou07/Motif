@@ -802,3 +802,209 @@ Merge of `main` (a0be7f0: automatic "Last setup", Continue skips the rest check 
 ### R17 review record
 - Reasoning: revision 1 NOT APPROVED (B1 failed restore left reusable times; B2 disclosures) → revision 2 APPROVED.
 - Testing: PASS with one requested test (saveProfile disclosure), added. tsc clean; vitest 31 files/393 PASS; build PASS. Mutations caught: forgetChecks removed, noReuse ignored, `<=` hour, carried restAt replaced, whole-set stamping, checks not loaded, future times, returnToStart without autosave check, approvedBaselineAt not copied, unknown id accepted. Equivalent/untestable: quick flag in the due filter (checkedAt only loaded when reusing), `checkedAt.clear()` in returnToStart.
+
+## R18 — Communication navigation and saved phrases (branch ethan-features; numbered R14 there) (revision 2)
+
+Status: revision 1 drafted 2026-10-17 for checkpoint **C1**; r14_review BLOCKING (B1–B3). Revision 2 below resolves them in place and lists the changes at the end; r14_review re-check APPROVED revision 2 (notes folded in as wording fixes). Implementation waits for the user's build instruction. Scope change approved by the user on 2026-10-17 ("okay sure create a plan to implement it") after the feature list in conversation: grouped scanning, save-as-favourite, add/remove phrases, undo last, say again. Spelling keyboard, prediction, P2 and gesture-driven phrase editing stay excluded. No code until this revision is APPROVED and the user says to build.
+
+### Problem (measured from the code)
+
+- `enterCommunication` (`src/app/session.ts:1007-1018`) builds ONE flat scan list: 6 phrases then 9–10 controls in gesture-auto (15–16 targets). At the default 2 s interval one pass takes 30–32 s; every added phrase adds 2 s to every pass. Recalibrate is last.
+- Phrases are a fixed array of exactly 6 (`STARTER_PHRASES`, `src/app/types.ts:155`; `parseProfile` requires exactly 6, `src/app/profiles.ts:77`). `setPhrase` only overwrites a slot during setup stages (`session.ts:756`). No add/remove.
+- The composer has only Speak and Clear (whole message). No undo, no repeat, no way to keep a useful message.
+- `plan.md` forbids saving message history/composer text but allows "deliberately saved phrase vocabulary". Therefore favourites are an explicit, confirmed copy of the current message into the vocabulary, never an automatic history.
+
+### Vocabulary model (pure, new `src/app/vocabulary.ts`)
+
+```ts
+interface PhraseGroup { id: string; name: string; phrases: string[] }   // id: 'favourites' | 'g1'…; stable within a vocabulary
+interface Vocabulary { groups: PhraseGroup[] }                          // groups[0] is always Favourites
+```
+
+- Limits: at most 6 groups including Favourites; at most 12 phrases per group; group name 1–24 chars; phrase 1–120 chars after trim; no duplicate phrase within a group (case-insensitive, trimmed). Favourites cannot be renamed, deleted or moved.
+- Default vocabulary: Favourites (empty); "Quick" = Yes, No, Thank you; "Needs" = I need water, Please help me, I am uncomfortable. Same six starter phrases as today, just grouped.
+- Pure operations returning `Result<Vocabulary>`: `addPhrase`, `removePhrase`, `editPhrase`, `movePhrase`, `addGroup`, `renameGroup`, `removeGroup` (non-empty group needs an explicit `force`), `addFavourite`. Each validates all limits and never mutates input. Rejections carry plain-language reasons the UI shows as-is.
+
+### Scan levels (pure, new `src/app/navigation.ts`)
+
+`buildLevel(stage, level, vocabulary, controls) → ScanTarget[]`. `ScanTarget.kind` gains `'group'` and `'nav'`.
+
+- **Top (communication):** `speak`, `undo`, one `group:<id>` per group (Favourites first), `pause`, `more`.
+- **Inside a group:** `phrase:<groupId>:<index>` for each phrase, then `back`, then `pause`.
+- **More:** `clear`, `save-favourite`, `say-again`, `slower`/`faster` (when auto scanning or assisted), `practice`, `change-controls`, `tiring` (2+ movements), `add-movement` (below MAX_GESTURES), `recalibrate`, `back`, `pause`. Assisted mode keeps its own `use-gesture`/`setup-gesture` here.
+- **Confirm favourite:** `confirm-favourite`, `cancel-favourite`, `pause` (a communication level, not a stage; see Composer actions).
+- **Practice:** same top/group levels with `finish-practice` in place of `speak`/`undo`, no `more`; `use-previous` stays a top-level decision when allowed. Phrase picks count but are never added or spoken.
+- Pause is in EVERY level so the one-gesture user never needs Back→Pause (plan.md: Pause reachable through scanning). Alternative considered: Pause top-level only — saves one step per group pass but strands Pause up to a full group pass away; rejected for safety.
+- Lists are stable: empty Favourites and Undo/Say again with nothing to act on stay in place and only announce ("No favourites yet…", "Nothing to undo"). Selecting empty Favourites does NOT enter a level; the scan stays at top. Shifting targets would move what the user has learned to time.
+- Rough cost: top level 7 targets (14 s pass) vs 15–16 today; reaching Recalibrate becomes More (7th) + 8–10 inside, comparable to today and no longer taxing every phrase pass.
+
+### Session integration (`session.ts`)
+
+- New private state `level: 'top' | 'more' | { group: string } | { confirm: string }`. Entering communication/practice, stage changes, step fallback (announced) and profile restore reset to `top`. Every level change sets the scan index to 0 explicitly.
+- Level changes use `ScanController.setTargets` (existing; resets index to 0 and cancels any latch), plus `scanTargets` replacement. No new scanner is constructed, so `GestureRuntime` arming state is untouched: one action per hold and neutral rearming still apply exactly as today. Scanning-driven level changes happen only after a commit or on a counted wrap, and a latched scanner cannot wrap, so they never cancel a dwell. The one exception is a helper `openGroup`, which cancels an in-progress gesture latch (no action results) — stated honestly, tested.
+- Selecting `group:<id>` enters it (announce "Needs: 3 phrases"). Selecting a phrase appends it, announces, and returns to **top with the highlight on Speak** (index 0) — the next likely action. Routine choice; alternative "stay in group" is easy to switch later.
+- `back` returns to top. **Auto-return (counted wraps, not time):** a sub-level (group, More, confirm) returns to top after the scanner has wrapped from its last target to index 0 **twice via `tick`** with nothing in between. `move` and `setTargets` never count as a wrap. A latched scanner does not advance (`scanner.ts` tick guard), so this can never fire mid-dwell. The count resets on dwell start (`update.started`), any selection, pause/resume, an actual suspension flip (compare the scanner snapshot before/after; `driveScanner` calls `setSuspended(false)` on every valid frame, which must NOT reset), interval change, `setTargets` and helper `openGroup`. Detection lives in one session helper `afterTick(before, after)` called by BOTH tick call sites (`session.tick` and `driveScanner`), so the assisted driver follows the same rule. Step mode has no auto-return (Previous/Back cover it). Practice auto-returns the same way. Auto-return from the confirm level means Cancel, announced as "Not saved." The same applies to helper `openGroup` from the confirm level and to a step-mode idle fallback while on it.
+- `selectTarget` (helper click) keeps its rule: only ids in the current level are clickable. Separately, the UI shows group tabs at all times; a tab calls new `session.openGroup(id | 'top')`, allowed for conventional input from any level while not paused (helpers are not bound by scanning). Gesture and Space input still act only on the highlighted target.
+- Phrase ids change from `phrase:<i>` to `phrase:<groupId>:<i>`; `phraseFor` resolves by group id and index against the CURRENT vocabulary and returns undefined for stale ids.
+
+### Composer actions
+
+- `undo`: remove the last message entry; announce "Removed “X”." or "Nothing to undo."
+- `say-again`: re-speak `lastSpoken` (memory only, never stored); same speech-unavailable text as Speak.
+- `save-favourite`: if the message is empty announce and stop. Otherwise switch to the communication **level** `{ confirm: text }` (targets `confirm-favourite` "Save “…” to Favourites", `cancel-favourite`, `pause`), built with `setTargets` like every other level. The stage stays `communication`, so routed mapping semantics hold: only the select-mapped movement commits; Next/Previous move; a Pause-mapped movement pauses; unmapped movements are discarded. Step mode, the fail-closed path, assisted Space and helper rules are unchanged. Text longer/duplicate/full is checked BEFORE entering the level so the user is not asked to confirm something that cannot be saved. On confirm, `addFavourite(text)` (re-validated); on any rejection announce the reason and change nothing. Never evict silently. Afterwards return to top. The message itself is left unchanged.
+- Announce honestly. With an approved setup: "Saved to Favourites for this session. Save your profile to keep it." Assisted-only (no approved setup, so no profile Save): "Saved to Favourites until this page is closed." Nothing is written to storage until the existing opt-in profile Save, whose announcement and `SaveProfile` panel state how many favourites are included. Restoring a profile replaces in-memory favourites; if that discards unsaved ones, announce it ("Favourites from this session were replaced by the saved profile's").
+- Clear (in More) has no undo; this is deliberate and documented in ACCEPTANCE.
+
+### Helper editing (conventional input only)
+
+- Setup (`SetupOptions`): replace the six fixed fields with a group editor: add/rename/remove groups, add/edit/remove/move phrases, edit or remove Favourites. All calls go through vocabulary operations; errors show inline.
+- Communication: a collapsed "Edit phrases" panel. It is only enabled while **paused**, so the scanner can never select something being edited. **Resume rule (one rule):** resume keeps the same level and resets the index to 0; if the vocabulary changed while paused, resume rebuilds at top instead. Practice has no editor.
+- Gesture users cannot delete or reorder phrases (excluded: risk of accidental loss, more design work).
+
+### Profiles (`profiles.ts`)
+
+- **Split the two versions.** New `CONTAINER_VERSION = 1` stays at 1 for the `{ version, profiles }` storage wrapper (read/write in `createLocalProfileStore`); `PROFILE_VERSION` becomes 2 for entries only. So existing stores stay readable, Save keeps working, and an older build on the same origin sees v2 entries as rejected-and-untouched instead of locking the whole store. Unknown container versions stay unreadable as today.
+- Entry v2: `phrases` replaced by `vocabulary` with exact-key validation of every group (`id`, `name`, `phrases`) and every limit above; Favourites first with id `favourites`; other ids match `^g[1-9][0-9]*$`, unique, no `:`. New group ids are max+1 so a removed id is never reused within a vocabulary; `phrase:<groupId>:<i>` stays unambiguous.
+- Entry v1 still loads: migrate on read to `{ version: 2, …, vocabulary: { groups: [Favourites [], { id: 'g1', name: 'Phrases', phrases: <the six stored phrases> }] } }` (keeps a helper's customized wording; does not guess groups), then validate as v2. `indexOf`/replace-by-name use the migrated parse. Stored bytes of v1 entries are not touched until that entry is explicitly saved again. Unknown entry versions (e.g. 3) are rejected and kept untouched (existing behaviour).
+- `signature()` uses the vocabulary, so the "unsaved changes" indicator covers new favourites and edits.
+
+### Failure modes and how they are handled
+
+| Risk | Handling |
+| --- | --- |
+| A dwell started on a group tile completes after the level changed | Scanning-driven level changes only follow a commit or a counted wrap, and a latched scanner cannot wrap. A helper `openGroup` during a dwell cancels the latch with no action (fails safe). Both tested. |
+| Tracking lost inside a group | Existing fail-closed path; level is kept (no surprise move); auto-return count resets (conservative). |
+| Pause pressed inside a sub-level | Works from every level; Resume keeps the level, index 0 (top if vocabulary changed while paused). |
+| User stranded in a group in auto mode | Back + Pause in every level; auto-return after 2 counted wraps (gesture-auto, assisted, practice). |
+| Step fallback rebuilds the scanner | Resets to top and announces (existing announce extended). |
+| Vocabulary edited during scanning | Only possible while paused; Resume rebuilds at top; stale phrase ids resolve to nothing. |
+| Favourite too long / duplicate / full | Rejected with reason; message unchanged; nothing evicted. |
+| Old v1 profile / older build | Container stays v1; v1 entries migrate on read, bytes untouched until re-saved; older builds reject v2 entries individually, not the whole store. |
+| Wrong movement on Save-to-Favourites | Confirm is a routed communication level: only the select-mapped movement commits. Tested with Next/Select and Pause mappings. |
+| Privacy | Message/lastSpoken never stored; favourites stored only via explicit profile Save, as deliberate vocabulary. |
+| Accessibility | Level shown as heading/breadcrumb ("Needs · 3 phrases"), group tiles named "Open Needs, 3 phrases", one polite announcement per level change (no per-tick chatter), same large targets and reduced-motion rules. |
+
+### Implementation order (small commits; each passes tsc + its tests)
+
+Every commit must pass `npx tsc --noEmit` and the FULL `npx vitest run`, not only its new tests; browser-check runs at C1b, C1d, C1f, C1g.
+
+1. C1a `vocabulary.ts` + tests (limits, every operation, immutability, duplicate/full/too-long, id pattern and max+1).
+2. C1b `profiles.ts` container/entry version split, v2 entry, v1 migration + tests; session, `SessionSnapshot` (`phrases` → `vocabulary`), `approveMapping` restore and `SetupViews` editor input switch to `Vocabulary`, with the flat scan list still built from it (no scanning change yet; existing tests updated only for the id format; `App.test.tsx:109-117` moves from `setPhrase` to the new editor call). Update `browser-check.mjs` seeding to a v1 entry so the browser exercises migration.
+3. C1c `navigation.ts` + tests (level contents for gesture auto/step, assisted, practice, confirm, 1–4 movements). `ScanTarget.kind` adds `'group' | 'nav'`.
+4. C1d session levels: enter/back/return-to-top, counted-wrap auto-return via `afterTick`, Pause in every level, practice routing (navigation and Pause handled before the practice branch of `activate`), step mode and assisted through levels, `openGroup`, snapshot `level` view (kind, group id/name, phrase count). Add `reach(id)` to `session.test-support.ts` (opens the right level first) and adapt existing session tests, `App.test.tsx` and the browser assisted-Space check by adding navigation only — no assertion weakened. Minimal `CommunicationView` update so the app stays usable in this commit.
+5. C1e composer actions: undo, say again, save-favourite confirm level. Session tests, including an edit while paused on confirm that makes the text a duplicate (re-validation rejects it).
+6. C1f UI: CommunicationView level rendering, group tabs, breadcrumb, composer buttons; setup group editor; paused edit panel. App tests + styles.
+7. C1g browser-check updates (communication navigation, no storage write before Save), README/ACCEPTANCE additions (a person times reaching a phrase and Recalibrate with one movement), STATUS.
+
+### Tests that must exist before C1 is called software verified
+
+- One-gesture auto: reach every phrase, Speak, Pause and Recalibrate using only select events; count scan steps; no target unreachable.
+- Two-gesture step: Next/Previous/Select through levels; Back; no auto-return in step mode.
+- Assisted Space through levels; helper `openGroup` and clicks only on current level; nothing clickable while paused.
+- Dwell spanning a scan boundary on a group tile selects that group; cancelled dwell on a group does nothing; a dwell spanning the would-be second wrap still selects its latched item and no auto-return happens.
+- Next/Select step mapping: Next never selects in a sub-level or on confirm; Back reachable by Next. Pause-mapped movement on confirm pauses and does not save.
+- Tracking loss inside a group: no action, level kept, auto-return clock frozen; recovery needs fresh neutral.
+- Auto-return after exactly 2 counted wraps in gesture-auto, assisted and practice, not before; reset by dwell start, selection, pause/resume, suspension, interval change inside More, `setTargets` and `openGroup`; hidden tab inside a group resets it in assisted mode; continuous valid frames still allow auto-return (no reset on non-flipping `setSuspended(false)`); confirm auto-return means Cancel.
+- Helper `openGroup` during a gesture dwell cancels the latch and produces no action.
+- Selecting a phrase emits one announcement (added + back to top), not two.
+- Undo/Say again/Save favourite incl. empty, duplicate, too long, full, cancel; storage spy proves no write during Undo, Say again, confirm or cancel — only on explicit profile Save.
+- Profile v2 round trip; v1 container with v1 entries lists them migrated; Save into a v1 container keeps other v1 entries unchanged (compare re-stringified raw entries); replace a v1 entry by name; mixed v1/v2 container lists both; unknown entry version rejected and untouched; unknown container version unreadable; malformed vocabulary/ids rejected per rule; unsaved indicator after a new favourite; Save announcement counts favourites.
+- Practice through levels speaks/adds nothing.
+- Full suite, typecheck, production build, browser-check pass.
+
+Human acceptance (pending, needs a person): whether grouped scanning is actually faster and less tiring with a real movement; whether the default groups make sense; whether auto-return timing feels right.
+
+### Revision 2 changes (resolving r14_review)
+
+- B1: Save-to-Favourites confirmation is a communication level `{ confirm }`, not a new stage, so the approved mapping still decides which movement selects; validation happens before entering it; tests with Next/Select and Pause mappings.
+- B2: auto-return counts scanner wraps through `tick` in one `afterTick` helper used by both tick sites (assisted included), with explicit reset causes; a latched scanner cannot wrap, so it never fires mid-dwell. Helper `openGroup` cancelling a latch is stated and tested; the failure table is corrected.
+- B3: `CONTAINER_VERSION` (1) split from entry `PROFILE_VERSION` (2); per-entry migration, byte-preservation and mixed-container tests; older builds reject only v2 entries.
+- M1 full-suite rule, `reach(id)` helper and per-commit test/browser updates; M2 practice routing; M3 one Resume rule; M4 empty Favourites does not open; M5 snapshot/type changes named in the order; M6 id pattern and max+1; M7 privacy wording, favourites count on Save, restore announcement; M8 tests added; M9 Clear has no undo (documented), Speak-after-pick left for human check; M10 corrected counts, plan.md Communication row pointer.
+
+### Implementation notes (C1 build; routine, no design change per c1_testing)
+
+- Version 1 migration drops repeated phrases (case-insensitive) because a group cannot hold the same phrase twice; otherwise such a profile would be rejected outright. Stored bytes are unchanged until the entry is saved again.
+- Group names must be unique (case-insensitive), so announcements and helper shortcuts are unambiguous.
+- Group ids are one more than the highest current number. Correction to the text above: removing the highest-numbered group lets its id be used again; a removed id below the highest is never reused. This is harmless because edits happen only while paused, Resume after any change rebuilds at top, and phrase ids resolve against the current vocabulary.
+- Re-validation on confirm stays as defence in depth but cannot be reached today: the only way the vocabulary changes on the confirm level is a paused edit, and the Resume rule then drops the confirm level first. The planned C1e test "re-validation rejects a duplicate" is therefore replaced by a test that the Resume rule drops the pending confirmation and nothing is added twice (`session.composer.test.ts` "is refused while scanning…").
+
+### R18 review record (numbered R14 on ethan-features)
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| C1 implementation | c1_testing (testing review) | tsc, vitest 475, build, browser 83/83 PASS; 23 mutants, 5 survived. B1: auto-return resets after a selection and after `openGroup`/`setTargets` untested → two tests added, both mutants now caught. N1 fallback-from-confirm test added; N2/N3 recorded above; N7 README wording fixed. | BLOCKING → fixed; re-check at `79c0321` PASS (tsc, vitest 478; M1/M2/M21 caught; M23 unobservable). Open non-blocking: N4 stale tiles while paused after an edit, N5 group-name field can go stale, N6 snapshot shares the vocabulary object. |
+| R14 revision 2 | r14_review (re-check) | B1–B3 resolved; no new blockers. Notes: suspension reset vs freeze, reset only on a real flip, leftover stage wording, function name, byte-identical wording, confirm-level cancels, `setPhrase` test, pass count, cross-build duplicate names (README line in C1g). All wording fixed in place. | APPROVED |
+| R14 revision 1 | r14_review | B1 confirm stage loses routed mapping (any movement would save); B2 time-based auto-return can cancel a latched dwell and skips assisted; B3 shared container/entry version makes all saved profiles unreadable. M1–M10 non-blocking. All resolved in revision 2. | BLOCKING |
+
+## R19 — Merging `main` into `ethan-features` (C1 phrase groups + automatic Last setup) (revision 2, approved with conditions folded in)
+
+User request (2026-10-17, awake): "merge main". `ethan-features` (C1, design R14 on that branch, software verified at `79c0321`/`1c87667`) merges `origin/main` (`e2d5871`: UX slices 1–3, wink channels R14, back to start R15/R16, automatic Last setup with stored check times R17). Trial merge: text conflicts in STATUS/progress/reasoning, `profiles.ts`, `session.ts`, `session.profiles.test.ts`, `CommunicationView.tsx`, `ProfileViews.tsx`, `SetupViews.tsx`, `styles.css`. Merge (not rebase): the repo merges PRs with merge commits and rewriting 78 unpushed commits is not needed.
+
+### Numbering
+`main` already has an R14 (wink). In the merged `reasoning.md` the C1 design keeps its text and becomes **"R18 — Communication navigation and saved phrases (branch ethan-features; numbered R14 there)"**, following main's convention ("numbered R14 there"). Code/test comments on the branch that say "R14" for C1 stay as they are; R18 states the mapping. This merge is R19. plan.md C1 row points to R18.
+
+### Stored profile (profiles.ts) — combine both
+- `CONTAINER_VERSION = 1` (wrapper), `PROFILE_VERSION = 2` (entries), as C1.
+- Entry v2 required keys: `version, featureSchema, name, models, mapping, vocabulary, scanIntervalMs`; optional `baseline`, `checks` with main's exact validators (`isBaseline`, `isChecks` against this entry's model ids). `buildProfile` takes `vocabulary` plus main's optional `baseline`/`checks`.
+- Entry v1 (main's format, including its optional `baseline`/`checks`) migrates on read: `phrases` (exactly 6, 1–60 chars) → `vocabulary` = Favourites [] + `{ g1, "Phrases", <phrases, repeats dropped> }`; `baseline`/`checks` carried over unchanged; then validated as v2. Stored bytes untouched until re-saved. Unknown entry versions rejected and kept; unknown container unreadable (unchanged).
+- `modelKey`, `MODEL_KEYS`, `AUTO_PROFILE_NAME` from main unchanged. Feature schema now includes main's wink channels (older profiles refuse on schema mismatch as main decided).
+- Cross-build note: main's current build (entries v1 only) treats a v2 "Last setup" as unreadable and, on its next autosave, appends a second v1 "Last setup". This build then lists both (README already says duplicates across builds can appear; extend it to Last setup). `get`/`indexOf` use the first readable entry. No data is lost.
+
+### Session (session.ts)
+- `vocabulary` replaces `phrases` everywhere main uses them: `signature`, `autoSaveProfile`, `saveProfile`, restore in `approveMapping` (including main's quick path), `returnToStart`.
+- `returnToStart()` keeps the vocabulary on both paths (gesture: it was just autosaved into Last setup; R16 assisted-only: as main kept phrases); level state is reset by `setStage('welcome')`. Assisted-only favourite wording is the one under "Favourites and the automatic Last setup".
+- **Delete clears phrases (condition 2):** after a successful Delete of the Last setup entry or Delete all while no setup is approved, the in-memory vocabulary resets to the defaults, so a later approval never writes deleted favourites back.
+- Load-time seeding uses the same first-readable entry as `get` and falls back to the defaults when storage is blocked or the container is unreadable.
+- The C1 favourite-replacement announcement on restore stays and also covers main's quick Continue path (same `approveMapping` restore branch).
+- Main's first-movement approve (`approve-comfortable`) and `comfortPreview` stay; C1 level scanning applies after approval exactly as before (practice/communication only).
+
+### Favourites and the automatic Last setup (privacy wording changes)
+C1 promised favourites reach storage only through the explicit profile Save. Main (user decision R17) removed the named Save panel from the screen (`saveProfile` is now API-only) and saves the approved setup automatically as "Last setup" after approval, after scan-speed changes and on back to start; `buildProfile` uses the current vocabulary, so phrases are written at every automatic save anyway. Favourites therefore persist only through Last setup. Rule (revision 2):
+- **One uniform autosave rule:** whenever a movement setup is approved (`hasApproved`), every successful vocabulary change calls `autoSaveProfile()` — a confirmed favourite, a paused communication edit, and a setup-stage edit (e.g. during recalibration). Same silent-failure semantics as the scan-speed change; carried check times are kept (as for scan speed).
+- **Announcements on confirm:** approved + autosave ok → "Saved to Favourites. It is kept on this device with Last setup."; approved + autosave failed → "Saved to Favourites for now; this browser could not keep it, so it will be gone when this page closes."; no approved setup (assisted-only) → "Saved to Favourites. It is kept on this device only once a movement setup is approved." C1's "Save your profile to keep it" is removed. The paused editor and Helper settings say edits are kept automatically once a setup is approved.
+- **No silent loss of saved phrases (B1):** the session seeds its in-memory vocabulary from the readable "Last setup" entry at construction (page load), instead of the defaults; defaults only when there is no readable Last setup. `returnToStart()` gesture path keeps the current vocabulary (it was just autosaved into Last setup) instead of resetting to defaults; the R16 assisted path keeps it too. A failed or cancelled restore never replaces the vocabulary (restore applies it only on approval). So reload → Set up again, failed Continue → fresh setup, back to start → Set up again, and assisted → Set up a movement all approve with the saved favourites, and their autosave rewrites the same vocabulary.
+- **Restore replacing in-memory phrases:** C1's announcement generalises: if the restored vocabulary differs from the in-memory one (favourites or edited phrases), announce "Phrases from this session were replaced by the saved setup's."
+- Undo, Say again, opening the confirm level and Cancel write nothing. The message and last-spoken text are never stored.
+- README: replace main's "Nothing is stored unless you choose Save on this device" entirely with the automatic-save truth (Last setup holds movement settings, controls, phrase groups including Favourites, scan speed, resting numbers and check times; never video, images, messages or what was spoken; Delete removes it).
+
+### C1 assertions intentionally changed (not counted as "no assertion weakened")
+- `session.composer.test.ts` storage-spy test: with an approved setup, confirming a favourite now writes Last setup exactly once; Undo, Say again, confirm-level entry and Cancel still write nothing. The named `saveProfile` part stays (API) and still counts favourites.
+- `session.composer.test.ts`/`Phrases.test.tsx` checks of `profiles.unsaved` and of "Save your profile" wording.
+- Browser check "a confirmed favourite … not written to browser storage" stays valid only because it runs in assisted-only mode (no approved setup); its name says so.
+- ACCEPTANCE C1.8 and the plan.md C1 row sentence "Favourites persist only through the existing opt-in profile Save" are rewritten to the Last setup rule.
+
+### Cross-build duplicate "Last setup"
+Main's current build ignores this build's v2 Last setup and appends its own v1 Last setup; this build lists both and `get`/replace use the first readable (its own v2), so a later session saved by main's build is ignored here, not lost (Delete removes either). README states it; a mixed same-name v1+v2 test pins `get` and replace order.
+
+### Tests
+- Resolve conflicts keeping both sides' tests; adapt main's new tests (`ux-*.acceptance.test.ts`, R15–R17 session/profile tests, App tests) to C1 navigation only by adding navigation (`reach`/`click`/`switchTo`, `phrase:<group>:<i>` ids) — no assertion weakened; adapt C1 tests to main's first-movement approve (`approve-comfortable`) where they set up by gesture.
+- New/changed: v1 entry with `baseline`+`checks` migrates keeping both; v2 with `baseline`/`checks` round-trips; v2 rejects bad `checks` ids/extra keys exactly as main; confirming a favourite with an approved setup writes Last setup containing it (storage spy: exactly one write) and announces so; with storage blocked the announcement says it is not kept; assisted-only confirm writes nothing; paused edit with an approved setup autosaves; Undo/Say again/confirm-level entry/Cancel write nothing; `returnToStart` keeps the vocabulary on both paths; quick Continue restores the saved vocabulary and announces replaced phrases; Delete (Last setup or all) then a fresh setup stores empty Favourites and the default groups; seeding with an unreadable container uses the defaults.
+- Revision 2 additions: reload → Set up again keeps favourites (seeded from Last setup); failed Continue (rest-fit mismatch) → fresh setup keeps favourites; back to start → Set up again keeps favourites; assisted → Set up a movement keeps favourites; setup-stage edit while approved autosaves; announcement for each case; v1 entry with bad `checks` ids rejected after migration; `forgetChecks` on a migrated v1 entry rewrites it as v2 without `checks`; favourite autosave after a quick Continue keeps carried check times; mixed same-name v1+v2 Last setup `get`/replace order.
+- Full suite, typecheck, production build, browser check; independent testing review before the merge is called verified.
+
+### Failure modes
+| Risk | Handling |
+| --- | --- |
+| Merge silently drops a side's behaviour | Resolve per file with both diffs; run both branches' full test sets; independent test review compares against both parents. |
+| Favourites written without the person knowing | Rule above; announcements and README state it; only after a deliberate confirm or a helper edit. |
+| Saved favourites overwritten by a fresh setup | Vocabulary seeded from Last setup at load; back to start keeps it; restore applies vocabulary only on approval (B1). |
+| v1 Last setup with check times loses them on migration | Carried unchanged; tested. |
+| Old build duplicates "Last setup" | Documented; no loss; first readable wins. |
+| Number collision R14 | Renamed R18 with mapping note. |
+
+### Commit plan
+One merge commit (staged file by file, never `-a`; `git diff --cached` must exclude the unrelated Supabase edits) that resolves conflicts and passes tsc + full vitest; it still carries C1's stale wording, fixed by the follow-ups before any testing review or verification claim. Then small follow-up commits: vocabulary seeding/keeping, uniform autosave + announcements, tests, docs. Never pushed.
+
+R18 mapping note: on ethan-features, comments saying "R14" in `vocabulary.ts`, `navigation.ts`, `PhraseEditor.tsx`, the level/composer code in `session.ts` and the C1 tests mean R18; elsewhere "R14" means the wink design.
+
+### R19 implementation notes (recorded after r19_testing)
+- Restore announcement wording: "Your phrases were replaced by the ones saved with “<name>”." (announced only when the in-memory vocabulary differs from the restored one), replacing the draft's "Phrases from this session were replaced by the saved setup's", which was untrue for phrases loaded from Last setup.
+- The automatic-save note on the communication screen is shown only with an approved movement setup and available storage; main showed it in assisted-only mode, where nothing is saved. The paused editor says changes are not kept when storage is unavailable.
+- Main's browser check had not been updated for its Get started screen; it now uses Get started / Continue and a version 1 "Last setup" seed (named profiles are no longer listed on the start screen).
+
+### R19 review record
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| R19 revision 1 | r19_review | B1 a fresh setup after reload / failed Continue / back to start overwrote saved favourites despite "kept on this device"; B2 draft still described main's removed Save panel and did not list C1 assertions being reversed. Notes n1–n7. (Two earlier runs were cut off by session restarts.) | BLOCKING |
+| R19 implementation | r19_testing (testing review) | tsc, vitest 599, build, browser 83/83 PASS; 23 mutants, 3 survived. B1 quick Continue restoring saved phrases untested (M11) → test added, now caught. M23 → unreadable-entry test added. M16 equivalent (Delete only offered with nothing approved). Non-blocking 1–4 and 6 fixed (editor copy guarded by storage, ux-record filter narrowed to `.phrase-editor`, corrupt-payload text tightened, notes above, ACCEPTANCE 7a.1). | BLOCKING → fixed |
+| R19 revision 2 | r19_review (re-check) | B1/B2 resolved; n1–n7 adopted. Conditions folded in before implementation: stale revision 1 lines removed; Delete resets the in-memory vocabulary. Non-blocking: seeding uses first readable entry, defaults on unreadable/blocked storage (adopted). | APPROVED (conditions applied) |

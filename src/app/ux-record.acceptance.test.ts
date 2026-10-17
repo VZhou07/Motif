@@ -52,7 +52,8 @@ describe('3.1 click a tile to record', () => {
     const h = atChoose();
     mount(h);
     expect(screen.queryByRole('button', { name: /Record this movement/ })).toBeNull();
-    expect(screen.queryByRole('textbox', { name: /name/i })).toBeNull();
+    // Only the helper phrase-group editor's own group-name fields (C1/R18) may match; no movement-name field.
+    expect(screen.queryAllByRole('textbox', { name: /name/i }).filter((field) => !field.closest('.phrase-editor'))).toEqual([]);
     expect(screen.queryByLabelText(/Name for this movement/)).toBeNull();
     expect(screen.getByRole('button', { name: /Stop setup/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /Find my movements/ })).toBeTruthy();

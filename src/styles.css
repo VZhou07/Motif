@@ -17,6 +17,19 @@
 .movement-evidence { padding-left: 18px; font-size: 12px; line-height: 1.7; margin-bottom: 16px; }
 .movement-evidence ul { padding-left: 18px; }
 
+/* R14: which scan level is showing (main list, a group, More, or the Favourites confirmation). */
+.level-heading { font-size: 14px; font-weight: 650; letter-spacing: .01em; color: #2f5a40; margin: 0 0 14px; }
+.phrase-editor { display: grid; gap: 16px; margin-top: 14px; }
+.group-editor { border: 1px solid #d4dfcb; border-radius: 12px; padding: 14px 16px; margin: 0; }
+.group-editor legend { font-size: 13px; font-weight: 650; color: #2f5a40; padding: 0 6px; }
+.editor-row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.editor-row .text-field { flex: 1 1 220px; margin-bottom: 0; }
+.phrase-edit-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.phrase-edit-list li { display: grid; gap: 6px; }
+.phrase-edit-list .text-field { margin-bottom: 0; }
+.phrase-edit-list .button { min-height: 44px; font-size: 12px; padding: 10px 12px; }
+.group-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+.group-tabs .button { min-height: 44px; font-size: 12px; padding: 10px 14px; }
 /* Start screen only: text at least 14px (UX slice 1). */
 .start-screen .button,.start-screen .helper-copy,.start-screen .settings-card>p,.start-screen .settings-card .field-label,.start-screen .status-notice{font-size:14px}
 .start-primary,.saved-setup{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:8px 0 18px}.button-large{min-height:64px;padding:18px 30px;font-size:17px!important;border-radius:14px}.start-secondary{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-left:-19px}.start-secondary .button-row{flex-wrap:wrap}.start-screen .settings-card{margin-top:22px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}

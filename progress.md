@@ -49,6 +49,25 @@ R15 local code commits (in order): `8f2fde6 Fix gesture conflicts`, `7db6bd2 Exp
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Current task — merge `origin/main` into `ethan-features` (R19)
+
+- User (awake, 2026-10-17): "merge main". Base: branch `ethan-features` at the commit after this note; `origin/main` at `e2d5871`. Trial merge (throwaway worktree, removed) conflicts in 10 files.
+- State: **software verified; human acceptance pending.** Merge `3774ce3`; R19 revision 2 APPROVED (conditions folded in); follow-ups `e4b48f4`..HEAD. Independent r19_testing BLOCKING (quick Continue restoring saved phrases untested) → `71c32db` test (+ unreadable-entry test, small fixes `f175255`, `1fb5554`, docs `fdf9736`) → re-check PASS. Last: tsc PASS, vitest 40 files/602 PASS, build PASS, browser-check 83/83. Branch is 0 behind `origin/main` (`e2d5871`) at last fetch.
+- Next action: the user pushes `ethan-features` and opens the PR on github.com (the local `gh` login cannot see this private repo). If `main` moves first, repeat the merge procedure. Supabase edits in `package.json`/`package-lock.json` remain uncommitted and unowned.
+- Owner: Claude Code coordinator. Files: all conflict files plus tests adapted for navigation. Do not push. Leave the unrelated Supabase edits in `package.json`/`package-lock.json` uncommitted.
+- Next action: after R19 is APPROVED, `git merge --no-commit origin/main`, resolve, run tsc + full vitest, commit the merge; then follow-up small commits (favourite autosave rule, tests, docs); then independent testing review.
+
+## Latest focused task — communication navigation and saved phrases (C1 / R14)
+
+- User (awake, 2026-10-17) asked for easier message navigation and saved/favourite messages, then approved planning C1. Base `ba15850` on branch `ethan-features`, clean tree.
+- State: **software verified; human acceptance pending** (ACCEPTANCE.md C1.1–C1.9). Last passing commit `79c0321` (code) — tsc PASS, vitest 36 files/478 PASS, build PASS (at `2b62ab9`, no app code changed since), browser-check 83/83. Independent c1_testing: BLOCKING B1 (resets after selection/openGroup untested) → `b628717` tests → re-check PASS.
+- Owner: Claude Code coordinator (no parallel workers yet). Files: new `src/app/vocabulary.ts`, `src/app/navigation.ts` (+tests); `src/app/profiles.ts`, `session.ts`, `types.ts`, `CommunicationView.tsx`, `SetupViews.tsx`, `styles.css`, `scripts/browser-check.mjs`, README/ACCEPTANCE/STATUS.
+- Steps: C1a vocabulary `ed6707a`+`f8ba93a` — done. C1b profiles v2 `41c2dd0` — done (browser-check 67/67). C1c navigation `5fd3db7` — done. C1d session levels `ba5377b`+`f437d7f` — done (vitest 457, browser-check 67/67). C1e composer actions `b5ff96d`+`1442b06` — done (vitest 35 files/469). C1f UI `019b17b`+`a3df4ab`+`c7e741d` — done. C1g browser-check/docs `802ac1a`+`bed78f7`+`b7b18f8` — done (tsc PASS, vitest 36 files/475 PASS, build PASS, browser-check 83/83). Review fixes `b628717`+`79c0321` — done; c1_testing re-check PASS.
+- Implementation notes (routine, conservative): v1 migration drops repeated phrases (a group cannot hold duplicates) instead of rejecting the whole profile; group names must be unique (case-insensitive); new group id is max+1 of current ids, so removing the highest id can reuse it (harmless: phrase ids resolve against the current vocabulary, edits only while paused, Resume rebuilds at top). Re-validation on confirm is defence in depth: the one Resume rule already drops a confirm level if phrases changed while paused (tested).
+- Not ours: `package.json`/`package-lock.json` gained `@supabase/ssr` and `@supabase/supabase-js` at 15:06 from another process; left untouched and uncommitted. A backend is outside plan.md scope; user to decide.
+- Next action: none required for C1 software. Optional non-blocking polish (needs its own test review): N4 refresh tiles while paused after an edit, N5 resync group-name field, N6 copy vocabulary in the snapshot. Person: run ACCEPTANCE.md C1.1–C1.9 and 3.6. No processes left running; worker ownership released.
+- Rule: every commit passes `npx tsc --noEmit` and the full `npx vitest run`; browser-check at C1b, C1d, C1f, C1g. Add the cross-build duplicate-name note to README in C1g.
+
 ## Latest focused task — merge of main into cat-features (R17)
 
 - User asked to resolve the merge of `main` (a0be7f0: wink channels, automatic Last setup, quick Continue) into `cat-features` (R15 one-hour reuse, R16 back to start). User decision: keep main's automatic saving and Continue, keep both back-to-start buttons, apply the one-hour rule to Continue (check times stored with the profile).
@@ -78,7 +97,7 @@ User: blink affects close-one-eye; only Open mouth works well. **Software verifi
 - Behavior: trials alternate 5 s Rest / 5 s Action and share only the trailing Rest. Overlay shows live smoothed values, rest baseline, thresholds when learned, and recorded failure numbers. Low/high beeps on Rest/Action; mute on the camera panel. Held-out checks use an explicit Action window so shared Rest may begin in relaxation; last pre-Action frame must be `armed` and neutral; exactly one intended event inside Action.
 - Next person step: refresh `npm run dev`, uncover the camera, run ACCEPTANCE.md 3.2 and 3.6, read the overlay if it still fails. No real camera was opened here. Nothing pushed.
 
-## Previous focused task — return-to-rest rejection (R12)
+## Earlier focused task — return-to-rest rejection (R12)
 
 - User reported all attempted movements fail "An attempt did not return to the personal resting baseline." Base `7914520`, clean tree at start. This authorized a focused fix; the earlier overall Goal stays paused.
 - State: **T2 software verified; real-user calibration/comfort pending.** R12 revisions 1 and 2 independently APPROVED by rest_review before implementation; independent rest_tests final verdict PASS. All agents read the canonical checkpoint skill and four project docs. Worker ownership released; no partial code or running processes remain.

@@ -3,6 +3,7 @@ import type { Mapping, MappingProposal, ScanMode } from './mapping';
 import type { DiscoveryResult } from './discovery';
 import type { MovementEvidence } from './scoring';
 import type { TrainingDiagnostics } from '../engine/calibration';
+import type { Vocabulary } from './vocabulary';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
@@ -67,7 +68,8 @@ export interface CycleEvidence {
 export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch' | 'discovery';
 export interface Failure { kind: FailureKind; title: string; reasons: string[] }
 
-export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' }
+/** `group` opens a phrase group and `nav` moves between levels (More, Back); R14. */
+export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' | 'group' | 'nav' }
 export interface ScanView {
   targets: ScanTarget[];
   index: number;
@@ -118,7 +120,10 @@ export interface SessionSnapshot {
   decisions: ScanTarget[];
   scan: ScanView | null;
   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
-  phrases: string[];
+  /** Current communication/practice scan level; null outside those stages (R14). */
+  level: LevelView | null;
+  /** Phrase groups (Favourites first); deliberately saved settings, never message history (R14). */
+  vocabulary: Vocabulary;
   message: string[];
   lastSpoken: string | null;
   speech: { available: boolean; voiceName: string | null };
@@ -139,6 +144,13 @@ export interface SessionSnapshot {
   comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
+}
+
+export interface LevelView {
+  kind: 'top' | 'more' | 'group' | 'confirm';
+  group: { id: string; name: string; phrases: number } | null;
+  /** The message text waiting for Save to Favourites confirmation. */
+  confirm: string | null;
 }
 
 export interface ProfilesView {
