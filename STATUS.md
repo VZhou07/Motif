@@ -4,7 +4,7 @@
 
 **Favourites:** More → Save message to Favourites → Save. They are kept for this session, and saved for good only when you save your profile. Helpers can edit groups during setup or while paused. Older saved profiles still open.
 
-**Checked (automated):** typecheck PASS; 475 tests PASS; production build PASS; 83/83 fake-camera browser checks PASS. An independent review of the finished code is next.
+**Checked (automated):** typecheck PASS; 478 tests PASS; production build PASS; 83/83 fake-camera browser checks PASS. An independent reviewer asked for two more tests; they were added and it then passed.
 
 **Still needs a person:** whether groups are actually faster and less tiring with a real movement, whether the auto-return timing feels right, and the earlier camera, comfort and beep checks. See `ACCEPTANCE.md` C1 and 3.6.
 
