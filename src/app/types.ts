@@ -63,7 +63,8 @@ export interface CycleEvidence {
 export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch' | 'discovery';
 export interface Failure { kind: FailureKind; title: string; reasons: string[] }
 
-export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' }
+/** `group` opens a phrase group and `nav` moves between levels (More, Back); R14. */
+export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' | 'group' | 'nav' }
 export interface ScanView {
   targets: ScanTarget[];
   index: number;

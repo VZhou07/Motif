@@ -9,6 +9,7 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
+import { CONTROL_LABELS } from './navigation';
 import { applyEdit, defaultVocabulary, type Vocabulary, type VocabularyEdit } from './vocabulary';
 import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
@@ -51,13 +52,6 @@ export const DECISION_LABELS = {
   'full-list': 'Choose from the full list',
 } as const;
 export type DecisionId = keyof typeof DECISION_LABELS;
-
-const CONTROL_LABELS: Record<string, string> = {
-  speak: 'Speak message', clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
-  practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Finish practice',
-  'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
-  'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
-};
 
 const silentSpeech: SpeechPort = { status: () => ({ available: false, voiceName: null }), speak: () => false, cancel: () => {} };
 const CAPTURE_STAGES: readonly Stage[] = ['baseline', 'training', 'verify', 'negative', 'discover'];
