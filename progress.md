@@ -1,5 +1,9 @@
 # Motif technical handoff
 
+## Latest planning clarification — separate movement actions
+
+User confirmed different verified movements should do different things, e.g. eyebrows → Next and mouth opening → Select. Coordinator recorded this requirement in plan.md and reasoning.md on the isolated branch only. State: product clarification recorded; no new application implementation. Existing four-action mapping/step mode is the baseline; further demo-expansion features and extra command types still await selection. No teammate-owned communication files or original-checkout files changed. Next: collect remaining feature choices, then define shared contracts and four branch boundaries before concurrent implementation. Independent conflict_reasoning inspected the three-document diff and existing mapping: PASS, no blockers; `git diff --check` PASS. No application tests rerun for this documentation-only clarification.
+
 ## Latest isolated task — R15 Open mouth / head conflict
 
 Latest user reports tilt down and turn right interfere with Open mouth. User requests ambiguity-safe personalized inputs, then excludes communication UI/new buttons owned by teammate. Work ONLY in `C:\Users\light\Motif\.cache\worktrees\gesture-conflicts`, branch `fix/gesture-conflicts`, base `ba15850`. Original checkout has Grok's uncommitted wink/hold work: never edit/stage/commit it or stop its processes. No automatic merge while Grok is active. Earlier build Goal stays paused.
