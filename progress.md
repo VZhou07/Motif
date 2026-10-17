@@ -54,6 +54,7 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 - The 60 s baseline valid-time cap is effectively unreachable (the 5-interruption cap fires first); kept as defensive code.
 - `.cache/superseded/Workspace.tsx` (gitignored, original machine only) is an earlier agent's unused UI draft; not needed.
 - Git prints LF→CRLF warnings on add (Windows); harmless. Do not change Git config.
+- **Privacy correction (2026-10-17):** earlier checkpoint records said "no requests leave this device", but those browser runs lasted under 60 s and never closed the model. `@mediapipe/tasks-vision` 1.1.1 has built-in usage logging (counters, no images) that POSTs to `odml.pa.googleapis.com` every 60 s and on close; builds before `b070ba2` would have sent it in real use. Fixed by `src/tracker/offline.ts` (same-origin-only fetch/sendBeacon guard installed in `main.tsx`) plus a CSP meta in `index.html`; the browser check now stops the camera and proves the send was blocked.
 - Two intermediate commits are not green on their own (no amend allowed): `3529bad` fails tsc (unused import, fixed in `4183a28`); `8adc098` has a failing App test (fixed in `fefa186`). Every other commit passed tsc and its tests.
 
 ## Environment (original Windows machine; check your own)
