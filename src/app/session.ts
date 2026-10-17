@@ -463,7 +463,8 @@ export class MotifSession {
       case 'tiring': return ['never-mind'];
       case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []), ...(this.candidate ? ['reject' as const] : []),
         ...(this.restoring ? ['reject-profile' as const] : [])];
-      case 'mapping-confirm': return ['choose-different', 'approve-mapping'];
+      // With one movement there is only one possible set of controls: offer a different movement instead.
+      case 'mapping-confirm': return [this.mappingSet().length === 1 ? 'another-movement' as const : 'choose-different' as const, 'approve-mapping'];
       case 'recalibrate-confirm': return ['start-recalibration', 'keep-current'];
       case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
       case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'discover', 'keep-current'] : [];
@@ -696,7 +697,7 @@ export class MotifSession {
       case 'discover': case 'discover-again': this.beginDiscovery(); break;
       case 'full-list': this.enterChoose(); break;
       case 'record-again': if (this.choice) this.startTraining(this.choice); break;
-      case 'another-movement': this.closeOpenCycle(); this.candidate = null; this.restoring = null; this.enterChoose(); break;
+      case 'another-movement': this.closeOpenCycle(); this.candidate = null; this.restoring = null; this.pendingMapping = null; this.enterChoose(); break;
       case 'choose-different': this.enterMapping(); break;
       case 'approve-mapping': this.approveMapping(); break;
       case 'use-previous': this.usePrevious(); break;
