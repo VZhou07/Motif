@@ -11,6 +11,8 @@ export interface CameraPanelProps {
   onStop: () => void;
   /** The start screen has its own Get started button; the panel's would duplicate it. */
   hideStart?: boolean;
+  /** The start screen with the camera off: only the preview space and the privacy line, no diagnostics. */
+  compact?: boolean;
   cueStatus?: CueAudioStatus;
   onCuesEnabled?: (enabled: boolean) => void;
   children?: ReactNode;
@@ -39,7 +41,7 @@ export function actionLabel(snapshot: SessionSnapshot, id: string): string {
 
 const runtimeLabels = { unarmed: 'waiting for rest', neutral: 'resting', armed: 'ready', pending: 'confirming movement', held: 'release to rest' } as const;
 
-export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
+export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, compact, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
   const [open, setOpen] = useState(false);
   const running = snapshot.camera === 'running';
   const tracked = running && snapshot.tracking === 'tracked';
@@ -60,8 +62,8 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, cu
           </div>
           {running && <span className="preview-caption">Mirrored preview · left and right mean your own sides</span>}
         </div>
-        <CameraDiagnostics snapshot={snapshot} />
-        <div className="camera-status"><span className={`status-dot ${tracked ? 'status-good' : ''}`} /><strong>{trackingLabel(snapshot)}</strong></div>
+        {!compact && <CameraDiagnostics snapshot={snapshot} />}
+        {!compact && <div className="camera-status"><span className={`status-dot ${tracked ? 'status-good' : ''}`} /><strong>{trackingLabel(snapshot)}</strong></div>}
         <p className="camera-help">{running
           ? 'Keep only the calibrated person in view. When tracking is unclear, controls safely wait.'
           : 'Video is processed on this device. It is never uploaded or saved.'}</p>
@@ -72,7 +74,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, cu
             : hideStart ? null : <button type="button" className="button button-quiet" disabled={snapshot.camera === 'loading'} onClick={onStart}>
                 {snapshot.camera === 'loading' ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Start camera'}</button>}
         </div>
-        {onCuesEnabled && <label className="camera-help" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+        {onCuesEnabled && !compact && <label className="camera-help" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
           <input type="checkbox" style={{ width: 22, minHeight: 22 }} checked={cueStatus?.enabled ?? true}
             disabled={cueStatus?.available === false} onChange={(event) => onCuesEnabled(event.target.checked)} />
           Rest/Action beeps {cueStatus?.available === false ? '(unavailable in this browser)' : cueStatus?.ready ? '' : '(play after you start the camera)'}
@@ -88,7 +90,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, cu
           {snapshot.runtime && <div><span>Recognizer</span><strong>{runtimeLabels[snapshot.runtime.phase]}</strong></div>}
         </div>
       )}
-      <section className="signal-dashboard">
+      {!compact && <section className="signal-dashboard">
         <button type="button" className="dashboard-toggle" aria-expanded={open} aria-controls="signal-panel" onClick={() => setOpen(!open)}>
           <span>Movement signal dashboard</span><span aria-hidden="true">{open ? '−' : '+'}</span>
         </button>
@@ -113,7 +115,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, cu
               {snapshot.runtime ? ` Recognizer: ${runtimeLabels[snapshot.runtime.phase]}.` : ''}</p>
           </div>
         )}
-      </section>
+      </section>}
     </aside>
   );
 }
