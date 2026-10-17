@@ -1,0 +1,255 @@
+import { describe, expect, it } from 'vitest';
+import { createLocalProfileStore, createMemoryStorage, PROFILE_KEY, type ProfileStore } from './profiles';
+import { BROW, HEAD_WOBBLE, Harness, MOUTH, REST, type Values } from './session.test-support';
+
+const BROW_LABEL = 'Raise left outer eyebrow';
+const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
+const perform = (label: string | null): Values => (label === BROW_LABEL ? BROW : label === 'Open mouth' ? MOUTH : REST);
+
+function storeFor(storage = createMemoryStorage()): { storage: ReturnType<typeof createMemoryStorage>; store: ProfileStore } {
+  return { storage, store: createLocalProfileStore(() => storage) };
+}
+
+/** Person A: edited phrase, slower scanning, brow selects and mouth moves next; saved as "Person A". */
+function savedPersonA() {
+  const { storage, store } = storeFor();
+  const h = new Harness({ profiles: store });
+  h.session.setPhrase(0, 'Hello');
+  h.setUpToCommunication();
+  h.selectByGesture('slower');
+  h.addMovement(OPEN_MOUTH, perform);
+  h.selectByGesture('comfortable');
+  h.selectByGesture('map:0');
+  h.selectByGesture('approve-mapping');
+  h.stepTo('finish-practice');
+  h.session.selectTarget('phrase:2'); // a message that must never be saved
+  expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
+  return { storage, store, original: h };
+}
+
+/** A fresh page (new session) on the same device, camera running, restore started. */
+function restoreOn(storage: ReturnType<typeof createMemoryStorage>, name = 'Person A'): Harness {
+  const h = new Harness({ profiles: storeFor(storage).store });
+  h.session.setCamera('running');
+  expect(h.session.restoreProfile(name)).toBe(true);
+  return h;
+}
+
+function recheck(h: Harness, everyday: (t: number) => Values = HEAD_WOBBLE): void {
+  h.run(10_500);
+  h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
+  if (h.snap.stage === 'negative') h.run(11_000, everyday);
+}
+
+describe('saving a profile (R7)', () => {
+  it('saves only after approval, only on an explicit call, and never the message or evidence', () => {
+    const { store } = storeFor();
+    const h = new Harness({ profiles: store });
+    expect(h.session.saveProfile('Too early')).toMatchObject({ ok: false });
+    h.calibrate();
+    expect(h.session.saveProfile('During setup')).toMatchObject({ ok: false });
+    expect(store.list().profiles).toEqual([]);
+
+    const { storage, original } = savedPersonA();
+    expect(original.snap.profiles).toMatchObject({ names: ['Person A'], active: 'Person A', unsaved: false });
+    const raw = storage.data.get(PROFILE_KEY)!;
+    expect(original.snap.message).toEqual(['I need water']);
+    expect(raw).not.toMatch(/"message"|lastSpoken/);
+    expect(raw).not.toMatch(/statistics|heldOut|negative|frame/);
+    const saved = JSON.parse(raw).profiles[0];
+    expect(saved.phrases[0]).toBe('Hello');
+    expect(saved.scanIntervalMs).toBe(2_500);
+    expect(saved.models).toHaveLength(2);
+  });
+
+  it('marks the setup unsaved after a change and refuses a duplicate name unless replacing', () => {
+    const { original } = savedPersonA();
+    original.stepTo('change-controls');
+    original.selectByGesture('map:1');
+    original.selectByGesture('approve-mapping');
+    expect(original.snap.profiles.unsaved).toBe(true);
+    expect(original.session.saveProfile('person a')).toMatchObject({ ok: false, code: 'exists' });
+    expect(original.session.saveProfile('Person A', true)).toEqual({ ok: true });
+    expect(original.snap.profiles.unsaved).toBe(false);
+  });
+
+  it('delete and delete all leave the approved setup in memory and clear the active name', () => {
+    const { original } = savedPersonA();
+    expect(original.session.deleteProfile('Person A')).toEqual({ ok: true });
+    expect(original.snap.profiles).toMatchObject({ names: [], active: null, unsaved: true });
+    expect(original.snap.approvedModels).toHaveLength(2);
+    original.session.saveProfile('Person A');
+    original.session.saveProfile('Spare');
+    expect(original.session.deleteAllProfiles()).toEqual({ ok: true });
+    expect(original.snap.profiles.names).toEqual([]);
+  });
+});
+
+describe('restoring a profile (R7)', () => {
+  it('re-checks a two-movement profile while disarmed and arms only after approval', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    expect(h.snap.stage).toBe('baseline');
+    expect(h.snap.restoring).toBe('Person A');
+    expect(h.snap.approvedModels).toEqual([]);
+    h.session.selectTarget('phrase:0');
+    expect(h.snap.message).toEqual([]);
+    expect(h.snap.phrases[0]).toBe('Yes'); // saved phrases apply only on approval
+
+    recheck(h);
+    expect(h.snap.stage).toBe('comfort');
+    const cycle = h.snap.cycles.at(-1)!;
+    expect(cycle).toMatchObject({ source: 'restored', profile: 'Person A', training: null, outcome: 'verified' });
+    expect(cycle.heldOut.map((attempt) => [attempt.kind, attempt.expected, attempt.passed])).toEqual([
+      ['recheck', BROW_LABEL, true], ['recheck', BROW_LABEL, true], ['recheck', 'Open mouth', true], ['recheck', 'Open mouth', true],
+    ]);
+    expect(cycle.negative).toMatchObject({ passed: true, eventCount: 0 });
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['comfortable', 'another-movement', 'reject-profile']);
+    expect(h.snap.approvedModels).toEqual([]);
+
+    h.selectByGesture('comfortable', MOUTH); // any re-checked movement drives setup choices
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.pendingMapping?.id).toBe('saved');
+    expect(h.snap.pendingMapping?.label).toMatch(/^Saved controls: Raise left outer eyebrow selects · Open mouth moves next/);
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping', 'reject-profile']);
+    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.runtime?.armed).toBe(false);
+    expect(h.snap.restoring).toBeNull();
+    expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
+    expect(h.snap.scanMode).toBe('step');
+    expect(h.snap.phrases[0]).toBe('Hello');
+    expect(h.snap.scan?.intervalMs).toBe(2_500);
+    expect(h.snap.profiles).toMatchObject({ active: 'Person A', unsaved: false });
+    expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
+    h.run(600);
+    h.stepTo('finish-practice');
+    h.stepTo('phrase:0');
+    expect(h.snap.message).toEqual(['Hello']);
+    // Today's rest becomes the approved baseline, so adding a movement later still works.
+    h.stepTo('add-movement');
+    expect(h.snap.stage).toBe('choose');
+  });
+
+  it('Choose different controls offers proposals for the restored set and still needs approval', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different');
+    expect(h.snap.stage).toBe('mapping');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['map:0', 'map:1', 'map:2', 'map:3', 'reject-profile']);
+    h.selectByGesture('map:2');
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.scanMode).toBe('auto');
+    expect(h.snap.profiles.unsaved).toBe(true);
+  });
+
+  it.each(['mapping', 'mapping-confirm'] as const)('“Do not use this profile” works by gesture in %s and applies nothing', (stage) => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('comfortable');
+    if (stage === 'mapping') h.selectByGesture('choose-different');
+    expect(h.snap.stage).toBe(stage);
+    h.selectByGesture('reject-profile');
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.failure?.title).toBe('Profile not used');
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.restoring).toBeNull();
+    expect(h.snap.phrases[0]).toBe('Yes');
+    expect(h.snap.cycles.at(-1)!.outcome).toBe('rejected');
+  });
+
+  it('the comfort stage offers a gesture exit and a button exit', () => {
+    const { storage } = savedPersonA();
+    const gesture = restoreOn(storage);
+    recheck(gesture);
+    gesture.selectByGesture('reject-profile');
+    expect(gesture.snap.failure?.title).toBe('Profile not used');
+    const button = restoreOn(storage);
+    recheck(button);
+    button.session.decide('reject-profile');
+    expect(button.snap.failure?.title).toBe('Profile not used');
+    expect(button.snap.approvedModels).toEqual([]);
+  });
+
+  it('fails honestly when today\'s rest does not fit a saved movement, keeping the rest usable', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    h.run(10_500, { browOuterUpLeft: 0.45 });
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.failure?.kind).toBe('profile-mismatch');
+    expect(h.snap.failure?.reasons[0]).toMatch(/“Raise left outer eyebrow” reads differently at rest/);
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['another-movement']);
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.restoring).toBeNull();
+    h.session.decide('another-movement');
+    expect(h.snap.stage).toBe('choose');
+  });
+
+  it('a saved movement that fails its re-check fails the restore', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    h.run(10_500);
+    h.followPrompts((snap) => snap.stage !== 'verify', () => REST);
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.failure?.title).toBe('“Raise left outer eyebrow” did not pass its re-check');
+    expect(h.snap.cycles.at(-1)!.outcome).toBe('failed');
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.decisions.map((decision) => decision.id)).not.toContain('record-again');
+  });
+
+  it('an accidental activation in the everyday check fails the restore', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h, (t) => (t % 4_000 < 800 ? MOUTH : REST));
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.cycles.at(-1)!.negative?.passed).toBe(false);
+    expect(h.snap.approvedModels).toEqual([]);
+  });
+
+  it('cancel and assisted input clear the restore without applying anything', () => {
+    const { storage } = savedPersonA();
+    const cancelled = restoreOn(storage);
+    cancelled.run(3_000);
+    cancelled.session.cancel();
+    expect(cancelled.snap.restoring).toBeNull();
+    expect(cancelled.snap.approvedModels).toEqual([]);
+    const assisted = restoreOn(storage);
+    assisted.run(10_500);
+    assisted.session.useAssisted();
+    expect(assisted.snap.restoring).toBeNull();
+    expect(assisted.snap.inputMode).toBe('assisted');
+    expect(assisted.snap.approvedModels).toEqual([]);
+    expect(assisted.snap.phrases[0]).toBe('Yes');
+  });
+
+  it('refuses without a camera, with an approved setup, for a missing profile, or with storage blocked', () => {
+    const { storage, original } = savedPersonA();
+    const noCamera = new Harness({ profiles: storeFor(storage).store });
+    expect(noCamera.session.restoreProfile('Person A')).toBe(false);
+    expect(noCamera.snap.announcement).toMatch(/Start the camera/);
+    expect(original.session.restoreProfile('Person A')).toBe(false);
+    const missing = new Harness({ profiles: storeFor(storage).store });
+    missing.session.setCamera('running');
+    expect(missing.session.restoreProfile('Nobody')).toBe(false);
+    expect(missing.snap.stage).toBe('welcome');
+    const blocked = new Harness({ profiles: createLocalProfileStore(() => { throw new Error('SecurityError'); }) });
+    blocked.session.setCamera('running');
+    expect(blocked.snap.profiles.available).toBe(false);
+    expect(blocked.session.restoreProfile('Person A')).toBe(false);
+    expect(blocked.snap.announcement).toMatch(/not available in this browser/);
+  });
+
+  it('keeps the profile read at restore time even if it is deleted meanwhile', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    storeFor(storage).store.remove('Person A');
+    recheck(h);
+    h.selectByGesture('comfortable');
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.approvedModels).toHaveLength(2);
+    expect(h.snap.profiles.names).toEqual([]);
+  });
+});
