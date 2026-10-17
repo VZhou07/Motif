@@ -313,7 +313,7 @@ export class MotifSession {
     const kind = this.restoring ? 'recheck' : expectedId === this.candidate?.id ? 'held-out' : 'cross-check';
     const result = evaluatePositiveAttempt(set, update.value.frames, expectedId);
     cycle.heldOut.push({ attempt: cycle.heldOut.length + 1, passed: result.passed, eventCount: result.eventCount,
-      validDurationMs: result.validDurationMs, reasons: result.reasons, expected: this.labelOf(expectedId), kind });
+      validDurationMs: result.validDurationMs, reasons: result.reasons, expected: this.labelOf(expectedId), expectedId, kind });
     if (!result.passed) {
       this.fail('verification', kind === 'cross-check' ? `The new movement interfered with “${this.labelOf(expectedId)}”`
         : kind === 'recheck' ? `“${this.labelOf(expectedId)}” did not pass its re-check` : 'A check attempt did not pass', result.reasons);

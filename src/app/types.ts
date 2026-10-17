@@ -30,6 +30,8 @@ export interface AttemptEvidence {
   attempt: number; passed: boolean; eventCount: number; validDurationMs: number; reasons: string[];
   /** Movement expected in this attempt; cross-checks confirm an existing movement still works with the new one. */
   expected: string; kind: 'held-out' | 'cross-check' | 'recheck';
+  /** Model id of the expected movement (labels can repeat). */
+  expectedId: string;
 }
 export interface NegativeEvidence { passed: boolean; eventCount: number; validDurationMs: number; restarts: number; reasons: string[] }
 export interface CycleEvidence {
