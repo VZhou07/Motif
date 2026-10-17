@@ -16,3 +16,6 @@
 .profile-list li { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .movement-evidence { padding-left: 18px; font-size: 12px; line-height: 1.7; margin-bottom: 16px; }
 .movement-evidence ul { padding-left: 18px; }
+
+/* Start screen only: text at least 14px (UX slice 1). */
+.start-screen .button,.start-screen .helper-copy,.start-screen .settings-card>p,.start-screen .settings-card .field-label,.start-screen .status-notice{font-size:14px}

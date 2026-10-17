@@ -21,7 +21,7 @@ export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: 
   // A saved setup makes Continue the main action; a new setup stays available but is secondary.
   const hasSaved = snapshot.profiles.names.includes(AUTO_PROFILE_NAME);
   return (
-    <>
+    <div className="start-screen">
       <Heading eyebrow="A LITTLE MOVEMENT. A WORLD OF POSSIBILITY." title={<>Your movement.<br /><em>Your voice.</em></>}
         lead="A personal way to communicate, built around a movement that feels comfortable to you. No particular smile, blink or head movement is required." />
       <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
@@ -38,7 +38,7 @@ export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: 
       </div>
       <p className="helper-copy">A helper may assist with camera permission and setup. After your movement is verified and approved, communication, pause, speed and recalibration all work with that movement alone.</p>
       <SetupOptions snapshot={snapshot} session={session} />
-    </>
+    </div>
   );
 }
 
