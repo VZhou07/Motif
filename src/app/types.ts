@@ -132,6 +132,8 @@ export interface SessionSnapshot {
   setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */
   recommendation: { id: string; reasons: string[] } | null;
+  /** On the first-movement comfort screen: what Approve will turn on (null elsewhere). */
+  comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
 }

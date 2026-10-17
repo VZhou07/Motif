@@ -70,6 +70,7 @@ export function FailedView({ snapshot, session }: ViewProps) {
 
 export function ComfortView({ snapshot, session }: ViewProps) {
   const cycle = snapshot.cycles[snapshot.cycles.length - 1];
+  const preview = snapshot.comfortPreview;
   return (
     <>
       <Heading eyebrow="CHECKING IN WITH YOU" title={<>How does<br /><em>that feel?</em></>}
@@ -83,8 +84,15 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         </div>
         <p>Observations from this short session, not a guarantee of future accuracy.</p>
       </div>
-      <h2 className="question-heading">Comfortable enough to repeat?</h2>
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      <h2 className="question-heading">{preview ? 'Comfortable enough to use?' : 'Comfortable enough to repeat?'}</h2>
+      {preview && (
+        <div id="comfort-preview" className="mapping-explainer comfort-preview"><Icon name="check" />
+          <p>Approving turns on: <strong>{preview.label}</strong>. {preview.mode === 'auto'
+            ? 'Choices highlight one at a time on their own, and your held movement selects the highlighted choice. Nothing is spoken until you choose it.'
+            : 'The highlight moves only when you make your movement.'} Nothing is on until you approve.</p>
+        </div>
+      )}
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} describedBy={preview ? 'comfort-preview' : undefined} />
       <EvidencePanel snapshot={snapshot} />
     </>
   );

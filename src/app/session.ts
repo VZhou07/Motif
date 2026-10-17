@@ -33,6 +33,8 @@ export const SESSION_LIMITS = {
 export const DECISION_LABELS = {
   comfortable: 'Yes, comfortable and easy',
   'comfortable-effort': 'Comfortable, but it takes effort',
+  'approve-comfortable': 'Approve and practice',
+  'approve-effort': 'Approve, but it takes effort',
   'record-again': 'Record this movement again',
   'another-movement': 'Choose another movement',
   'keep-current': 'Keep current setup',
@@ -454,7 +456,9 @@ export class MotifSession {
   private allowedDecisions(): DecisionId[] {
     const keep = (this.recalibrating || this.adding) && this.hasApproved;
     switch (this.stage) {
-      case 'comfort': return this.restoring ? ['comfortable', 'another-movement', 'reject-profile']
+      case 'comfort':
+        if (!this.restoring && this.singleMovementProposal()) return ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement'];
+        return this.restoring ? ['comfortable', 'another-movement', 'reject-profile']
         : ['comfortable', 'comfortable-effort', 'record-again', 'another-movement', ...(keep ? ['keep-current' as const] : [])];
       case 'tiring': return ['never-mind'];
       case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []), ...(this.candidate ? ['reject' as const] : []),
@@ -505,6 +509,30 @@ export class MotifSession {
   private enterChoose(): void {
     this.setStage('choose');
     if (this.recalibrating || this.adding) this.restrictedScanner(this.approvedModels);
+  }
+
+  /**
+   * A new setup with exactly one fresh movement and a verified cycle can be approved from the comfort
+   * screen. Pure: the only valid mapping for one movement is select-only, so no effort or
+   * recommendation is consulted and no state changes while the screen is showing.
+   */
+  private singleMovementProposal(): MappingProposal | null {
+    if (this.stage !== 'comfort' || this.restoring || this.adding || this.recalibrating || this.approvedModels.length || !this.candidate) return null;
+    if (this.cycles[this.cycles.length - 1]?.outcome !== 'verified') return null;
+    const set = this.mappingSet();
+    const first = proposeMappings(set)[0];
+    if (!first) return null;
+    const valid = validateMapping(set, first.assignments);
+    return valid.ok ? { ...valid.value, id: first.id, label: first.label } : null;
+  }
+
+  private approveFromComfort(effort: Effort): void {
+    const proposal = this.singleMovementProposal();
+    if (!proposal) return;
+    this.noteEffort(effort);
+    this.pendingMapping = proposal;
+    this.approveMapping();
+    this.pendingMapping = null;
   }
 
   private enterComfort(): void {
@@ -662,6 +690,8 @@ export class MotifSession {
     switch (id) {
       case 'comfortable': this.noteEffort('easy'); if (this.restoring) this.offerSavedControls(); else this.enterMapping(); break;
       case 'comfortable-effort': this.noteEffort('effort'); this.enterMapping(); break;
+      case 'approve-comfortable': this.approveFromComfort('easy'); break;
+      case 'approve-effort': this.approveFromComfort('effort'); break;
       case 'never-mind': this.enterCommunication(); this.announce('Nothing changed. Return to rest before selecting.'); break;
       case 'discover': case 'discover-again': this.beginDiscovery(); break;
       case 'full-list': this.enterChoose(); break;
@@ -866,6 +896,11 @@ export class MotifSession {
     const proposal = { ...valid.value, id: match?.id ?? 'map:recommended', label: `Recommended: ${describeMapping(set, valid.value)}` };
     this.proposals = [proposal, ...base.filter((candidate) => candidate !== match)];
     this.recommendation = { id: proposal.id, reasons: recommended.reasons };
+  }
+
+  private comfortPreview(): { label: string; mode: ScanMode } | null {
+    const proposal = this.singleMovementProposal();
+    return proposal ? { label: describeMapping(this.mappingSet(), proposal), mode: proposal.mode } : null;
   }
 
   /** Caregiver form: any valid assignment for the movements in play; still needs approval. */
@@ -1261,6 +1296,7 @@ export class MotifSession {
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
+      comfortPreview: this.comfortPreview(),
     };
     for (const listener of this.listeners) listener();
   }
