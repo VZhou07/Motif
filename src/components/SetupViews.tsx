@@ -90,6 +90,7 @@ export function CaptureView({ snapshot, session }: ViewProps) {
   return (
     <>
       <Heading eyebrow={eyebrow} title={PROMPT_TITLES[capture.prompt]} lead={lead} />
+      {capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
       <div className={`recording-card ${capture.prompt === 'Move' ? 'recording-move' : ''}`}>
         <div><span className="recording-dot" /><span>{capture.prompt}</span></div>
         <strong className="timer" aria-hidden="true">{seconds}<small>{capture.kind === 'negative' ? 'armed seconds remaining' : 'seconds in this step'}</small></strong>
@@ -114,7 +115,8 @@ export function ChooseView({ snapshot, session }: ViewProps) {
     <>
       <Heading eyebrow="STEP 2 · FIND YOUR MOVEMENT" title={<>A movement that<br /><em>works for you.</em></>}
         lead="Choose any movement you can comfortably repeat and hold for about two seconds. The number shows how strongly it registers compared with your own rest." />
-      {snapshot.recalibrating && <DecisionList snapshot={snapshot} onDecide={(id) => session.decide(id)} />}
+      {(snapshot.recalibrating || snapshot.adding) && <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />}
+      {snapshot.adding && <p className="status-notice">Adding a movement to: {snapshot.mappingLabel}. Movements you already use cannot be chosen twice.</p>}
       {regions.map((region) => (
         <fieldset className="feature-fieldset" key={region}>
           <legend>{region}</legend>

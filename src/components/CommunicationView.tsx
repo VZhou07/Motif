@@ -9,7 +9,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
   const paused = scan?.paused ?? false;
   const activate = (id: string) => session.selectTarget(id);
   const phrases = scan?.targets.filter((target) => target.kind === 'phrase') ?? [];
-  const controls = scan?.targets.filter((target) => target.kind === 'control') ?? [];
+  const controls = scan?.targets.filter((target) => target.kind !== 'phrase') ?? [];
   const mode = snapshot.inputMode === 'assisted' ? 'Assisted Space switch' : 'Automatic scanning';
   return (
     <>

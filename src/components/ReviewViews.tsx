@@ -40,7 +40,7 @@ export function FailedView({ snapshot, session }: ViewProps) {
       <Heading eyebrow="LET'S TAKE ANOTHER LOOK" title={<>No rush.<br /><em>{failure?.title ?? 'We can try again.'}</em></>}
         lead="Nothing was approved from this attempt. You can record again, try another comfortable movement, redo the rest check, or use assisted input." />
       {failure && <div className="error-banner" role="alert"><strong>What we observed</strong>{failure.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>}
-      <DecisionList snapshot={snapshot} onDecide={(id) => session.decide(id)} />
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
       <div className="button-row" style={{ marginTop: 16 }}>
         <button type="button" className="button" onClick={() => session.startBaseline()}><Icon name="refresh" />Redo the rest check</button>
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch)</button>
@@ -66,21 +66,40 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         <p>Observations from this short session, not a guarantee of future accuracy.</p>
       </div>
       <h2 className="question-heading">Comfortable enough to repeat?</h2>
-      <DecisionList snapshot={snapshot} onDecide={(id) => session.decide(id)} />
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
     </>
   );
 }
 
 export function MappingView({ snapshot, session }: ViewProps) {
   const interval = ((snapshot.scan?.intervalMs ?? 2_000) / 1_000).toFixed(1);
+  const label = snapshot.candidate?.label ?? snapshot.approvedModel?.label ?? 'Your movement';
   return (
     <>
-      <Heading eyebrow="STEP 3 · MAKE IT YOURS" title={<>Your movement.<br /><em>Your control.</em></>}
-        lead="Review the control before turning it on. Nothing is spoken during setup." />
+      <Heading eyebrow="STEP 3 · MAKE IT YOURS" title={<>Your movements.<br /><em>Your controls.</em></>}
+        lead="Pick how your movements control Motif. Choosing here turns nothing on: you approve on the next screen. Nothing is spoken during setup." />
       <div className="mapping-explainer"><Icon name="check" />
-        <p>Choices highlight one at a time, every {interval} seconds. <strong>{snapshot.candidate?.label}</strong>, held briefly, selects the highlighted choice. After each selection, rest briefly before the next one. Pause, speed and recalibration are choices in the same list.</p>
+        <p>With one movement, choices highlight one at a time every {interval} seconds and <strong>{label}</strong>, held briefly, selects the highlighted choice. With a “moves next” movement the highlight moves only when you make it — there is no timer. Rest briefly between movements.</p>
       </div>
-      <DecisionList snapshot={snapshot} onDecide={(id) => session.decide(id)} />
+      {snapshot.mappingLabel && <p className="status-notice">Current controls: {snapshot.mappingLabel}</p>}
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+    </>
+  );
+}
+
+export function MappingConfirmView({ snapshot, session }: ViewProps) {
+  const pending = snapshot.pendingMapping;
+  return (
+    <>
+      <Heading eyebrow="STEP 3 · CHECK YOUR CONTROLS" title={<>Turn these<br /><em>controls on?</em></>}
+        lead="Only Approve turns these controls on. You practice first; nothing is spoken in practice." />
+      <div className="result-card">
+        <h2>{pending?.label ?? 'No controls chosen yet'}</h2>
+        <p>{pending?.mode === 'step'
+          ? 'Step by step: no timer. The highlight moves only when you make your “moves next” movement. If no movement is seen for a minute, scanning becomes automatic again.'
+          : 'Automatic scanning: choices highlight one at a time and your select movement picks the highlighted one.'}</p>
+      </div>
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
     </>
   );
 }
@@ -90,7 +109,7 @@ export function RecalibrateView({ snapshot, session }: ViewProps) {
     <>
       <Heading eyebrow="RECALIBRATE" title={<>Fresh start,<br /><em>same you.</em></>}
         lead="Recording a new rest check and movement turns communication off until the new movement is verified and approved. You can keep your current setup at every decision point." />
-      <DecisionList snapshot={snapshot} onDecide={(id) => session.decide(id)} />
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
     </>
   );
 }

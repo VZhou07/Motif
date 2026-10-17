@@ -3,11 +3,11 @@ import { useMotif, type MotifRuntime } from './app/useMotif';
 import { CameraPanel } from './components/CameraPanel';
 import { CommunicationView } from './components/CommunicationView';
 import { BrandMark, Icon } from './components/Icon';
-import { ComfortView, FailedView, MappingView, RecalibrateView } from './components/ReviewViews';
+import { ComfortView, FailedView, MappingConfirmView, MappingView, RecalibrateView } from './components/ReviewViews';
 import { CaptureView, ChooseView, WelcomeView } from './components/SetupViews';
 
 const SETUP_STEP: Partial<Record<Stage, number>> = {
-  welcome: 0, baseline: 0, choose: 1, training: 1, verify: 1, negative: 1, 'setup-failed': 1, comfort: 1, mapping: 2,
+  welcome: 0, baseline: 0, choose: 1, training: 1, verify: 1, negative: 1, 'setup-failed': 1, comfort: 1, mapping: 2, 'mapping-confirm': 2,
 };
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
@@ -25,6 +25,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
     case 'setup-failed': content = <FailedView {...view} />; break;
     case 'comfort': content = <ComfortView {...view} />; break;
     case 'mapping': content = <MappingView {...view} />; break;
+    case 'mapping-confirm': content = <MappingConfirmView {...view} />; break;
     case 'recalibrate-confirm': content = <RecalibrateView {...view} />; break;
     case 'practice':
     case 'communication': content = <CommunicationView {...view} />; break;

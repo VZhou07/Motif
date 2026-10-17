@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react';
-import type { DecisionId } from '../app/session';
 import type { SessionSnapshot } from '../app/types';
 
 /** The id currently highlighted by the scanner, or undefined while suspended/paused. */
@@ -36,19 +35,26 @@ export function ScanButton({ id, snapshot, onActivate, children, className = '',
 export function ScanHint({ snapshot }: { snapshot: SessionSnapshot }) {
   const scan = snapshot.scan;
   let text = 'Choose with a click, touch or keyboard (assisted setup).';
+  const operating = snapshot.stage === 'communication' || snapshot.stage === 'practice';
   if (scan?.driver === 'gesture') {
+    const ready = operating && snapshot.mappingLabel
+      ? (snapshot.scanMode === 'step'
+        ? `Step by step, no timer: ${snapshot.mappingLabel.replace(/ \(step by step, no timer\)$/, '')}.`
+        : 'Your select movement selects the highlighted choice. Buttons also work for a helper.')
+      : snapshot.approvedModels.length + (snapshot.candidate ? 1 : 0) > 1
+        ? 'Any of your verified movements selects the highlighted choice. Buttons also work for a helper.'
+        : 'Your movement selects the highlighted choice. Buttons also work for a helper.';
     text = scan.suspended
       ? 'Scanning waits until one face is clearly in view. Nothing can be selected meanwhile.'
-      : snapshot.runtime?.armed
-        ? 'Your movement selects the highlighted choice. Buttons also work for a helper.'
-        : 'Rest for a moment: your movement works again after a short rest.';
+      : snapshot.runtime?.armed ? ready : 'Rest for a moment: your movements work again after a short rest.';
   } else if (scan?.driver === 'assisted') {
     text = 'Assisted input: press Space to select the highlighted choice.';
   }
   return <p className="control-hint">{text}</p>;
 }
 
-export function DecisionList({ snapshot, onDecide }: { snapshot: SessionSnapshot; onDecide: (id: DecisionId) => void }) {
+/** Setup choices: decisions and mapping proposals. Each is scanned (when a movement exists) and clickable for helpers. */
+export function DecisionList({ snapshot, onChoose }: { snapshot: SessionSnapshot; onChoose: (id: string) => void }) {
   if (!snapshot.decisions.length) return null;
   return (
     <>
@@ -56,7 +62,7 @@ export function DecisionList({ snapshot, onDecide }: { snapshot: SessionSnapshot
       <div className="stacked-actions" role="group" aria-label="Choices">
         {snapshot.decisions.map((decision, index) => (
           <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} primary={index === 0}
-            onActivate={(id) => onDecide(id as DecisionId)}>{decision.label}</ScanButton>
+            onActivate={onChoose}>{decision.label}</ScanButton>
         ))}
       </div>
     </>
