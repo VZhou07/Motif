@@ -386,6 +386,8 @@ Engine: `cancelCause` for released, band, conflict (including a different moveme
 | --- | --- | --- | --- |
 | R8 revision 1 | r8_review | B1 failed-check/everyday keys are constant for approved movements or misattribute failed cycles; B2 runtime `cancelled` cannot distinguish release from invalidation/conflict; B3 tiring guessed the movement; B4 separation unguarded for edited profiles. Separation derivation confirmed correct for `fitGesture`. All resolved in revision 2. | CHANGES REQUIRED |
 | R8 revision 2 | r8_review (re-review) | B1–B4 resolved against current code; no new blockers. Non-blocking: edit stale text, pending-id mismatch → `conflict`, `tiring` stage routing/types/view, keep message across `tiring`; adopted. | APPROVED |
+| R8 implementation (`7147850`) | w7b_test_review | Ran tsc, vitest 223, build, browser-check 12/12 itself; no correctness bugs; 31 of 41 mutants killed. BLOCKING (tests only): label-vs-id attribution, adjacent-key precedence and the cross-product, `comfortable` recording easy. | BLOCKING ISSUES |
+| R8 implementation (`5464487`) | w7b_test_review (re-check) | Tests `5464487`. Ran tsc, vitest 243, build, browser-check 12/12; M11, M14–M16, M28, M29, M33, M36 killed; 40 of 44 earlier mutants killed, survivors defensive/cosmetic/equivalent. Non-blocking open: defensive cancel-cause counting tests, recommendation published outside `mapping`, restored practice-strength wording. | PASS — software verified; human acceptance pending |
 
 ## R9 — W7c: free movement discovery (revision 2)
 
