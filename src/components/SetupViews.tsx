@@ -137,7 +137,7 @@ export function ChooseView({ snapshot, session }: ViewProps) {
               const used = inUse.has(key);
               return (
                 <button key={key} type="button" className="button feature-button" aria-pressed={selected === option} disabled={used}
-                  onClick={() => { setSelected(option); setName(option.label); }}>
+                  onClick={() => { setSelected(option); setName((current) => (!current.trim() || current === selected?.label ? option.label : current)); }}>
                   {option.label}<span>{used ? 'already in use' : deviation === null ? '—' : `${Math.max(0, deviation).toFixed(1)}× rest`}</span>
                 </button>
               );
@@ -146,7 +146,7 @@ export function ChooseView({ snapshot, session }: ViewProps) {
         </fieldset>
       ))}
       <label className="text-field">Name for this movement <span>(optional)</span>
-        <input value={name} maxLength={60} placeholder="My comfortable movement" onChange={(event) => setName(event.target.value)} />
+        <input value={name} maxLength={60} placeholder={selected ? 'My comfortable movement' : 'Choose a movement above first'} disabled={!selected} onChange={(event) => setName(event.target.value)} />
       </label>
       <div className="button-row">
         <button type="button" className="button" disabled={snapshot.camera !== 'running'} onClick={() => session.startDiscovery()}>Not sure? Find my movements</button>
@@ -157,6 +157,11 @@ export function ChooseView({ snapshot, session }: ViewProps) {
           Record this movement<Icon name="arrow" /></button>
         <button type="button" className="button button-quiet" onClick={() => session.cancel()}>Stop setup</button>
       </div>
+      {(!selected || snapshot.camera !== 'running') && (
+        <p className="helper-copy" role="status">
+          {!selected ? 'Choose a movement above to enable recording. The name is optional.' : 'Waiting for the camera before you can record.'}
+        </p>
+      )}
       <p className="helper-copy">Next: three practice attempts, two separate checks, then ten seconds of everyday activity. Head-direction labels are calculated from the camera geometry and still need confirmation on real hardware.</p>
       <SetupOptions snapshot={snapshot} session={session} />
     </>
