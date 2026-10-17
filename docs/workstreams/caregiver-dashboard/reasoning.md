@@ -124,3 +124,9 @@ It is NEVER discarded by: `offline` snapshots (signed-out + empty is how the rea
 | Revision | Reviewer | Verdict |
 | --- | --- | --- |
 | 3 | pending | — |
+
+## Testing review record
+| Commit | Reviewer | Result |
+| --- | --- | --- |
+| 29e9731 | independent testing reviewer | FAIL — B1: invite-expiry test passed via the retention cap, not expiry. Non-blocking gaps listed in progress.md. |
+| 9e23d01 | same reviewer, re-check | PASS — tsc, 87 feature / 583 full tests, build; expiry, cold-start, per-update chime, focus and re-sign-in mutants caught. |
