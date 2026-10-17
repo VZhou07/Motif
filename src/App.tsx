@@ -1,3 +1,4 @@
+import { CAREGIVER_HREF } from './app/route';
 import type { Stage } from './app/types';
 import { useMotif, type MotifRuntime } from './app/useMotif';
 import { CameraPanel } from './components/CameraPanel';
@@ -40,6 +41,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
         <div className="header-meta">
           <span className="privacy-tag"><Icon name="lock" size={15} />Camera processing stays on this device</span>
           <span className="input-tag">{snapshot.inputMode === 'assisted' ? 'Assisted switch' : 'Personal movement'}</span>
+          <a className="route-link" href={CAREGIVER_HREF}>Caregiver dashboard</a>
         </div>
       </header>
       <div className="workspace-layout">
