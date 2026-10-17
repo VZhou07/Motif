@@ -89,6 +89,7 @@ describe('caregiver dashboard on the real CareService', () => {
     env.state.credentialGate = new Promise((resolve) => { open = resolve; });
     service = new CareService(env.transport);
     render(<CaregiverDashboard client={service} sound={fakeSound().port} clock={manualClock()} />);
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 20)); });
     expect(screen.getByText('Connecting to the care service…')).toBeTruthy();
     expect(screen.queryByLabelText('E-mail')).toBeNull();
     await act(async () => { env.state.credentialGate = null; open(); });
@@ -113,7 +114,7 @@ describe('caregiver dashboard on the real CareService', () => {
   });
 
   it('a wrong password keeps the form with a message; signing out and in as B shows nothing of A', async () => {
-    const { service: client, container, alex } = await start(null);
+    const { service: client, container, alex, sound } = await start(null);
     await screen.findByLabelText('E-mail');
     fireEvent.change(screen.getByLabelText('E-mail'), { target: { value: 'a@example.org' } });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrong' } });
@@ -125,6 +126,8 @@ describe('caregiver dashboard on the real CareService', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await screen.findByRole('list', { name: 'Open requests' });
     expect(screen.getByText(/A group/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Enable sound' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Sound on (turn off)' })).toBeTruthy());
 
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
     await screen.findByLabelText('E-mail');
@@ -134,6 +137,7 @@ describe('caregiver dashboard on the real CareService', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await screen.findByText(/B group/);
     expect(screen.getAllByText(/Bob/).length).toBeGreaterThan(0);
+    expect(sound.chime).not.toHaveBeenCalled(); // B's existing queue never chimes
     expect(container.innerHTML).not.toContain(alex.id);
     expect(screen.queryByText(/Alex/)).toBeNull();
     expect(client.snapshot.access.group?.id).toBe(OTHER_GROUP_ID);
