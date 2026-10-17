@@ -65,8 +65,8 @@ describe('inside a group', () => {
 describe('More', () => {
   it.each([
     [1, true, ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']],
-    [2, false, ['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'tiring', 'add-movement', 'recalibrate', 'back', 'pause']],
-    [4, false, ['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'tiring', 'recalibrate', 'back', 'pause']],
+    [2, false, ['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']],
+    [4, false, ['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'recalibrate', 'back', 'pause']],
   ])('with %i movement(s) (timed: %s) holds the rarer controls and ends with Back and Pause', (movements, timed, expected) => {
     expect(ids('more', gesture(movements, timed))).toEqual(expected);
   });
@@ -121,5 +121,25 @@ describe('every level', () => {
     expect(ids('top', gesture(1))).toContain('more');
     expect(ids('more', gesture(1))).toContain('recalibrate');
     expect(CONTROL_LABELS.recalibrate).toBe('Recalibrate');
+  });
+});
+
+describe('Helper confirmation levels (R18)', () => {
+  it('the clear and recalibrate levels start with the safe choice and end with Pause', () => {
+    expect(ids({ clear: true }, gesture(1))).toEqual(['clear-no', 'clear-yes', 'pause']);
+    expect(ids({ recalibrate: true }, gesture(1))).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
+  });
+
+  it('practice falls back to the top level for them', () => {
+    const practice = { ...gesture(1), stage: 'practice' as const };
+    expect(effectiveLevel({ clear: true }, defaultVocabulary(), 'practice')).toBe('top');
+    expect(effectiveLevel({ recalibrate: true }, defaultVocabulary(), 'practice')).toBe('top');
+    expect(ids({ clear: true }, practice)).toEqual(ids('top', practice));
+  });
+
+  it('labels the Helper entry and its Close button', () => {
+    expect(buildLevel('top', defaultVocabulary(), gesture(1)).find((target) => target.id === 'more')?.label).toBe('Helper');
+    expect(buildLevel('more', defaultVocabulary(), gesture(1)).find((target) => target.id === 'back')?.label).toBe('Close helper');
+    expect(buildLevel({ group: 'g1' }, defaultVocabulary(), gesture(1)).find((target) => target.id === 'back')?.label).toBe('Back');
   });
 });

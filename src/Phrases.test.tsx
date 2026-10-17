@@ -65,27 +65,28 @@ describe('setup phrase editor', () => {
 });
 
 describe('communication levels on screen', () => {
-  it('helper shortcuts open any group or the main list, and are disabled while paused', () => {
+  it('helper shortcuts (inside Helper) open any group or the main list, and are disabled while paused', () => {
     const h = new Harness();
     show(h);
     fireEvent.click(button(/assisted input/i));
+    fireEvent.click(button('Helper'));
     const tabs = within(screen.getByRole('navigation', { name: 'Helper shortcuts to phrase groups' }));
-    expect(tabs.getByRole('button', { name: 'Main list' }).getAttribute('aria-pressed')).toBe('true');
     fireEvent.click(tabs.getByRole('button', { name: 'Needs' }));
     expect(h.snap.level?.group?.id).toBe('g2');
-    expect(tabs.getByRole('button', { name: 'Needs' }).getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('group', { name: 'Needs phrases' })).toBeTruthy();
     expect(button('Back')).toBeTruthy();
-    fireEvent.click(button('Pause'));
-    expect((tabs.getByRole('button', { name: 'Quick' }) as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(tabs.getByRole('button', { name: 'Quick' }));
-    expect(h.snap.level?.group?.id).toBe('g2');
-    fireEvent.click(button('Resume'));
-    fireEvent.click(tabs.getByRole('button', { name: 'Main list' }));
-    expect(h.snap.level?.kind).toBe('top');
-    fireEvent.click(button('More options'));
-    expect(screen.getByRole('heading', { name: 'More options' })).toBeTruthy();
+    fireEvent.click(button('Back'));
+    fireEvent.click(button('Helper'));
+    expect(screen.getByRole('heading', { name: 'Helper options' })).toBeTruthy();
     expect(button('Save message to Favourites')).toBeTruthy();
+    fireEvent.click(button('Pause'));
+    const paused = within(screen.getByRole('navigation', { name: 'Helper shortcuts to phrase groups' }));
+    expect((paused.getByRole('button', { name: 'Quick' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(paused.getByRole('button', { name: 'Quick' }));
+    expect(h.snap.level?.kind).toBe('more');
+    fireEvent.click(button('Resume'));
+    fireEvent.click(within(screen.getByRole('navigation', { name: 'Helper shortcuts to phrase groups' })).getByRole('button', { name: 'Main list' }));
+    expect(h.snap.level?.kind).toBe('top');
   });
 
   it('confirms a favourite on screen and counts it in the automatic-save note', () => {
@@ -93,10 +94,11 @@ describe('communication levels on screen', () => {
     h.setUpToCommunication();
     show(h);
     act(() => { h.click('phrase:g1:2'); h.click('save-favourite'); });
-    expect(screen.getByRole('heading', { name: 'Save to Favourites?' })).toBeTruthy();
+    expect(screen.getByText('Save “Thank you” to Favourites?')).toBeTruthy();
     fireEvent.click(button('Save “Thank you” to Favourites'));
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual(['Thank you']);
-    // main removed the named Save panel; the automatic-save note carries the count (R19).
+    // The automatic-save note (inside Helper) carries the count (R19).
+    fireEvent.click(button('Helper'));
     expect(screen.getByText(/saved on this device automatically.*including 1 favourite\)/)).toBeTruthy();
   });
 
@@ -104,7 +106,7 @@ describe('communication levels on screen', () => {
     const h = new Harness();
     show(h);
     fireEvent.click(button(/assisted input/i));
-    fireEvent.click(screen.getByRole('button', { name: 'Needs' }));
+    fireEvent.click(button('Helper'));
     expect(screen.getByText(/Pause scanning first/)).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: 'New phrase for Needs' })).toBeNull();
     fireEvent.click(button('Pause'));
@@ -123,16 +125,16 @@ describe('communication levels on screen', () => {
     h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
     show(h);
     expect(button('Open Quick, 3 phrases')).toBeTruthy();
-    expect(screen.queryByText('Edit phrases (helper)')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'More options' })).toBeNull();
+    expect(screen.queryByText('Edit phrases')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Helper' })).toBeNull();
   });
 
   it('the paused editor says changes cannot be kept when this browser blocks storage (R19)', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => null) });
     h.setUpToCommunication();
     show(h);
-    act(() => h.session.selectTarget('pause'));
-    fireEvent.click(screen.getByText('Edit phrases (helper)'));
+    act(() => { h.session.selectTarget('more'); h.session.selectTarget('pause'); });
+    fireEvent.click(screen.getByText('Edit phrases'));
     expect(screen.getByText('This browser cannot keep changes; they last until this page closes.')).toBeTruthy();
     expect(screen.queryByText(/Changes are kept on this device automatically/)).toBeNull();
   });

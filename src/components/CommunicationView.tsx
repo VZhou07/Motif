@@ -67,7 +67,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           )}
           {confirmingFavourite && (
             <>
-              <ScanButton id="confirm-favourite" snapshot={snapshot} onActivate={activate} primary disabled={paused}>Save to Favourites</ScanButton>
+              <ScanButton id="confirm-favourite" snapshot={snapshot} onActivate={activate} primary disabled={paused} label={scan?.targets.find((target) => target.id === 'confirm-favourite')?.label}>Save to Favourites</ScanButton>
               <ScanButton id="cancel-favourite" snapshot={snapshot} onActivate={activate} disabled={paused}>Cancel, do not save</ScanButton>
             </>
           )}

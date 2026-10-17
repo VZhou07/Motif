@@ -30,6 +30,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
   const seconds = ((snapshot.scan?.intervalMs ?? 2_000) / 1_000).toFixed(1);
   const paused = snapshot.scan?.paused ?? false;
   const assisted = snapshot.inputMode === 'assisted';
+  const favouriteCount = snapshot.vocabulary.groups[0]?.phrases.length ?? 0;
   return (
     <section className="helper-panel" aria-label="Helper options">
       <div className="helper-head">
@@ -110,7 +111,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       <EvidencePanel snapshot={snapshot} />
       <details className="helper-details">
         <summary>Saving and the start screen</summary>
-        {snapshot.profiles.available && <p className="helper-note">Your setup is saved on this device automatically: movement settings, controls, phrase groups (including {snapshot.vocabulary.groups[0]?.phrases.length ?? 0} favourites), scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
+        {snapshot.profiles.available && <p className="helper-note">Your setup is saved on this device automatically: movement settings, controls, phrase groups (including {favouriteCount} favourite{favouriteCount === 1 ? '' : 's'}), scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
         {assisted && !snapshot.approvedModels.length && (
           <div className="button-row">
             <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>
