@@ -256,3 +256,49 @@ Recalibrate (R5) still restarts with one new gesture and replaces the whole set 
 ### Tests
 
 Pure: proposal generation for 1–4 gestures, mapping validation (duplicate actions, missing select, previous without next, unknown ids). Session: add a second gesture with held-out + cross-check + negative on the set; a candidate that steals the old gesture fails its cross-check; duplicate movement refused; simultaneous A+B selects nothing in setup and communication; Next/Select step scanning has no timed advance and selects the stepped item; previous; pause gesture toggles and next is ignored while paused; one-gesture fallback ignores the unmapped gesture; Change controls requires confirmation and fresh neutral, Keep current controls preserves the old mapping; 3- and 4-gesture mappings reach every operational control; assisted mode unaffected. RTL: mapping proposals render with scan highlight. Then full suite, typecheck, build, browser check, independent test review.
+
+## R7 — W7a: local profiles and restore (revision 1)
+
+Status: DRAFT, awaiting independent reasoning review before any code. Owner: Claude Code coordinator (session 3). Builds on approved R4–R6. W6 independent testing review runs separately.
+
+### Scope
+
+Opt-in, minimal, versioned local profiles (UA1/UA2): explicit Save with a name, a list of saved profiles, Delete (one or all), strict validation on load, and a disarmed restore that requires a fresh rest check, revalidation of every saved movement, the everyday-activity check and explicit mapping approval before anything can act. Recalibration/remapping/adding already exist (R5/R6) and keep their cancel/keep-current and assisted recovery; W7a only adds that a profile is never changed in storage except by an explicit Save.
+
+### Stored data (and nothing else)
+
+`StoredProfile = { version: 1, featureSchema: string, name: string, models: GestureModel[], mapping: { assignments: Assignments }, phrases: string[], scanIntervalMs: number }`, kept in `localStorage` under one key `motif.profiles` as `{ version: 1, profiles: StoredProfile[] }`.
+- `featureSchema` is `FEATURE_IDS.join(',')`, so a model saved for a different feature set is rejected rather than reinterpreted.
+- Models are the approved, frozen `GestureModel`s (feature, direction, baseline center, thresholds, dwell times, label, id). They are numbers relative to blendshape coefficients/angles, not images or identity data.
+- Never stored: video, frames, baseline statistics, setup evidence, the message being composed, spoken history, camera status, or anything about the device. The rest check is always re-recorded.
+- Limits: name 1–40 characters after trimming; at most 8 profiles; Save with an existing name needs explicit `replace`.
+
+### Profile module (pure, `src/app/profiles.ts`)
+
+- `parseProfile(unknown): Result<StoredProfile>` rejects, with readable reasons: a non-object; unknown or missing keys (exact key sets at every level, so nothing extra is ever kept); `version !== 1` ("made by a different version"); schema mismatch; a name outside the limits; 1–4 models; each model's feature not in `FEATURE_IDS`, direction not ±1, any nonfinite number (JSON turns NaN/Infinity into `null`, which also fails), `activationThreshold <= releaseThreshold`, `releaseThreshold <= 0`, dwell times outside 50–5 000 ms, empty/over-60-character label, duplicate ids or duplicate feature+direction; a mapping that fails `validateMapping` for those models; anything other than exactly 6 phrases of 1–60 characters; a scan interval outside `SESSION_LIMITS` bounds or not a multiple of the 500 ms step.
+- `profileFromSession({name, models, mapping, phrases, scanIntervalMs})` builds a profile from explicit fields only and runs it through `parseProfile` before it can be written.
+- `ProfileStore` port: `list(): { profiles: StoredProfile[]; rejected: number; available: boolean }`, `save(profile, replace): SaveResult`, `remove(name)`, `removeAll()`. `createLocalProfileStore(storage)` wraps a `Storage`-like object; every access is in try/catch so private mode, quota errors or blocked storage give `available: false` or an explicit failure, never a crash. Invalid stored entries are skipped and counted (the UI says "N saved profiles could not be read and were ignored"); corrupt JSON counts as one rejected entry. `createMemoryProfileStore()` serves tests and the default session (so a session without a store saves nothing persistently).
+
+### Session wiring
+
+- `MotifSession` takes an optional `profiles?: ProfileStore`; `useMotif` passes `createLocalProfileStore(window.localStorage)` (guarded). Nothing is written unless `saveProfile` is called.
+- `saveProfile(name, replace=false)`: only in `communication` or `practice` with an approved set and mapping (gesture or assisted mode). It is a conventional, caregiver-assisted action (naming needs typing); it is not on the scanner, so a stray gesture can never save or delete. Announces the result (saved / name exists / storage unavailable / limit reached). The snapshot shows `profiles: { names, rejected, available, active, unsaved }`; `unsaved` becomes true when the approved set, mapping, phrases or interval differ from the active profile.
+- `deleteProfile(name)` / `deleteAllProfiles()`: conventional with a confirm step in the UI; allowed in any stage; never changes the in-memory approved setup.
+- `restoreProfile(name)`: allowed only from `welcome` or `setup-failed` when no setup is approved (a person switching profiles reloads or uses the welcome screen; demo Person A/B in W8 uses this). Needs the camera running. It re-reads and re-validates the profile from the store at that moment, then enters `baseline` with `restoring = profile`. Nothing is armed: `approvedModels`/`mapping` stay empty, so communication and Space-free gesture control are impossible until approval.
+- After the fresh rest check, a rest-compatibility check: for every saved model, today's rest must sit inside that model's neutral zone, i.e. `direction * (statistic − baselineCenter)` for the rest `low`, `center` and `high` stays below `releaseThreshold` (and above −`releaseThreshold` on the opposite side, so the rest is not already counted as moving the other way). If not, the restore fails honestly ("Your resting face reads differently from when this profile was saved…") and offers a new setup or assisted input. Thresholds are never re-centred or adapted silently.
+- Revalidation (`verify` stage, frozen models, no fitting): the select movement twice, then every other saved movement once, each with `evaluatePositiveAttempt(set, frames, expectedId)` on the whole set; evidence kind `recheck`. Then the 10 s neutral-armed negative window over the set (existing `NegativeMonitor`). Interruption caps, no retry-until-pass and the 60 s caps are as in R5. A cycle records `source: 'restored'` and the profile name.
+- `comfort` asks whether the movements are still comfortable (Comfortable / Choose another movement / Do not use this profile), scanned by any movement in the set. Comfortable opens `mapping-confirm` with the saved mapping as the pending proposal (label "Saved controls: …"); `Choose different controls` goes to `mapping` with proposals for the restored set. Only `Approve these controls` arms: then the set, mapping, phrases and scan interval are applied, `active` = the profile name, `previousMapping` is cleared, and practice starts with a fresh runtime (fresh neutral). Any failure, rejection or cancel clears `restoring`, applies nothing, and leaves storage untouched.
+- `another-movement` after a failed or rejected restore starts a normal new setup from the fresh rest check; `record-again` is not offered for restores (there is nothing to re-record).
+
+### Failure modes covered
+
+Corrupt/foreign/newer/edited storage; blocked storage; restore of a deleted profile (re-read at restore time fails cleanly); rest that no longer matches; revalidation failure; a profile whose saved mapping is invalid for its models (rejected at parse); a gesture during restore before approval (no action: no approved set); stage changes (fresh neutral as everywhere); a save while capture runs (refused); message/composer text never reaching storage.
+
+### Tests before advancing
+
+Pure (`profiles.test.ts`): round trip; each rejection above (including `null` thresholds from NaN, extra keys, version 2, schema mismatch, 5 models, duplicate movement, invalid mapping, 5 phrases, bad interval/name); store list skips and counts bad entries and corrupt JSON; save/replace/exists/limit; remove/removeAll; storage that throws on get/set gives `available: false` or a failure result, never an exception. Session: save refused before approval and during capture; save stores only allowed keys and never the message; restore requires the camera; restore stays disarmed through every stage (no communication targets, `selectTarget` of a phrase does nothing); rest mismatch fails honestly; recheck plan and kinds; a failed recheck fails; negative window over the set; Approve applies set/mapping/phrases/interval and needs fresh neutral; Choose different controls; reject/cancel applies nothing; a two-movement step profile restores and steps; delete and delete-all; `unsaved` flag. RTL: Save form in communication, profile list with Restore/Delete-confirm on welcome, rejected-count notice. Browser check: still nothing persisted without an explicit Save. Then typecheck, build, independent testing review.
+
+### R7 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
