@@ -1,5 +1,21 @@
 # Motif technical handoff
 
+## Latest isolated task — R15 Open mouth / head conflict
+
+Latest user reports tilt down and turn right interfere with Open mouth. User requests ambiguity-safe personalized inputs, then excludes communication UI/new buttons owned by teammate. Work ONLY in `C:\Users\light\Motif\.cache\worktrees\gesture-conflicts`, branch `fix/gesture-conflicts`, base `ba15850`. Original checkout has Grok's uncommitted wink/hold work: never edit/stage/commit it or stop its processes. No automatic merge while Grok is active. Earlier build Goal stays paused.
+
+State: **software verified; real-user mouth/head calibration pending.** R15 revisions 1 and 2 independently APPROVED by conflict_reasoning before their implementation. Root coordinated recognition, verification, session and docs; mapping_investigation implemented only calibration prompts/diagnostics and returned ownership. Independent conflict_tests completed final execution/review with explicit PASS. All agents read the canonical skill/four docs. No worker retains file ownership and no partial implementation remains. Isolated baseline was 31 files/355 tests PASS. The new co-motion fixtures reproduced eight failures before the fix.
+
+Final independent commands: `npm test -- --reporter=dot` → **35 files/378 PASS**; `npm run typecheck` PASS; `npm run build` (assets/typecheck/Vite) PASS; `git diff --check` PASS. Tester ran all 67 synthetic-camera browser checks on isolated ports 4437/4438 using an in-memory port substitution (tracked browser script unchanged); both test servers exited. Seven adversarial runtime probes passed. Saved-profile probe passed: correct first voiced target, dropout after a changed-target preview, corrected spoken unfinished target, full restarted Rest, exactly four rechecks and disarmed approval. The review first BLOCKED a stale spoken preview on interruption; fixed by naming the next target on every Rest cue. A newly obsolete announcer assertion was corrected while retaining countdown deduplication checks. No unresolved automated failures.
+
+Coverage: mouth + tilt down / turn right with smoothed gradual co-motion; a responder prepares during Rest without peeking at Action; full held-out/cross-check/negative gates; frozen models; separate existing Next/Select actions. Actual simultaneous activation still fails, even after an earlier correct event, and preserves old controls. Rest/rearming, threshold edges, opposite directions, missing/wrong/repeated/ambiguous explanations and saved-profile preparation are pinned. Changed code is limited to recognition/verification, session capture metadata/cues, calibration views/diagnostics and associated tests. No communication-screen or mapping-editor change.
+
+An isolated dev server is running for the user at **http://127.0.0.1:5187/**, exec session **66988** (workdir THIS worktree; `npm run dev -- --port 5187 --strictPort`). Leave it running for user testing; stop only this recorded process when requested, never Grok's node processes. Original checkout has not been edited/staged/committed by this task. Build assets were copied into this worktree's gitignored public directories. Dependencies resolve from ancestor; only `node_modules/@mediapipe` is a read-through junction for the asset validator; Vite caches live in this worktree. No real camera opened. Native test/build workers needed approved execution after sandbox `spawn EPERM`.
+
+Next pickup: (1) inspect this worktree's status/log and preserve the isolated preview; (2) run real-person ACCEPTANCE.md 6.6 when the user tries it, retaining failed-check numbers if needed; (3) after concurrent work is finished and integration is authorized, compare Grok's recognition/calibration changes and integrate the focused commits with review and regression checks. Do not automatically merge, cherry-pick into, or push the active original branch. The software verification does not establish real-person comfort, accuracy, head labels or cue audibility.
+
+R15 local code commits (in order): `8f2fde6 Fix gesture conflicts`, `7db6bd2 Explain gesture check failures`, `f8702e4 Prepare upcoming gesture checks`, `2f73157 Clarify calibration preparation`. Last passing code is `2f73157`; a separate documentation commit follows it. All commit messages are subject-only, with no coauthor/signature/body. Final documents were independently checked by conflict_reasoning: PASS. No source edits followed the final 378-test/build PASS. No uncommitted implementation or unresolved software blocker remains; verify actual Git status before pickup. Nothing merged or pushed.
+
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
 ## Latest focused task — camera diagnostics and Rest / Action cues (R13)
@@ -24,12 +40,12 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 
 ## Resume first (next agent)
 
-1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R13 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
-2. Run `git status` and `git log --oneline -n 10`. Expected: compare with "Last passing commit" below. No processes or extra worktrees were left running.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R15 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
+2. Work in the isolated worktree recorded above; run `git status` and `git log --oneline -n 10`. Its port-5187 preview is intentionally running. The original checkout is concurrently owned by Grok; historical sections below describe older completed tasks, not current process ownership.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
-## Last passing commit
+## Previous passing commits (before R15)
 
 - Last passing code/test commits: `4b15c3b Add rest action diagnostics`, `ba253df Test rest action diagnostics`. Coordinator: typecheck PASS; vitest 31 files/353 PASS; build PASS. Independent r13_testing: tsc, 353 tests, build, browser 67/67, pending-at-boundary recheck PASS. Prior baseline `2ee25cf`.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
@@ -84,7 +100,7 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 - Node 24.13.1, npm 11.8.0, Chrome and Edge installed. Pinned deps in `package.json`/lockfile (React 19.3.1, Vite 8.3.4, TS 7.0.2, Vitest 5.0.5, Tailwind 4.3.3, MediaPipe tasks-vision 1.1.1, Playwright 1.64.1, jsdom 26.1.0).
 - npm defaults to offline; network installs need native approval with command-local flags. No global config changes.
 - Git author identity is configured locally (values not logged).
-- Running processes/worktrees left by this session: none.
+- Historical pre-R15 session left no processes/worktrees. For the current isolated worktree and preview process, use the R15 handoff at the top of this document.
 
 ## Environment (Linux server, session 3, 2026-10-17)
 

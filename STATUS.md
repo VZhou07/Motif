@@ -1,11 +1,13 @@
 # Motif build update
 
-**Changed for you:** calibration now alternates **5 seconds Rest / 5 seconds Action** (no separate Return to rest). A low beep marks Rest, a higher beep marks Action (checkbox on the camera panel). Diagnostics sit **under** the camera so they do not cover your face. If Rest was already as strong as Action (for example an open mouth during Rest), it says so in plain language.
+The head/mouth conflict fix is ready to try at **http://127.0.0.1:5187/**. It runs separately on `fix/gesture-conflicts`; Grok's checkout and your teammate's communication screen were left untouched.
 
-**Checked (automated):** typecheck PASS; 353 tests PASS; production build PASS; 67/67 fake-camera browser checks PASS. Independent review required a pending-at-boundary test, then passed. Shared Rest that starts while you are still relaxing is no longer rejected just because the first frame is not rest yet.
+A clear movement can now work alongside small incidental movement. Two gestures reaching their action thresholds together still cancel input. Rest shows and optionally speaks the movement needed for the next Action, including after an interrupted attempt. Failed checks explain whether the movement was missed, repeated, confused with another, or actually ambiguous, with measured values.
 
-The approved communication features, movement discovery, multiple movements, saved profiles and assisted Space-bar input remain available. Camera processing stays on this computer, and outside usage reporting is blocked.
+Calibration still uses **5 seconds Rest / 5 seconds Action**, with the existing low/high beeps. No new communication buttons were added.
 
-**Still needs a person:** real face tracking, whether this rhythm is comfortable, whether the beeps are audible, and hands-free use. The camera stayed covered during automated checks. See `ACCEPTANCE.md` 3.2 and 3.6.
+Independent checks passed: **378 tests, typecheck, production build, and 67 fake-camera browser checks**. Tests reproduce mouth with tilt down and turn right, use them for separate existing controls, and reject actual simultaneous activation.
 
-Refresh the app (`npm run dev`) and try calibration again. Look at the overlay if it still fails. Actual success is not claimed. Nothing has been pushed.
+**Still needs your try:** real mouth/head calibration, comfortable timing, direction labels, and audible cues. No real camera was opened during these checks. See `ACCEPTANCE.md` 6.6.
+
+The changes are committed locally in the separate branch. Nothing was merged or pushed.
