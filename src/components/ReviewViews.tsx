@@ -68,8 +68,29 @@ export function FailedView({ snapshot, session }: ViewProps) {
   );
 }
 
+/** Locally controlled so a publish per keystroke never remounts it or moves focus; every valid change applies at once. */
+function MovementName({ initial, session }: { initial: string; session: ViewProps['session'] }) {
+  const [draft, setDraft] = useState(initial);
+  const [problem, setProblem] = useState('');
+  const check = (value: string) => {
+    const result = session.renameMovement(value);
+    setProblem(result.ok ? '' : result.reason);
+  };
+  return (
+    <div className="text-field">
+      <label htmlFor="movement-name">Name this movement</label>
+      <input id="movement-name" value={draft} maxLength={60} aria-describedby="movement-name-status"
+        onChange={(event) => { setDraft(event.target.value); if (session.renameMovement(event.target.value).ok) setProblem(''); }}
+        onBlur={(event) => check(event.target.value)}
+        onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); check(event.currentTarget.value); } }} />
+      <p id="movement-name-status" role="status" className="helper-copy">{problem}</p>
+    </div>
+  );
+}
+
 export function ComfortView({ snapshot, session }: ViewProps) {
   const cycle = snapshot.cycles[snapshot.cycles.length - 1];
+  const preview = snapshot.comfortPreview;
   return (
     <>
       <Heading eyebrow="CHECKING IN WITH YOU" title={<>How does<br /><em>that feel?</em></>}
@@ -83,8 +104,16 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         </div>
         <p>Observations from this short session, not a guarantee of future accuracy.</p>
       </div>
-      <h2 className="question-heading">Comfortable enough to repeat?</h2>
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      <h2 className="question-heading">{preview ? 'Comfortable enough to use?' : 'Comfortable enough to repeat?'}</h2>
+      {preview && snapshot.candidate && <MovementName initial={snapshot.candidate.label} session={session} />}
+      {preview && (
+        <div id="comfort-preview" className="mapping-explainer comfort-preview"><Icon name="check" />
+          <p>Approving turns on: <strong>{preview.label}</strong>. {preview.mode === 'auto'
+            ? 'Choices highlight one at a time on their own, and your held movement selects the highlighted choice. Nothing is spoken until you choose it.'
+            : 'The highlight moves only when you make your movement.'} Nothing is on until you approve.</p>
+        </div>
+      )}
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} describedBy={preview ? 'comfort-preview' : undefined} />
       <EvidencePanel snapshot={snapshot} />
     </>
   );

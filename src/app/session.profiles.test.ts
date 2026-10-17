@@ -188,6 +188,26 @@ describe('quick continue', () => {
   });
 });
 
+describe('one-movement saved setup: confirm screen', () => {
+  it('offers Choose another movement instead of a one-option controls page, and approves nothing', () => {
+    const { storage, store } = storeFor();
+    const first = new Harness({ profiles: store });
+    first.now = 10 * 60 * 60_000; // a real wall-clock time, so the rest check counts as recent
+    first.setUpToCommunication();
+    const h = new Harness({ profiles: storeFor(storage).store });
+    h.now = first.now + 60_000;
+    h.session.setCamera('running');
+    expect(h.session.restoreProfile('Last setup', true)).toBe(true);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['another-movement', 'approve-mapping']);
+    h.selectByGesture('another-movement');
+    expect(h.snap.stage).toBe('choose');
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.restoring).toBeNull();
+    expect(h.snap.pendingMapping).toBeNull();
+  });
+});
+
 const MINUTE = 60_000;
 const LAST = 'Last setup';
 
@@ -325,7 +345,7 @@ describe('Continue within an hour of the checks (R17)', () => {
     h.now += 30 * MINUTE;
     expect(h.session.restoreProfile(LAST, true)).toBe(true);
     expect(h.snap.stage).toBe('mapping-confirm');
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping', 'reject-profile']);
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping']);
     expect(h.snap.approvedModels).toEqual([]);
     expect(h.snap.runtime?.armed).not.toBe(true);
     h.session.selectTarget('phrase:0');
@@ -513,10 +533,18 @@ describe('a failed restore forgets the check times (R17 B1)', () => {
     const store = createLocalProfileStore(() => storage);
     const h = new Harness({ profiles: store });
     h.setUpToCommunication();
+    // Two movements, so the controls screen (with "Do not use this profile") is reachable from the confirm screen.
+    h.run(2_000);
+    h.addMovement(OPEN_MOUTH, perform);
+    h.selectByGesture('comfortable');
+    h.selectByGesture('map:0');
+    h.selectByGesture('approve-mapping');
+    h.stepTo('finish-practice');
     expect(h.session.returnToStart()).toBe(true);
     blocked = true;
     h.session.restoreProfile(LAST, true);
     expect(h.snap.stage).toBe('mapping-confirm');
+    h.session.decide('choose-different'); // "Do not use this profile" lives on the controls screen
     h.session.decide('reject-profile');
     h.session.restoreProfile(LAST, true);
     h.session.cancel();
@@ -571,7 +599,8 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.pendingMapping?.id).toBe('saved');
     expect(h.snap.pendingMapping?.label).toMatch(/^Saved controls: Raise left outer eyebrow selects · Open mouth moves next/);
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping', 'reject-profile']);
+    // "Do not use this profile" is not offered on the confirm screen; it stays on comfort and mapping.
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping']);
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.runtime?.armed).toBe(false);
@@ -606,13 +635,16 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.profiles.unsaved).toBe(true);
   });
 
-  it.each(['mapping', 'mapping-confirm'] as const)('“Do not use this profile” works by gesture in %s and applies nothing', (stage) => {
+  it('“Do not use this profile” works by gesture in mapping and applies nothing', () => {
     const { storage } = savedPersonA();
     const h = restoreOn(storage);
     recheck(h);
     h.selectByGesture('comfortable');
-    if (stage === 'mapping') h.selectByGesture('choose-different');
-    expect(h.snap.stage).toBe(stage);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    h.session.decide('reject-profile'); // not offered on the confirm screen: ignored
+    expect(h.snap.stage).toBe('mapping-confirm');
+    h.selectByGesture('choose-different');
+    expect(h.snap.stage).toBe('mapping');
     h.selectByGesture('reject-profile');
     expect(h.snap.stage).toBe('setup-failed');
     expect(h.snap.failure?.title).toBe('Profile not used');
@@ -740,9 +772,7 @@ describe('restoring a profile (R7)', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.cycles.at(-1)!.source).toBe('trained');
-    h.selectByGesture('comfortable', MOUTH);
-    h.selectByGesture('map:0', MOUTH);
-    h.selectByGesture('approve-mapping', MOUTH);
+    h.selectByGesture('approve-comfortable', MOUTH);
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual(['Open mouth']);
   });
