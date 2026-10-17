@@ -111,6 +111,8 @@ export function ChooseView({ snapshot, session }: ViewProps) {
   const [selected, setSelected] = useState<MovementOption | null>(null);
   const [name, setName] = useState('');
   const regions = [...new Set(MOVEMENT_OPTIONS.map((option) => option.region))];
+  // While adding, movements already in the approved set are refused by the session; show that up front.
+  const inUse = new Set(snapshot.adding ? snapshot.approvedModels.map((model) => `${model.feature}:${model.direction}`) : []);
   return (
     <>
       <Heading eyebrow="STEP 2 · FIND YOUR MOVEMENT" title={<>A movement that<br /><em>works for you.</em></>}
@@ -124,10 +126,11 @@ export function ChooseView({ snapshot, session }: ViewProps) {
             {MOVEMENT_OPTIONS.filter((option) => option.region === region).map((option) => {
               const deviation = liveDeviation(snapshot.baseline, snapshot.frame, option.feature, option.direction);
               const key = `${option.feature}:${option.direction}`;
+              const used = inUse.has(key);
               return (
-                <button key={key} type="button" className="button feature-button" aria-pressed={selected === option}
+                <button key={key} type="button" className="button feature-button" aria-pressed={selected === option} disabled={used}
                   onClick={() => { setSelected(option); setName(option.label); }}>
-                  {option.label}<span>{deviation === null ? '—' : `${Math.max(0, deviation).toFixed(1)}× rest`}</span>
+                  {option.label}<span>{used ? 'already in use' : deviation === null ? '—' : `${Math.max(0, deviation).toFixed(1)}× rest`}</span>
                 </button>
               );
             })}

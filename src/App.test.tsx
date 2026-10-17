@@ -149,4 +149,15 @@ describe('Motif app', () => {
     expect(panel.textContent).toMatch(/Raise left outer eyebrowSelects/);
     expect(panel.textContent).toMatch(/Open mouthMoves next/);
   });
+
+  it('disables movements already in use while adding another', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    h.selectByGesture('add-movement');
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    const used = screen.getByRole('button', { name: /Raise left outer eyebrow/ }) as HTMLButtonElement;
+    expect(used.disabled).toBe(true);
+    expect(used.textContent).toMatch(/already in use/);
+    expect((screen.getByRole('button', { name: /Raise right outer eyebrow/ }) as HTMLButtonElement).disabled).toBe(false);
+  });
 });
