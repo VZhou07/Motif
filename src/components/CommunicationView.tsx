@@ -1,5 +1,4 @@
 import { Icon } from './Icon';
-import { SaveProfile } from './ProfileViews';
 import { EvidencePanel } from './ReviewViews';
 import { ScanButton, ScanHint } from './ScanBoard';
 import type { ViewProps } from './SetupViews';
@@ -59,7 +58,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
         ))}
       </nav>
       <p className="helper-copy">Scanning every {((scan?.intervalMs ?? 2_000) / 1_000).toFixed(1)} seconds. {snapshot.inputMode === 'assisted' ? 'Assisted mode does not use or verify a facial movement.' : 'If tracking is lost, scanning waits and nothing is selected.'}</p>
-      {!practice && <SaveProfile snapshot={snapshot} session={session} />}
+      {!practice && snapshot.profiles.available && <p className="helper-copy">Your setup is saved on this device automatically: movement settings, controls, phrases and scan speed. Never video, camera images or your messages.</p>}
       {!practice && <EvidencePanel snapshot={snapshot} />}
     </>
   );
