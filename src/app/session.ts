@@ -1145,8 +1145,9 @@ export class MotifSession {
       if (actionOf(update.started) === 'select') scanner.beginSelection(nowMs);
     }
     if (update.cancelled && scanner.snapshot.latchedTarget !== undefined) {
-      // Letting go early keeps the highlight's remaining time; tracking problems restart it.
-      if (update.cancelCause === 'released') scanner.abandonSelection(nowMs); else scanner.cancelSelection(nowMs);
+      // Letting go early (released, or passing through the band on the way down) keeps the highlight's
+      // remaining time; tracking loss and conflicting movements restart it.
+      if (update.cancelCause === 'released' || update.cancelCause === 'band') scanner.abandonSelection(nowMs); else scanner.cancelSelection(nowMs);
     }
     if (update.event) {
       this.idleValidMs = 0;
