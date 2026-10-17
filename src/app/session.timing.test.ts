@@ -17,13 +17,14 @@ function followWithJitter(h: Harness, done: (snap: SessionSnapshot) => boolean, 
   const start = h.now;
   let prompt = h.snap.capture?.prompt;
   let since = h.now;
+  let returning = false;
   const cadence = [43, 89, 71, 57];
   for (let index = 0; !done(h.snap); index += 1) {
     if (h.now - start > 65_000) throw new Error(`Timed out in ${h.snap.stage}: ${h.snap.failure?.reasons.join(', ')}`);
     const current = h.snap.capture?.prompt;
-    if (current !== prompt) { prompt = current; since = h.now; }
+    if (current !== prompt) { returning = prompt === 'Action' && current === 'Rest'; prompt = current; since = h.now; }
     const elapsed = h.now - since;
-    const moving = (current === 'Move' && elapsed >= delayMs) || (current === 'Return to rest' && elapsed < delayMs);
+    const moving = (current === 'Action' && elapsed >= delayMs) || (current === 'Rest' && returning && elapsed < delayMs);
     h.stepMs = cadence[index % cadence.length]!;
     h.step(moving ? movement : REST);
   }
@@ -32,9 +33,9 @@ function followWithJitter(h: Harness, done: (snap: SessionSnapshot) => boolean, 
 describe('natural guided pacing (R11)', () => {
   it('speaks each real phase once across all five attempts, ending directly with everyday activity', () => {
     const h = training(true);
-    expect(h.spoken).toEqual(['Get ready']);
+    expect(h.spoken).toEqual(['Rest']);
     h.followPrompts((snap) => snap.stage === 'negative');
-    expect(h.spoken).toEqual([...Array.from({ length: 5 }, () => ['Get ready', 'Move', 'Return to rest']).flat(), 'Everyday activity']);
+    expect(h.spoken).toEqual(['Rest', ...Array.from({ length: 5 }, () => ['Action', 'Rest']).flat(), 'Everyday activity']);
     expect(h.snap.capture?.prompt).toBe('Everyday activity');
     expect(h.snap.capture?.remainingMs).toBe(10_000);
   });
@@ -42,14 +43,14 @@ describe('natural guided pacing (R11)', () => {
   it('immediately cancels an interrupted Move and restarts the matching ready countdown without counting the trial', () => {
     const h = training(true);
     const cancel = vi.spyOn(h.speech, 'cancel');
-    h.followPrompts((snap) => snap.capture?.prompt === 'Move');
+    h.followPrompts((snap) => snap.capture?.prompt === 'Action');
     h.run(450, BROW);
     h.step(REST, 'missing');
     expect(cancel).toHaveBeenCalledOnce();
-    expect(h.spoken.at(-1)).toBe('Get ready');
-    expect(h.snap.capture).toMatchObject({ prompt: 'Get ready', remainingMs: 3_000, index: 1, validMs: 0, interruptions: 1 });
+    expect(h.spoken.at(-1)).toBe('Rest');
+    expect(h.snap.capture).toMatchObject({ prompt: 'Rest', remainingMs: 5_000, index: 1, validMs: 0, interruptions: 1 });
     h.step();
-    expect(h.snap.capture?.remainingMs).toBe(3_000);
+    expect(h.snap.capture?.remainingMs).toBe(5_000);
     h.followPrompts((snap) => snap.stage === 'negative');
     expect(h.snap.cycles[0]!.training?.ok).toBe(true);
     expect(h.snap.cycles[0]!.heldOut).toHaveLength(2);
@@ -59,10 +60,10 @@ describe('natural guided pacing (R11)', () => {
     const h = training(true);
     const cancel = vi.spyOn(h.speech, 'cancel');
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      h.followPrompts((snap) => snap.capture?.prompt === 'Move');
+      h.followPrompts((snap) => snap.capture?.prompt === 'Action');
       const before = h.spoken.length;
       h.step(REST, 'missing');
-      expect(h.spoken.slice(before)).toEqual(attempt < 4 ? ['Get ready'] : []);
+      expect(h.spoken.slice(before)).toEqual(attempt < 4 ? ['Rest'] : []);
     }
     expect(cancel.mock.calls.length).toBeGreaterThanOrEqual(5);
     expect(h.snap.stage).toBe('setup-failed');
@@ -74,7 +75,7 @@ describe('natural guided pacing (R11)', () => {
     h.run(1_000);
     h.stall(12_000);
     expect(h.snap.stage).toBe('training');
-    expect(h.snap.capture).toMatchObject({ index: 1, prompt: 'Get ready', remainingMs: 3_000, validMs: 0 });
+    expect(h.snap.capture).toMatchObject({ index: 1, prompt: 'Rest', remainingMs: 5_000, validMs: 0 });
     expect(h.snap.cycles[0]!.training).toBeNull();
   });
 
@@ -106,16 +107,16 @@ describe('natural guided pacing (R11)', () => {
     let since = h.now;
     const start = h.now;
     while (h.snap.stage === 'training') {
-      if (h.now - start > 35_000) throw new Error('Training did not finish');
+      if (h.now - start > 45_000) throw new Error('Training did not finish');
       const current = h.snap.capture?.prompt;
       if (current !== prompt) { prompt = current; since = h.now; }
       const elapsed = h.now - since;
-      const moving = kind === 'early' ? current === 'Get ready' && elapsed < 500 : current === 'Move' && elapsed < 500;
+      const moving = kind === 'early' ? current === 'Rest' && elapsed < 500 : current === 'Action' && elapsed < 500;
       h.step(moving ? BROW : REST);
     }
     expect(h.snap.stage).toBe('setup-failed');
     expect(h.snap.failure?.kind).toBe('training');
     expect(h.snap.candidate).toBeNull();
-    expect(h.spoken).toEqual(Array.from({ length: 3 }, () => ['Get ready', 'Move', 'Return to rest']).flat());
+    expect(h.spoken).toEqual(['Rest', ...Array.from({ length: 3 }, () => ['Action', 'Rest']).flat()]);
   });
 });

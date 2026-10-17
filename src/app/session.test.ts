@@ -88,13 +88,13 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     h.session.startBaseline();
     h.run(10_500);
     h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Brow' });
-    h.followPrompts((snap) => snap.capture?.prompt === 'Move');
+    h.followPrompts((snap) => snap.capture?.prompt === 'Action');
     h.run(500, BROW);
     h.step(REST, 'multiple');
     expect(h.snap.stage).toBe('training');
     expect(h.snap.capture?.index).toBe(1);
     expect(h.snap.capture?.interruptions).toBe(1);
-    expect(h.snap.capture?.prompt).toBe('Get ready');
+    expect(h.snap.capture?.prompt).toBe('Rest');
     h.followPrompts((snap) => snap.stage === 'verify');
     expect(h.snap.cycles[0]!.training?.ok).toBe(true);
   });
@@ -423,7 +423,7 @@ describe('honest limits and setup settings', () => {
       h.run(10_500);
       h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Brow' });
       h.followPrompts((snap) => snap.capture?.index === 2);
-      expect(h.spoken.slice(0, 3)).toEqual(enabled ? ['Get ready', 'Move', 'Return to rest'] : []);
+      expect(h.spoken.slice(0, 3)).toEqual(enabled ? ['Rest', 'Action', 'Rest'] : []);
     }
   });
 });

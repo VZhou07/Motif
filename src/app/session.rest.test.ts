@@ -36,15 +36,16 @@ function start(motion: Motion): Harness {
 function follow(h: Harness, motion: Motion, done: (snap: SessionSnapshot) => boolean): void {
   let prompt = h.snap.capture?.prompt;
   let since = h.now;
+  let returning = false;
   const startMs = h.now;
   const cadence = [50, 83, 67, 100];
   for (let index = 0; !done(h.snap); index += 1) {
     if (h.now - startMs > 60_000) throw new Error(`Timed out in ${h.snap.stage}`);
     const current = h.snap.capture?.prompt;
-    if (current !== prompt) { prompt = current; since = h.now; }
+    if (current !== prompt) { returning = prompt === 'Action' && current === 'Rest'; prompt = current; since = h.now; }
     const elapsed = h.now - since;
-    const fraction = current === 'Move' ? Math.min(1, Math.max(0, (elapsed - 450) / 300))
-      : current === 'Return to rest' ? Math.exp(-Math.max(0, elapsed - 550) / 500) : 0;
+    const fraction = current === 'Action' ? Math.min(1, Math.max(0, (elapsed - 450) / 300))
+      : current === 'Rest' && returning ? Math.exp(-Math.max(0, elapsed - 550) / 500) : 0;
     h.stepMs = cadence[index % cadence.length]!;
     h.step({ [motion.feature]: center(motion.feature) + motion.excursion * fraction });
   }
@@ -89,8 +90,8 @@ describe('calibration with a changing relaxed face (R12)', () => {
     const h = start(motions[0]!);
     h.followPrompts((snap) => snap.stage !== 'training', movement(motions[0]!));
     expect(h.snap.stage).toBe('verify');
-    h.followPrompts((snap) => snap.capture?.prompt === 'Return to rest', movement(motions[0]!));
-    h.run(3_500, movement(motions[0]!));
+    h.followPrompts((snap) => snap.capture?.prompt === 'Rest', movement(motions[0]!));
+    h.run(5_500, movement(motions[0]!));
     expect(h.snap.stage).toBe('setup-failed');
     expect(h.snap.failure?.kind).toBe('verification');
     expect(h.snap.approvedModels).toEqual([]);
@@ -110,6 +111,7 @@ describe('calibration with a changing relaxed face (R12)', () => {
     expect(h.snap.cycles[0]!.heldOut[0]).toMatchObject({ passed: false, eventCount: 0 });
     expect(learned).toEqual(frozen);
     expect(h.snap.candidate).toBeNull();
+    expect(h.snap.diagnosticModel).toEqual(frozen);
     expect(h.snap.approvedModels).toEqual([]);
   });
 
