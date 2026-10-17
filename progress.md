@@ -5,13 +5,13 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 ## Resume first (next agent)
 
 1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R4–R6 matter most) and `.agents/skills/motif-checkpoint/SKILL.md`.
-2. Run `git status` and `git log --oneline -n 10`. Expected: clean tree; the last code commit is `e266183 Add mapping confirmation screen` and newer commits are docs only. No processes or extra worktrees were left running.
+2. Run `git status` and `git log --oneline -n 10`. Expected: clean tree; compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with "Exact next work", step 1. Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last code commit: `e266183 Add mapping confirmation screen` (newer commits are docs only). Verified there on the original Windows machine: `npx tsc --noEmit` PASS; `npx vitest run` 12 files/110 tests PASS; `npm run build` PASS; `node scripts/browser-check.mjs` (after build) 12/12 PASS.
+- Last code commit: `6e017d0 Reset idle timer on pause and resume` (Linux, session 3): tsc PASS; vitest 12 files/135 PASS; build and browser-check 12/12 PASS at `e848456`. Earlier: `e266183` verified on the original Windows machine (110 tests).
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)
