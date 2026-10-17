@@ -52,6 +52,12 @@ Feature-level evidence on this branch uses the real `GestureRuntime` + `ScanCont
 - After sending, `snapshot.scan.targets` and the screen show "Water: sending", with exactly one button per request target.
 - Speaking or composing never calls `sendRequest` (spy on the client).
 
+## Notes for Agent 3
+
+- The session holds one announcement string; if the controller emits two messages in one update, only the last is heard. Queue or join them in the publishing announce if that matters.
+- The feature is not in the production bundle until it is imported by the app; the build so far proves only that it typechecks.
+- Upstream (not this feature): at `1e94ede`, `src/app/session.conflicts.test.ts` (4) and `src/components/CalibrationPreparation.test.tsx` (3) fail with "could not select comfortable in stage comfort", also when run alone. Reproduced by the independent tester on an exported copy of `1e94ede`.
+
 ## Pending (human / hosted)
 
 Hosted Supabase project, two real devices, real camera gestures, real Space switch, screen-reader check of the panel and pairing view.

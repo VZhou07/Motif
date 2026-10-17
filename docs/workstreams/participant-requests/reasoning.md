@@ -183,7 +183,15 @@ One controller per shared client. Agent 3 calls `controller.dispose()` before `c
 - The controller starts `client.watch` in its constructor instead of on the first subscriber, so a send result is reconciled even before the UI subscribes. `dispose()` unwatches.
 - A send rejected with `session_changed` (account changed under it) is marked not confirmed silently and announced only when the next authoritative snapshot confirms the same person; if the person changed, the entry is dropped unannounced. This avoids a stale-session announcement during a switch (found by the direct A1 → A2 test).
 - Card helper buttons have their own accessible names ("Cancel this water request", "Remove this unconfirmed water request") so they never share a name with the Cancel scan target.
+- (Testing review B1) A revoked device still holds the anonymous identity bound to the removed pairing, so the server answers `already_paired`. `pair()` therefore signs out first when the role is `revoked`, and the revoked text says so.
 - Component tests use a minimal stand-in `CareClient` because PGlite cannot load under jsdom; all delivery behaviour is tested against the real `CareService` and SQL in node-environment tests.
+
+## Testing review record
+
+| Commit | Tester | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| 5ce73dd | p1_testing | Ran tsc, full vitest (535), build, 28 planted bugs (26 caught). B1: a revoked device could not re-pair and the text was untrue. N1/N2: late old-session rejection and inactive helper Retry/Cancel untested (M14, M24 survived). Fixed in 1b98b55, tests in a920b32 (both planted bugs now caught). | BLOCKING |
+| 0d2e912 | p1_testing (recheck) | B1 resolved and traced through the real client; B1-unfixed, M14, M24 re-planted and caught; timeout change (30 s test, 15 s wait) hides nothing; 7 full-suite failures reproduced identically at upstream 1e94ede (an exported copy), so they are Agent 3's. | PASS — software verified; integration and human acceptance pending |
 
 ## Review record
 
