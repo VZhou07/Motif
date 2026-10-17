@@ -14,12 +14,37 @@ describe('feature extraction', () => {
     const frame = extractFeatureFrame(validResult(), 100)
     expect(frame.tracking).toBe('tracked')
     expect(frame.timestampMs).toBe(100)
-    expect(Object.keys(frame.values)).toHaveLength(17)
+    expect(Object.keys(frame.values)).toHaveLength(19)
     expect(frame.values.browOuterUpLeft).toBe(0.05)
     expect(frame.values.browOuterUpRight).toBe(0.1)
+    expect(frame.values.eyeBlinkLeft).toBe(0.2)
+    expect(frame.values.eyeBlinkRight).toBe(0.25)
+    expect(frame.values.winkLeft).toBe(0)
+    expect(frame.values.winkRight).toBeCloseTo(0.05)
     expect(frame.values.headYaw).toBeCloseTo(0)
     expect(frame.values.headPitch).toBeCloseTo(0)
     expect(frame.values.headRoll).toBeCloseTo(0)
+  })
+
+  it('derives a wink only from a one-eye close, not from a two-eye blink', () => {
+    const withBlinks = (left: number, right: number): FaceResult => {
+      const result = validResult()
+      const categories = result.faceBlendshapes[0].categories.map((category) => {
+        if (category.categoryName === 'eyeBlinkLeft') return { ...category, score: left }
+        if (category.categoryName === 'eyeBlinkRight') return { ...category, score: right }
+        return category
+      })
+      return { ...result, faceBlendshapes: [{ categories }] }
+    }
+    const blink = extractFeatureFrame(withBlinks(0.8, 0.8), 10)
+    expect(blink.values.winkLeft).toBe(0)
+    expect(blink.values.winkRight).toBe(0)
+    const left = extractFeatureFrame(withBlinks(0.8, 0.1), 10)
+    expect(left.values.winkLeft).toBeCloseTo(0.7)
+    expect(left.values.winkRight).toBe(0)
+    const right = extractFeatureFrame(withBlinks(0.1, 0.8), 10)
+    expect(right.values.winkLeft).toBe(0)
+    expect(right.values.winkRight).toBeCloseTo(0.7)
   })
 
   it('does not fabricate signals for absent, multiple, or inconsistent faces', () => {

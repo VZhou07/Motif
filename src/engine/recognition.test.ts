@@ -117,6 +117,23 @@ describe('gesture input state machine', () => {
     }
   })
 
+  describe('wink dwell versus blinks (R14)', () => {
+    const wink: GestureModel = {
+      ...testModel, id: 'wink-left', feature: 'winkLeft', baselineCenter: 0,
+      activationThreshold: 0.25, releaseThreshold: 0.08, activationMs: 500,
+    }
+
+    it('ignores a 350 ms one-eye close and a 250 ms two-eye blink, then accepts a 500 ms wink', () => {
+      const runtime = new GestureRuntime(wink)
+      feed(runtime, stream(0, 500))
+      expect(feed(runtime, stream(550, 350, { eyeBlinkLeft: 0.85 })).some((update) => update.event)).toBe(false)
+      feed(runtime, stream(950, 500))
+      expect(feed(runtime, stream(1_500, 250, { eyeBlinkLeft: 0.85, eyeBlinkRight: 0.85 })).some((update) => update.event)).toBe(false)
+      feed(runtime, stream(1_800, 500))
+      expect(feed(runtime, stream(2_350, 500, { eyeBlinkLeft: 0.85 })).filter((update) => update.event)).toHaveLength(1)
+    })
+  })
+
   describe('names why a pending dwell ended (R8 B2)', () => {
     const mouth: GestureModel = { ...testModel, id: 'mouth', feature: 'jawOpen' }
     function pending(models: GestureModel | GestureModel[] = testModel) {

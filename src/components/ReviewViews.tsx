@@ -10,6 +10,7 @@ import { Heading, type ViewProps } from './SetupViews';
 const seconds = (ms: number) => `${(ms / 1_000).toFixed(1)} s`;
 
 function cycleSummary(cycle: CycleEvidence): string[] {
+  if (cycle.quick) return ['Saved setup: checks that passed within the last hour were not repeated. The movement was not re-checked.'];
   const lines = [cycle.source === 'restored'
     ? 'Training: none — saved movements are re-checked unchanged'
     : `Training: ${cycle.training === null ? 'not finished' : cycle.training.ok ? 'learned from 3 attempts' : `not learned — ${cycle.training.reasons[0] ?? ''}`}`];

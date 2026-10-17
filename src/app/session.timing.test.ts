@@ -111,7 +111,7 @@ describe('natural guided pacing (R11)', () => {
       const current = h.snap.capture?.prompt;
       if (current !== prompt) { prompt = current; since = h.now; }
       const elapsed = h.now - since;
-      const moving = kind === 'early' ? current === 'Rest' && elapsed < 500 : current === 'Action' && elapsed < 500;
+      const moving = kind === 'early' ? current === 'Rest' && elapsed < 500 : current === 'Action' && elapsed < 150;
       h.step(moving ? BROW : REST);
     }
     expect(h.snap.stage).toBe('setup-failed');
