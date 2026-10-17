@@ -6,7 +6,7 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software sc
 
 - User: "so many pages … simple and intuitive … fix it". Branch `ux-simplify` off `ux-comm-screen` at `b2adf7c` (513 tests). Practice stays required (plan.md decision kept; shown on the Talk screen).
 - Slice A (views, copy, progress bar, mapping cards; no stage-machine change): reasoning.md "UX simplify, slice A" revision 1; criteria U1-U12, UH. State: **software verified; human acceptance pending (UH)** — commits f8b36ee..e70b1c0 plus QA tests; vitest 38 files/595, tsc clean, build OK.
-- Slice B (session): reasoning.md "UX simplify, slice B" revision 2 APPROVED; criteria V1-V10, VH. State: implementing (developer a7a8cb8d; QA ae97aab9 owns `src/app/ux-approve-all.acceptance.test.ts`).
+- Slice B: **software verified; human acceptance pending (VH)** — commits 6b80d24..7a8fa31 plus QA tests; vitest 39 files/638, tsc clean, build OK. Next: merge origin/main (119 new commits: caregiver dashboard, participant requests, phrase groups) into ux-simplify; no push.
 - Agents: reviewer ae8ac905 (design), developer a7a8cb8d, QA ae97aab9 (owns `src/ux-simplify.acceptance.test.tsx`).
 
 ## Previous task — branch ux-comm-screen (communication screen)
