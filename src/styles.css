@@ -19,3 +19,14 @@
 
 /* R14: which scan level is showing (main list, a group, More, or the Favourites confirmation). */
 .level-heading { font-size: 14px; font-weight: 650; letter-spacing: .01em; color: #2f5a40; margin: 0 0 14px; }
+.phrase-editor { display: grid; gap: 16px; margin-top: 14px; }
+.group-editor { border: 1px solid #d4dfcb; border-radius: 12px; padding: 14px 16px; margin: 0; }
+.group-editor legend { font-size: 13px; font-weight: 650; color: #2f5a40; padding: 0 6px; }
+.editor-row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.editor-row .text-field { flex: 1 1 220px; margin-bottom: 0; }
+.phrase-edit-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 10px; }
+.phrase-edit-list li { display: grid; gap: 6px; }
+.phrase-edit-list .text-field { margin-bottom: 0; }
+.phrase-edit-list .button { min-height: 44px; font-size: 12px; padding: 10px 12px; }
+.group-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 16px; }
+.group-tabs .button { min-height: 44px; font-size: 12px; padding: 10px 14px; }
