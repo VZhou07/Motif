@@ -5,9 +5,10 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software sc
 ## Latest focused task — communication navigation and saved phrases (C1 / R14)
 
 - User (awake, 2026-10-17) asked for easier message navigation and saved/favourite messages, then approved planning C1. Base `ba15850` on branch `ethan-features`, clean tree.
-- State: **planned.** R14 revision 1 reviewed by r14_review: BLOCKING (B1 confirm stage, B2 auto-return clock, B3 profile version). Revision 2 APPROVED on re-check; its non-blocking wording notes are folded in. No application code changed. Implementation waits for the user's build instruction.
-- Owner: Claude Code coordinator. Files planned: new `src/app/vocabulary.ts`, `src/app/navigation.ts` (+tests); `src/app/profiles.ts`, `session.ts`, `types.ts`, `CommunicationView.tsx`, `SetupViews.tsx`, `styles.css`, `scripts/browser-check.mjs`, README/ACCEPTANCE/STATUS.
-- Next action: when the user says build, start C1a (`vocabulary.ts` + tests), then C1b–C1g in the R14 order. Every commit passes tsc and the full vitest suite. Add the cross-build duplicate-name note to README in C1g.
+- State: **implementing** (user said build, 2026-10-17). R14 revision 2 APPROVED (r14_review re-check). Plan commit `3b8abbb`.
+- Owner: Claude Code coordinator (no parallel workers yet). Files: new `src/app/vocabulary.ts`, `src/app/navigation.ts` (+tests); `src/app/profiles.ts`, `session.ts`, `types.ts`, `CommunicationView.tsx`, `SetupViews.tsx`, `styles.css`, `scripts/browser-check.mjs`, README/ACCEPTANCE/STATUS.
+- Steps: C1a vocabulary — in progress. C1b profiles v2 — todo. C1c navigation — todo. C1d session levels — todo. C1e composer actions — todo. C1f UI — todo. C1g browser-check/docs — todo. Then independent testing review.
+- Rule: every commit passes `npx tsc --noEmit` and the full `npx vitest run`; browser-check at C1b, C1d, C1f, C1g. Add the cross-build duplicate-name note to README in C1g.
 
 ## Previous focused task — camera diagnostics and Rest / Action cues (R13)
 
