@@ -3,22 +3,28 @@ import { AUTO_PROFILE_NAME } from '../app/profiles';
 import type { ViewProps } from './SetupViews';
 
 /** The one setup kept on this device: Continue (disarmed re-check) and Delete with confirmation (R7). */
-export function SavedProfiles({ snapshot, session }: ViewProps) {
+export function SavedProfiles({ snapshot, session, onStartCamera }: ViewProps & { onStartCamera?: () => Promise<boolean> | void }) {
   const [confirming, setConfirming] = useState(false);
   const { names, rejected, available, readable } = snapshot.profiles;
   const saved = names.includes(AUTO_PROFILE_NAME);
   // Nothing saved here: say nothing, even if storage is blocked.
   if (!saved && !rejected && readable) return null;
   const running = snapshot.camera === 'running';
+  // From the start screen, Continue turns the camera on first; elsewhere the camera must already be running.
+  const canContinue = running || (!!onStartCamera && snapshot.camera !== 'loading');
+  const resume = async () => {
+    if (!running && (await onStartCamera?.()) === false) return;
+    session.restoreProfile(AUTO_PROFILE_NAME);
+  };
   return (
     <section className="settings-card" aria-labelledby="saved-profiles-heading">
       <h2 id="saved-profiles-heading" className="field-label">Saved on this device</h2>
-      {saved && <p>Your last approved setup is kept here automatically. Continuing repeats the rest check and re-checks every saved movement. Nothing works until you approve its controls again.{running ? '' : ' Start the camera to continue.'}</p>}
+      {saved && <p>Your last approved setup is kept here automatically. Continuing repeats the rest check and re-checks every saved movement. Nothing works until you approve its controls again.{canContinue ? '' : ' Start the camera to continue.'}</p>}
       {!available && <p className="status-notice">Saving is not available in this browser (storage is blocked).</p>}
       {!readable && <p className="status-notice">The saved setup on this device could not be read. Delete it to start fresh.</p>}
       {rejected > 0 && <p className="status-notice">{rejected} saved item{rejected === 1 ? '' : 's'} could not be read and {rejected === 1 ? 'was' : 'were'} ignored.</p>}
       {saved && <div className="button-row">
-        <button type="button" className="button button-primary" disabled={!running} onClick={() => session.restoreProfile(AUTO_PROFILE_NAME)}>Continue with your last setup</button>
+        <button type="button" className="button button-primary" disabled={!canContinue} onClick={() => void resume()}>Continue with your last setup</button>
       </div>}
       {confirming
         ? <div className="button-row">

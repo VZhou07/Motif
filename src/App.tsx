@@ -16,7 +16,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
   const view = { snapshot, session };
   let content;
   switch (snapshot.stage) {
-    case 'welcome': content = <WelcomeView {...view} onStartCamera={() => void startCamera()} />; break;
+    case 'welcome': content = <WelcomeView {...view} onStartCamera={startCamera} />; break;
     case 'baseline':
     case 'training':
     case 'verify':

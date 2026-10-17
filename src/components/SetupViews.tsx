@@ -14,7 +14,7 @@ export function Heading({ eyebrow, title, lead }: { eyebrow: string; title: Reac
 
 const percent = (value: number) => Math.round(Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)) * 100);
 
-export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { onStartCamera: () => void }) {
+export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { onStartCamera: () => Promise<boolean> | void }) {
   const running = snapshot.camera === 'running';
   return (
     <>
@@ -23,12 +23,12 @@ export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { 
       <div className="button-row welcome-actions">
         {running
           ? <button type="button" className="button button-primary" onClick={() => session.startBaseline()}>Start the rest check<Icon name="arrow" /></button>
-          : <button type="button" className="button button-primary" disabled={snapshot.camera === 'loading'} onClick={onStartCamera}>
+          : <button type="button" className="button button-primary" disabled={snapshot.camera === 'loading'} onClick={() => void onStartCamera()}>
               <Icon name="camera" />{snapshot.camera === 'loading' ? 'Starting camera…' : 'Start camera'}<Icon name="arrow" /></button>}
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch) instead</button>
       </div>
       <p className="helper-copy">A helper may assist with camera permission and setup. After your movement is verified and approved, communication, pause, speed and recalibration all work with that movement alone.</p>
-      <SavedProfiles snapshot={snapshot} session={session} />
+      <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
       <SetupOptions snapshot={snapshot} session={session} />
       <div className="journey-cards">
         {[['01', 'Settle in', 'Ten quiet seconds so Motif learns your own resting variation.'],
