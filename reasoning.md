@@ -864,3 +864,38 @@ Rows V1-V10 in UX_ACCEPTANCE.md. QA owns `src/app/ux-approve-all.acceptance.test
 - Notes adopted: when recalibrating with more than one approved movement, the comfort card adds "Your other movements will be turned off" (mappingSet is the new candidate only). Restore exit is `another-movement`; checks are not forgotten then (the saved setup was not rejected; accepted). The `tiring` case is removed from `activate` and the Helper list; `never-mind` always returns to mapping; `report-tiring` sits after the proposals and before `reject`, with Keep current first. `approveMapping` announces a plain reason whenever a guard refuses ("These controls can't be turned on yet: the checks did not finish.") instead of returning silently.
 - **Review verdict:** reviewer ae8ac905: revision 1 CHANGES REQUIRED (B1 effort ignored with 2+, B2 recalibrate-yes leak) → revision 2 APPROVED. Accepted note: with the preview assuming "easy", a new movement may become select over movements of unknown effort; it is shown on the card and needs explicit Approve.
 - **Coordinator fix during implementation (found by QA):** the restore comfort list had `approve-saved` first, so a first accidental selection would arm. Order is now `choose-different`, `approve-saved`, `another-movement` (first item arms nothing), matching the failure-mode rule above; V4/V7 updated. Ordering only; no other design change.
+
+
+## R18 — Merging main (groups, Favourites, caregiver) into ux-simplify (revision 1)
+User chose "Combine both". Base ux-simplify `0ed6d05` (638 tests) + `origin/main` `24e9c6b` (857 tests). `git merge-tree` shows conflicts in session.ts (6), types.ts, App.tsx, CommunicationView.tsx (4), styles.css, session.test-support.ts, and tests/docs. Both sides redesigned the communication scan: main = levels (R14: `top | more | {group} | {confirm}`, `src/app/navigation.ts`, vocabulary groups Favourites/Quick/Needs, phrase editor, Save to Favourites); mine = message bar, Helper panel, Clear/Recalibrate confirmations, movement-seen light.
+
+### Principle
+main's list model is the foundation (stable lists, tested, Favourites persistence, caregiver routes untouched). My branch contributes the layout, the guards (Clear and Recalibrate ask first), Helper presentation, slice A/B setup screens and approval flow.
+
+### Scan lists (all built by `buildLevel` in navigation.ts; main's ids and order kept unless listed)
+- top: `speak`, `undo`, group tiles, `pause`, `more`. Always the same list (no dynamic Speak/Undo/repeat): my earlier dynamic list (C1) is dropped because main's rule is that lists never shift while scanned.
+- group: phrases, `back`, `pause`. Unchanged.
+- more (this is the **Helper**): label of the nav tile `more` becomes "Helper"; the level's `back` tile is labelled "Close helper". Controls = main's `moreControls` minus `tiring` (tiring moved to Change controls in slice B): `clear`, `save-favourite`, `say-again`, slower/faster (as today), `practice`, `change-controls`, `add-movement` (below MAX), `recalibrate` (assisted: `use-gesture` or `setup-gesture`); then `back`, `pause`. Order unchanged.
+- New confirm levels `{ clear: true }` and `{ recalibrate: true }`: targets `clear-no` ("Keep it") / `recalibrate-no` ("Keep current setup") FIRST, then `clear-yes` ("Yes, clear it") / `recalibrate-yes` ("Start recalibration"), then `pause`. `clear` and `recalibrate` in the more level open these levels instead of acting. The favourites `{confirm}` level is unchanged. Practice list unchanged except `finish-practice` is labelled "Start talking" (slice A).
+- `say-again` replaces my `repeat`; `speakMessage` empties the message into `lastSpoken` as on my branch (R-comm B1); main's tests that assume Speak keeps the message change for that reason.
+- Auto-return (main R14): two idle wraps in any sub-level go back to top. For the clear and recalibrate confirm levels this means "not confirmed": the message and setup are kept, nothing is discarded. `recalibrate-yes` keeps my atomic rule (camera not running: announce, change nothing, back to the Helper level).
+- `confirmingClear`, `confirmingRecalibrate`, `helperOpen` snapshot fields stay but are DERIVED from the level (more / clear / recalibrate), so my UI and tests keep their contract. `snapshot.level` (LevelView) from main gains kinds `clear` and `recalibrate`. Entering communication, `returnToStart`, and the step-idle fallback follow main's `setLevel('top')` behaviour (no `keepPanel`; the fallback returns to the main list as main does).
+
+### UI (CommunicationView, HelperPanel, CameraPanel)
+- Layout from the approved mockup: message bar on top (message ≥ 24px; Speak and Undo always shown, muted when the message is empty but still scannable; "Say it again" button shown in the bar when the message is empty and something was spoken, as a click control that sends the same `say-again`; it is also in the Helper list); below it the level heading and the tile grid (group tiles at top, phrases with a Back tile inside a group); bottom row Pause + Helper + one hint line. Favourites/clear/recalibrate confirmations render in the message bar like my Clear confirm. Practice banner and "Start talking" from slice A kept.
+- Helper panel (level `more`): "Your controls" tiles (Change controls, Add a movement, Recalibrate; assisted: Set up/Use my movement), "Scanning and message" buttons (Slower/Faster, Clear, Save message to Favourites, Say it again, Practice), then click-only sections: Jump to a phrase group (main's group tabs, `session.openGroup`), Edit phrases (main's PhraseEditor, with its "Pause first" rule and saving note), Camera diagnostics, Setup evidence, Saving and the start screen (Done). Focus behaviour as on my branch.
+- main's `.operation-toolbar`, the always-visible group tabs and settings details are removed from the main screen.
+
+### Setup and approval (my slices A/B win)
+- Wherever main touched setup views or approval ids, keep my screens/flow (progress bar, proposal cards, comfort approve, `approve-saved`, `effort-choose`, `choose-different`, Helper recalibrate confirmation, `report-tiring` in Change controls). main's tests that were adapted for the older one-approve-screen change are adapted again only where my later flow differs.
+- App.tsx: keep main's routing/Root wiring and care client untouched; keep my progress bar and CameraPanel props.
+
+### Failure modes
+- A merge that silently drops either side: every main acceptance/unit test must still pass unless it asserts a replaced behaviour (Speak keeps message, `tiring` in More, `Finish practice` label, Clear without confirm, old approval path); each such test change is listed in the commit/report.
+- Stable lists: no list changes with message state; Speak/Undo/say-again always present in their levels.
+- Safe first items: Helper confirmations start with the no-op choice; the first item of the Helper level (`clear`) only opens a confirmation.
+- Caregiver/participant code, care client and Supabase config untouched; no secrets written; `.env.local` stays gitignored.
+- Profile schema: main's vocabulary (phrase groups, favourites) persistence unchanged; my branch adds no profile fields.
+
+### Tests
+Rows M1-M12 in UX_ACCEPTANCE.md. QA owns `src/app/ux-merge.acceptance.test.ts` and updates my earlier acceptance files (ux-comm.acceptance.test.ts, ux-comm-ui.acceptance.test.tsx) to the combined contract; main's tests are changed only by the developer, only for replaced behaviour.
