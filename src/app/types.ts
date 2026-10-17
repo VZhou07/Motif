@@ -76,7 +76,7 @@ export interface ScanView {
   driver: 'gesture' | 'assisted' | 'none';
 }
 
-export interface MovementChoice { feature: FeatureId; direction: 1 | -1; label: string }
+export interface MovementChoice { feature: FeatureId; direction: 1 | -1; label: string; /** Hold before it counts (ms); the movement's default when absent. */ holdMs?: number }
 
 export interface SessionSnapshot {
   stage: Stage;

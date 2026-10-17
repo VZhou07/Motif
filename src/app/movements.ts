@@ -42,6 +42,32 @@ export function movementLabel(feature: FeatureId, direction: 1 | -1): string {
  * Live signed deviation from this person's resting center, in multiples of their own
  * resting noise. A display aid for choosing a movement, not evidence of intention.
  */
+export type HoldOptionId = 'auto' | 'short' | 'long' | 'extra';
+export const HOLD_OPTIONS: ReadonlyArray<{ id: HoldOptionId; label: string; ms?: number }> = [
+  { id: 'auto', label: 'Auto (recommended)' },
+  { id: 'short', label: 'Short, 0.25 s', ms: 250 },
+  { id: 'long', label: 'Long, 0.8 s', ms: 800 },
+  { id: 'extra', label: 'Extra long, 1.5 s', ms: 1_500 },
+];
+
+/** Closing an eye needs a long hold so ordinary blinks (about 0.1-0.4 s) never count. */
+export function defaultHoldMs(feature: FeatureId): number {
+  return feature === 'eyeBlinkLeft' || feature === 'eyeBlinkRight' ? 800 : 250;
+}
+
+export function holdMsFor(option: HoldOptionId, feature: FeatureId): number {
+  return HOLD_OPTIONS.find((candidate) => candidate.id === option)?.ms ?? defaultHoldMs(feature);
+}
+
+/** Holds at or below this are the ordinary default and are not called out in labels. */
+export const SHORT_HOLD_MAX_MS = 300;
+
+export function holdLabel(ms: number): string {
+  if (ms <= SHORT_HOLD_MAX_MS) return 'short hold';
+  const seconds = `${Number((ms / 1_000).toFixed(2))} s`;
+  return ms >= 1_200 ? `extra-long hold, ${seconds}` : `long hold, ${seconds}`;
+}
+
 export function liveDeviation(baseline: Baseline | null, frame: FeatureFrame | null, feature: FeatureId, direction: 1 | -1): number | null {
   if (!baseline || !frame || frame.tracking !== 'tracked') return null;
   const value = frame.values[feature];

@@ -1,4 +1,4 @@
-import type { Baseline, FeatureFrame, GestureModel, TrackingState, TrainingTrial } from '../domain/types';
+import type { Baseline, FeatureFrame, GestureModel, RuntimeUpdate, TrackingState, TrainingTrial } from '../domain/types';
 import { fitGesture, type TrainingDiagnostics } from '../engine/calibration';
 import type { CueAudio } from './audio';
 import { FeatureProcessor, MAX_FRAME_GAP_MS } from '../engine/features';
@@ -7,6 +7,7 @@ import { ScanController } from '../engine/scanner';
 import { evaluatePositiveAttempt, type ActionWindow } from '../engine/verification';
 import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from './capture';
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
+import { defaultHoldMs, holdLabel, SHORT_HOLD_MAX_MS } from './movements';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
 import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
@@ -341,7 +342,8 @@ export class MotifSession {
         return;
       }
       const fitted = fitGesture({ baseline: this.baseline, trials: this.trials, feature: this.choice.feature,
-        direction: this.choice.direction, id: `${this.choice.feature}:${this.choice.direction}:${cycle.cycle}`, label: this.choice.label });
+        direction: this.choice.direction, id: `${this.choice.feature}:${this.choice.direction}:${cycle.cycle}`, label: this.choice.label,
+        activationMs: this.choice.holdMs ?? defaultHoldMs(this.choice.feature) });
       this.calibrationReport = fitted.diagnostics ?? null;
       cycle.training = { ok: fitted.ok, reasons: fitted.ok ? [] : fitted.reasons };
       if (!fitted.ok) { this.fail('training', 'This movement could not be learned yet', fitted.reasons); return; }
@@ -717,7 +719,7 @@ export class MotifSession {
       case 'keep-current': this.keepCurrent(); break;
       case 'same-movement': {
         const select = this.selectModel();
-        if (select) this.startTraining({ feature: select.feature, direction: select.direction, label: select.label });
+        if (select) this.startTraining({ feature: select.feature, direction: select.direction, label: select.label, holdMs: select.activationMs });
         break;
       }
     }
@@ -888,6 +890,14 @@ export class MotifSession {
     this.announce(`Noted: “${model.label}” is tiring. The recommended controls use it less; nothing changes until you approve.`);
   }
 
+  /** For long holds, a release before half the hold is an ordinary blink or twitch, not an unfinished attempt. */
+  private unfinishedHold(update: RuntimeUpdate): string | undefined {
+    if (update.cancelCause !== 'released' && update.cancelCause !== 'band') return undefined;
+    const model = this.approvedModels.find((candidate) => candidate.id === update.cancelledId);
+    if (!model || update.pendingMs === undefined || model.activationMs <= SHORT_HOLD_MAX_MS) return update.cancelledId;
+    return update.pendingMs >= model.activationMs / 2 ? update.cancelledId : undefined;
+  }
+
   /** Completed holds and holds released before completion, in practice and communication only. */
   private countUse(completedId: string | undefined, unfinishedId: string | undefined): void {
     const bump = (id: string, key: keyof MovementUse) => {
@@ -921,7 +931,10 @@ export class MotifSession {
 
   private comfortPreview(): { label: string; mode: ScanMode } | null {
     const proposal = this.singleMovementProposal();
-    return proposal ? { label: describeMapping(this.mappingSet(), proposal), mode: proposal.mode } : null;
+    const model = this.candidate;
+    if (!proposal || !model) return null;
+    const hold = model.activationMs > SHORT_HOLD_MAX_MS ? ` (${holdLabel(model.activationMs)})` : '';
+    return { label: `${describeMapping(this.mappingSet(), proposal)}${hold}`, mode: proposal.mode };
   }
 
   /** Caregiver form: any valid assignment for the movements in play; still needs approval. */
@@ -1124,14 +1137,17 @@ export class MotifSession {
     if (this.lastScanFrameTimestamp !== undefined && !scanner.snapshot.paused) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
     this.lastScanFrameTimestamp = frame.timestampMs;
     const update = this.runtime.step(frame, nowMs);
-    if (this.isRoutedStage()) this.countUse(update.event?.gestureId, update.cancelCause === 'released' || update.cancelCause === 'band' ? update.cancelledId : undefined);
+    if (this.isRoutedStage()) this.countUse(update.event?.gestureId, this.unfinishedHold(update));
     // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
     const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
     if (update.started) {
       this.idleValidMs = 0;
       if (actionOf(update.started) === 'select') scanner.beginSelection(nowMs);
     }
-    if (update.cancelled && scanner.snapshot.latchedTarget !== undefined) scanner.cancelSelection(nowMs);
+    if (update.cancelled && scanner.snapshot.latchedTarget !== undefined) {
+      // Letting go early keeps the highlight's remaining time; tracking problems restart it.
+      if (update.cancelCause === 'released') scanner.abandonSelection(nowMs); else scanner.cancelSelection(nowMs);
+    }
     if (update.event) {
       this.idleValidMs = 0;
       const action = actionOf(update.event.gestureId);
