@@ -640,4 +640,126 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.scan!.paused).toBe(false);
     expect(h.snap.message).toEqual([]);
   });
+
+  it('a one-movement mapping ignores the unmapped movement, which still blocks as ambiguous', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    addAndApprove(h, OPEN_MOUTH, 'map:2');
+    expect(h.snap.mapping?.assignments).toEqual({ [h.snap.approvedModels[0]!.id]: 'select' });
+    expect(h.snap.scanMode).toBe('auto');
+    h.selectByGesture('finish-practice');
+    h.selectByGesture('phrase:0', MOUTH);
+    expect(h.snap.message).toEqual([]);
+    expect(h.snap.stage).toBe('communication');
+    h.run(1_000);
+    h.run(800, { ...BROW, ...MOUTH });
+    h.run(800);
+    expect(h.snap.message).toEqual([]);
+    h.selectByGesture('phrase:0');
+    expect(h.snap.message).toEqual(['Yes']);
+  });
+
+  it('Change controls needs confirmation and fresh neutral; Keep current controls changes nothing', () => {
+    const h = twoGestureStep();
+    const before = h.snap.mapping;
+    h.stepTo('change-controls');
+    expect(h.snap.stage).toBe('mapping');
+    expect(h.snap.decisions[0]?.id).toBe('keep-current');
+    h.selectByGesture('keep-current');
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.mapping).toEqual(before);
+
+    h.stepTo('change-controls');
+    h.selectByGesture('map:1'); // mouth selects, brow moves next
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.mapping).toEqual(before);
+    h.selectByGesture('choose-different');
+    expect(h.snap.stage).toBe('mapping');
+    expect(h.snap.mapping).toEqual(before);
+    h.selectByGesture('map:1');
+    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.runtime?.armed).toBe(false);
+    const [brow, mouth] = h.snap.approvedModels;
+    expect(h.snap.mapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow!.id]: 'next' });
+    expect(h.snap.cycles).toHaveLength(2); // remapping never retrains
+  });
+
+  it('Use previous controls returns to the earlier mapping only after approval', () => {
+    const h = twoGestureStep();
+    const original = h.snap.mapping;
+    h.stepTo('change-controls');
+    h.selectByGesture('map:1');
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.scan?.targets.map((target) => target.id)).toContain('use-previous');
+    h.stepTo('use-previous', BROW, MOUTH); // now brow moves next and mouth selects
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.pendingMapping?.assignments).toEqual(original?.assignments);
+    expect(h.snap.mapping).not.toEqual(original);
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.mapping).toEqual(original);
+  });
+
+  it('with four movements every communication control is reachable and works', () => {
+    const h = twoGestureStep();
+    addAndApprove(h, PUCKER_LIPS);
+    h.stepTo('finish-practice');
+    addAndApprove(h, PUFF_CHEEKS);
+    h.stepTo('finish-practice');
+    const ids = h.snap.scan!.targets.map((target) => target.id);
+    expect(ids).toEqual(['phrase:0', 'phrase:1', 'phrase:2', 'phrase:3', 'phrase:4', 'phrase:5',
+      'speak', 'clear', 'pause', 'practice', 'change-controls', 'recalibrate']);
+    const seen = new Set<string>();
+    h.run(600);
+    for (let i = 0; i < ids.length; i += 1) { seen.add(h.highlightedId()!); h.run(600, MOUTH); h.run(600); }
+    expect([...seen].sort()).toEqual([...ids].sort());
+    h.stepTo('phrase:5');
+    h.stepTo('speak');
+    expect(h.spoken).toEqual(['Thank you']);
+    h.stepTo('clear');
+    expect(h.snap.message).toEqual([]);
+    h.stepTo('pause');
+    expect(h.snap.scan!.paused).toBe(true);
+    h.run(600, BROW); h.run(600);
+    expect(h.snap.scan!.paused).toBe(false);
+    h.stepTo('practice');
+    expect(h.snap.stage).toBe('practice');
+    h.stepTo('finish-practice');
+    h.stepTo('recalibrate');
+    expect(h.snap.stage).toBe('recalibrate-confirm');
+    h.selectByGesture('keep-current');
+    expect(h.snap.approvedModels).toHaveLength(4);
+    h.stepTo('change-controls');
+    expect(h.snap.stage).toBe('mapping');
+    expect(h.snap.decisions.filter((decision) => decision.id.startsWith('map:'))).toHaveLength(8);
+  });
+
+  it('with three movements a mapping without next keeps automatic scanning and speed controls', () => {
+    const h = twoGestureStep();
+    addAndApprove(h, PUCKER_LIPS, 'map:3'); // brow alone selects
+    h.selectByGesture('finish-practice');
+    const ids = h.snap.scan!.targets.map((target) => target.id);
+    expect(ids).toEqual(expect.arrayContaining(['slower', 'faster', 'add-movement', 'change-controls', 'recalibrate', 'pause']));
+    h.selectByGesture('slower');
+    expect(h.snap.scan!.intervalMs).toBe(2_500);
+  });
+
+  it('assisted input is unaffected by a gesture set and switching back restores step scanning', () => {
+    const h = twoGestureStep();
+    h.session.useAssisted();
+    expect(h.snap.inputMode).toBe('assisted');
+    expect(h.snap.scan?.driver).toBe('assisted');
+    h.run(1_000);
+    h.run(800, MOUTH); h.run(800);
+    h.run(800, BROW); h.run(800);
+    expect(h.snap.message).toEqual([]);
+    while (h.highlightedId() !== 'phrase:1') h.step();
+    h.session.switchPress(h.now);
+    expect(h.snap.message).toEqual(['No']);
+    expect(h.snap.approvedModels).toHaveLength(2);
+    h.session.useGesture();
+    expect(h.snap.inputMode).toBe('gesture');
+    expect(h.snap.scanMode).toBe('step');
+  });
 });
