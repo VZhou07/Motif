@@ -43,7 +43,7 @@ describe('Motif app', () => {
     const h = new Harness();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Your movement/);
-    expect(screen.getAllByRole('button', { name: /Start camera/ }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Get started/ }).length).toBe(1);
     expect(screen.getByRole('button', { name: /assisted input/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Speak message/ })).toBeNull();
     expect(screen.getByText(/stays on this device/)).toBeTruthy();
@@ -58,7 +58,7 @@ describe('Motif app', () => {
       throw error;
     });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker }} />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Start camera/ })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /Get started/ }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.some((alert) => /could not load/.test(alert.textContent ?? ''))).toBe(true);
     expect(h.snap.camera).toBe('error');

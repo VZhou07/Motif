@@ -11,12 +11,12 @@ const SETUP_STEP: Partial<Record<Stage, number>> = {
 };
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
-  const { snapshot, session, videoRef, startCamera, stopCamera, cueStatus, setCuesEnabled } = useMotif(runtime);
+  const { snapshot, session, videoRef, startCamera, getStarted, stopCamera, cueStatus, setCuesEnabled } = useMotif(runtime);
   const step = SETUP_STEP[snapshot.stage];
   const view = { snapshot, session };
   let content;
   switch (snapshot.stage) {
-    case 'welcome': content = <WelcomeView {...view} onStartCamera={startCamera} />; break;
+    case 'welcome': content = <WelcomeView {...view} onStartCamera={startCamera} onGetStarted={getStarted} />; break;
     case 'baseline':
     case 'training':
     case 'verify':
@@ -58,7 +58,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
           )}
           {content}
         </main>
-        <CameraPanel snapshot={snapshot} videoRef={videoRef} onStart={() => void startCamera()} onStop={stopCamera}
+        <CameraPanel snapshot={snapshot} videoRef={videoRef} onStart={() => void startCamera()} onStop={stopCamera} hideStart={snapshot.stage === 'welcome'}
           cueStatus={cueStatus} onCuesEnabled={setCuesEnabled} />
       </div>
       <p className="sr-only" aria-live="polite">{snapshot.announcement}</p>

@@ -15,8 +15,9 @@ export function Heading({ eyebrow, title, lead }: { eyebrow: string; title: Reac
 
 const percent = (value: number) => Math.round(Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)) * 100);
 
-export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { onStartCamera: () => Promise<boolean> | void }) {
+export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: ViewProps & { onStartCamera: () => Promise<boolean> | void; onGetStarted: () => Promise<boolean> | void }) {
   const running = snapshot.camera === 'running';
+  const loading = snapshot.camera === 'loading';
   // A saved setup makes Continue the main action; a new setup stays available but is secondary.
   const hasSaved = snapshot.profiles.names.includes(AUTO_PROFILE_NAME);
   return (
@@ -24,22 +25,19 @@ export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { 
       <Heading eyebrow="A LITTLE MOVEMENT. A WORLD OF POSSIBILITY." title={<>Your movement.<br /><em>Your voice.</em></>}
         lead="A personal way to communicate, built around a movement that feels comfortable to you. No particular smile, blink or head movement is required." />
       <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
+      <p className="helper-copy">Setup takes about 1½ minutes: a short rest, three practice attempts, two checks, and one everyday-activity test. Then you approve the control and practice.</p>
       <div className="button-row welcome-actions">
-        {running
-          ? <button type="button" className={`button ${hasSaved ? '' : 'button-primary'}`} onClick={() => session.startBaseline()}>Start the rest check<Icon name="arrow" /></button>
-          : <button type="button" className={`button ${hasSaved ? '' : 'button-primary'}`} disabled={snapshot.camera === 'loading'} onClick={() => void onStartCamera()}>
-              <Icon name="camera" />{snapshot.camera === 'loading' ? 'Starting camera…' : 'Start camera'}<Icon name="arrow" /></button>}
+        {hasSaved
+          ? <button type="button" className="button" disabled={loading} onClick={() => void onGetStarted()}>
+              {loading ? 'Starting camera…' : 'Set up again'}</button>
+          : running
+            ? <button type="button" className="button button-primary" onClick={() => void onGetStarted()}>Start the rest check<Icon name="arrow" /></button>
+            : <button type="button" className="button button-primary" disabled={loading} onClick={() => void onGetStarted()}>
+                <Icon name="camera" />{loading ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Get started'}<Icon name="arrow" /></button>}
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch) instead</button>
       </div>
       <p className="helper-copy">A helper may assist with camera permission and setup. After your movement is verified and approved, communication, pause, speed and recalibration all work with that movement alone.</p>
       <SetupOptions snapshot={snapshot} session={session} />
-      <div className="journey-cards">
-        {[['01', 'Settle in', 'Ten quiet seconds so Motif learns your own resting variation.'],
-          ['02', 'Find your movement', 'Three practice attempts, two separate checks, and an everyday-activity check.'],
-          ['03', 'Make it your voice', 'Approve the control, practice, then build and speak messages.']].map(([number, title, text]) => (
-          <div key={number}><span>{number}</span><h3>{title}</h3><p>{text}</p></div>
-        ))}
-      </div>
     </>
   );
 }
