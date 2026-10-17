@@ -6,6 +6,6 @@
 
 **Not connected yet:** the person's pairing and request buttons are merged but not wired into the communication screen (steps in `docs/workstreams/participant-requests/integration.md`). The browser companion has not been built.
 
-**Checked (automated):** typecheck PASS; 857 tests PASS; production build PASS. The fake-camera browser check was not run.
+**Checked (automated):** typecheck PASS; 857 tests PASS; production build PASS; 83/83 fake-camera browser checks PASS. An independent tester re-ran all of these and passed the branch.
 
 **Untested:** the real Supabase project, two real devices, and the camera with a real person (camera covered).
