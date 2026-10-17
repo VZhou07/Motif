@@ -1,11 +1,11 @@
 # Motif build update
 
-**Changed for you:** calibration now alternates **5 seconds Rest / 5 seconds Action** (no separate Return to rest). A low beep marks Rest, a higher beep marks Action (checkbox on the camera panel). Diagnostics sit **under** the camera so they do not cover your face. If Rest was already as strong as Action (for example an open mouth during Rest), it says so in plain language.
+**Branch `ux-setup-flow`, slice 1 done (software):** the start screen now has one big **Get started** button. It turns the camera on and begins the rest check by itself. With a saved setup, **Continue** stays the main button and **Set up again** is the small one. Text on this screen is now at least 14px, and the old "repeats the rest check" wording is fixed.
 
-**Checked (automated):** typecheck PASS; 353 tests PASS; production build PASS; 67/67 fake-camera browser checks PASS. Independent review required a pending-at-boundary test, then passed. Shared Rest that starts while you are still relaxing is no longer rejected just because the first frame is not rest yet.
+**Checked (automated + browser, camera covered):** typecheck, build and 387 tests pass. QA broke the double-click and "left before camera started" protections on purpose and the tests caught it.
 
-The approved communication features, movement discovery, multiple movements, saved profiles and assisted Space-bar input remain available. Camera processing stays on this computer, and outside usage reporting is blocked.
+**Needs you (one check):** click **Get started** with the real camera. Your browser should ask for camera permission, then the 10-second rest check should start without another click. Tell me if it doesn't, or if the start screen feels unclear.
 
-**Still needs a person:** real face tracking, whether this rhythm is comfortable, whether the beeps are audible, and hands-free use. The camera stayed covered during automated checks. See `ACCEPTANCE.md` 3.2 and 3.6.
+**Not checked:** the start screen at a 1280-wide window (the tool could not resize).
 
-Refresh the app (`npm run dev`) and try calibration again. Look at the overlay if it still fails. Actual success is not claimed. Nothing has been pushed.
+**Next:** slice 2 (pick a movement = start recording) and slice 3 (one approve screen). Nothing is pushed.
