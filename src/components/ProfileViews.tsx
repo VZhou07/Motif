@@ -19,7 +19,7 @@ export function SavedProfiles({ snapshot, session, onStartCamera }: ViewProps & 
   return (
     <section className="settings-card" aria-labelledby="saved-profiles-heading">
       <h2 id="saved-profiles-heading" className="field-label">Saved on this device</h2>
-      {saved && <p>Your last approved setup is kept here automatically. Continuing repeats the ten-second rest check, then you approve the saved controls. You can also re-check your movement first.{canContinue ? '' : ' Start the camera to continue.'}</p>}
+      {saved && <p>Your last approved setup is kept here automatically. Continue skips the rest check and movement checks that passed within the last hour; older ones run again. You then approve the saved controls. Re-check always repeats every check.{canContinue ? '' : ' Start the camera to continue.'}</p>}
       {!available && <p className="status-notice">Saving is not available in this browser (storage is blocked).</p>}
       {!readable && <p className="status-notice">The saved setup on this device could not be read. Delete it to start fresh.</p>}
       {rejected > 0 && <p className="status-notice">{rejected} saved item{rejected === 1 ? '' : 's'} could not be read and {rejected === 1 ? 'was' : 'were'} ignored.</p>}

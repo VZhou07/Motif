@@ -34,7 +34,7 @@ export class Harness {
   stepMs = 50;
 
   constructor(options: { profiles?: ProfileStore } = {}) {
-    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, profiles: options.profiles });
+    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles });
   }
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }

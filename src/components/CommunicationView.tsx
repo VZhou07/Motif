@@ -58,7 +58,19 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
         ))}
       </nav>
       <p className="helper-copy">Scanning every {((scan?.intervalMs ?? 2_000) / 1_000).toFixed(1)} seconds. {snapshot.inputMode === 'assisted' ? 'Assisted mode does not use or verify a facial movement.' : 'If tracking is lost, scanning waits and nothing is selected.'}</p>
-      {!practice && snapshot.profiles.available && <p className="helper-copy">Your setup is saved on this device automatically: movement settings, controls, phrases and scan speed. Never video, camera images or your messages.</p>}
+      {!practice && snapshot.inputMode === 'assisted' && !snapshot.approvedModels.length && (
+        <div className="button-row">
+          <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>
+          <span className="helper-copy">This ends assisted input and clears the message. Nothing is saved.</span>
+        </div>
+      )}
+      {!practice && snapshot.profiles.available && <p className="helper-copy">Your setup is saved on this device automatically: movement settings, controls, phrases, scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
+      {!practice && snapshot.profiles.available && snapshot.approvedModels.length > 0 && snapshot.mapping && (
+        <div className="button-row">
+          <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>
+          <span className="helper-copy">This ends the session. Continue from the start screen skips checks that passed within the last hour, so only the same person should continue.</span>
+        </div>
+      )}
       {!practice && <EvidencePanel snapshot={snapshot} />}
     </>
   );

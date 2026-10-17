@@ -197,6 +197,41 @@ describe('Motif app', () => {
     expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles.map((profile: { name: string }) => profile.name)).toEqual(['Last setup']);
   });
 
+  it('goes back to the start screen from communication, where Continue picks up the saved setup', () => {
+    const storage = createMemoryStorage();
+    const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    h.setUpToCommunication();
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByText(/when your checks last passed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
+    expect(h.session.getSnapshot().stage).toBe('welcome');
+    expect(screen.getByText(/skips the rest check and movement checks that passed within the last hour/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
+    expect(h.session.getSnapshot().stage).toBe('mapping-confirm');
+  });
+
+  it('offers back to start inside assisted input started from the start screen, but not in practice', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch) instead' }));
+    act(() => h.session.selectTarget('practice'));
+    expect(h.session.getSnapshot().stage).toBe('practice');
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+    act(() => h.session.selectTarget('finish-practice'));
+    expect(h.session.getSnapshot().stage).toBe('communication');
+    fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
+    expect(h.session.getSnapshot()).toMatchObject({ stage: 'welcome', inputMode: 'gesture' });
+  });
+
+  it('hides back to start during practice with a movement setup', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    h.setUpToCommunication();
+    act(() => h.stepTo('practice'));
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(h.session.getSnapshot().stage).toBe('practice');
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+  });
+
   it('offers Continue and a confirmed delete for the saved setup on the welcome screen', async () => {
     const storage = createMemoryStorage();
     const first = new Harness({ profiles: createLocalProfileStore(() => storage) });
@@ -204,6 +239,7 @@ describe('Motif app', () => {
     const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
     storage.setItem(PROFILE_KEY, JSON.stringify({ ...raw, profiles: [...raw.profiles, { broken: true }] }));
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    h.now = first.now + 60_000; // a reload within the hour, so Continue skips the checks (R17)
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('1 saved item could not be read and was ignored.')).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Continue with your last setup' }) as HTMLButtonElement).disabled).toBe(false);
