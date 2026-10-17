@@ -755,6 +755,27 @@ export class MotifSession {
     this.publish();
   }
 
+  /**
+   * Rename the movement being approved (comfort screen only). Replaces every copy of the label together;
+   * the id and thresholds are untouched, and nothing is approved.
+   */
+  renameMovement(label: string): { ok: true } | { ok: false; reason: string } {
+    const candidate = this.candidate;
+    if (this.stage !== 'comfort' || !candidate || this.restoring) return { ok: false, reason: 'A movement can be renamed only while you are approving it.' };
+    const name = label.trim();
+    if (name.length < 1 || name.length > 60) return { ok: false, reason: 'Names must be 1 to 60 characters.' };
+    if (this.adding && this.approvedModels.some((model) => sameName(model.label, name))) return { ok: false, reason: 'Another of your movements already has that name. Choose a different name.' };
+    if (name !== candidate.label) {
+      this.candidate = { ...candidate, label: name };
+      if (this.diagnosticModel?.id === candidate.id) this.diagnosticModel = { ...this.diagnosticModel, label: name };
+      if (this.choice) this.choice = { ...this.choice, label: name };
+      const last = this.cycles.length - 1;
+      if (last >= 0) this.cycles[last] = { ...this.cycles[last]!, movement: name };
+      this.publish();
+    }
+    return { ok: true };
+  }
+
   cancel(): void {
     if (!CAPTURE_STAGES.includes(this.stage) && this.stage !== 'choose') return;
     this.fail('cancelled', 'Setup paused', ['You stopped. Nothing from the unfinished recording was used.']);
