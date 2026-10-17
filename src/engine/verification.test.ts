@@ -92,7 +92,7 @@ describe('independent held-out evidence', () => {
       ? makeFrame(4_000, { browOuterUpLeft: 0.3 }) : frame)
     expect(evaluateNegativeWindow(testModel, bandOnly).passed).toBe(true)
     const conflicting = stream(0, 11_000).map((frame) => frame.timestampMs === 4_000
-      ? makeFrame(4_000, { browOuterUpLeft: 0.3, jawOpen: 0.3 }) : frame)
+      ? makeFrame(4_000, { browOuterUpLeft: 0.8, jawOpen: 0.8 }) : frame)
     expect(evaluateNegativeWindow([testModel, { ...testModel, id: 'mouth', feature: 'jawOpen' }], conflicting).passed).toBe(false)
   })
 })
