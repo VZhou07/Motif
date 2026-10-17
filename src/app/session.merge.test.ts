@@ -145,7 +145,36 @@ describe('Delete really removes favourites (R19 condition 2)', () => {
   });
 });
 
+describe('Continue puts back the saved phrases (R19)', () => {
+  it('a quick Continue replaces phrases typed on the start screen with the saved ones, and says so', () => {
+    const storage = createMemoryStorage();
+    const first = new Harness({ profiles: storeOn(storage) });
+    first.now = 10 * 60 * 60_000;
+    first.setUpToCommunication();
+    const page = new Harness({ profiles: storeOn(storage) });
+    page.now = first.now + 60_000;
+    expect(page.session.editVocabulary({ kind: 'add-phrase', group: 'favourites', text: 'Typed on start screen' }).ok).toBe(true);
+    page.session.setCamera('running');
+    expect(page.session.restoreProfile(LAST, true)).toBe(true);
+    expect(page.snap.stage).toBe('mapping-confirm');
+    expect(favourites(page)).toEqual(['Typed on start screen']); // nothing applied before approval
+    page.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(favourites(page)).toEqual([]);
+    expect(page.snap.announcement).toMatch(/Your phrases were replaced by the ones saved with “Last setup”\./);
+    expect(lastFavourites(storage)).toEqual([]);
+  });
+});
+
 describe('loading phrases at page start', () => {
+  it('still uses Last setup when another stored entry is unreadable', () => {
+    const { storage } = withFavourite();
+    const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
+    raw.profiles.unshift({ junk: true });
+    storage.setItem(PROFILE_KEY, JSON.stringify(raw));
+    expect(favourites(new Harness({ profiles: storeOn(storage) }))).toEqual(['Thank you']);
+  });
+
+
   it('uses the defaults with no saved setup, an unreadable store, or blocked storage', () => {
     expect(new Harness().snap.vocabulary).toEqual(defaultVocabulary());
     const corrupt = createMemoryStorage();
