@@ -20,23 +20,31 @@ export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: 
   const loading = snapshot.camera === 'loading';
   // A saved setup makes Continue the main action; a new setup stays available but is secondary.
   const hasSaved = snapshot.profiles.names.includes(AUTO_PROFILE_NAME);
+  const assisted = <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch)</button>;
   return (
     <div className="start-screen">
-      <Heading eyebrow="A LITTLE MOVEMENT. A WORLD OF POSSIBILITY." title={<>Your movement.<br /><em>Your voice.</em></>}
-        lead="A personal way to communicate, built around a movement that feels comfortable to you. No particular smile, blink or head movement is required." />
-      <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
-      <p className="helper-copy">Setup takes about 1½ minutes: a short rest, three practice attempts, two checks, and one everyday-activity test. Then you approve the control and practice.</p>
-      <div className="button-row welcome-actions">
-        {hasSaved
-          ? <button type="button" className="button" disabled={loading} onClick={() => void onGetStarted()}>
-              {loading ? 'Starting camera…' : 'Set up again'}</button>
-          : running
-            ? <button type="button" className="button button-primary" onClick={() => void onGetStarted()}>Start the rest check<Icon name="arrow" /></button>
-            : <button type="button" className="button button-primary" disabled={loading} onClick={() => void onGetStarted()}>
-                <Icon name="camera" />{loading ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Get started'}<Icon name="arrow" /></button>}
-        <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch) instead</button>
+      <div className="stage-heading">
+        <h1>{hasSaved ? <>Welcome <em>back.</em></> : <>Your movement.<br /><em>Your voice.</em></>}</h1>
+        <p className="lead">{hasSaved ? 'Your setup is saved on this device.' : 'Talk using one comfortable movement, such as raising an eyebrow or opening your mouth.'}</p>
       </div>
-      <p className="helper-copy">A helper may assist with camera permission and setup. After your movement is verified and approved, communication, pause, speed and recalibration all work with that movement alone.</p>
+      {hasSaved
+        ? <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera}>
+            <button type="button" className="button button-quiet" disabled={loading} onClick={() => void onGetStarted()}>
+              {loading ? 'Starting camera…' : 'Set up again'}</button>
+            {assisted}
+          </SavedProfiles>
+        : <>
+            <div className="start-primary">
+              {running
+                ? <button type="button" className="button button-primary button-large" onClick={() => void onGetStarted()}>Start the rest check<Icon name="arrow" /></button>
+                : <button type="button" className="button button-primary button-large" disabled={loading} onClick={() => void onGetStarted()}>
+                    <Icon name="camera" />{loading ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Get started'}<Icon name="arrow" /></button>}
+              <p className="helper-copy">Takes about 1½ minutes: a short rest, then a few practice tries.</p>
+            </div>
+            <div className="start-secondary">{assisted}</div>
+            {/* Shows only unreadable or blocked saved data, with Delete. */}
+            <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
+          </>}
       <SetupOptions snapshot={snapshot} session={session} />
     </div>
   );

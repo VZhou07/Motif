@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AUTO_PROFILE_NAME } from '../app/profiles';
+import { Icon } from './Icon';
 import type { ViewProps } from './SetupViews';
 
 /** The one setup kept on this device: Continue (disarmed re-check) and Delete with confirmation (R7). */
-export function SavedProfiles({ snapshot, session, onStartCamera }: ViewProps & { onStartCamera?: () => Promise<boolean> | void }) {
+export function SavedProfiles({ snapshot, session, onStartCamera, children }: ViewProps & { onStartCamera?: () => Promise<boolean> | void; children?: ReactNode }) {
   const [confirming, setConfirming] = useState(false);
   const { names, rejected, available, readable, hasBaseline } = snapshot.profiles;
   const saved = names.includes(AUTO_PROFILE_NAME);
@@ -17,22 +18,25 @@ export function SavedProfiles({ snapshot, session, onStartCamera }: ViewProps & 
     session.restoreProfile(AUTO_PROFILE_NAME, quick);
   };
   return (
-    <section className="settings-card" aria-labelledby="saved-profiles-heading">
-      <h2 id="saved-profiles-heading" className="field-label">Saved on this device</h2>
-      {saved && <p>Your last approved setup is kept here automatically. {hasBaseline ? 'Continuing uses your saved resting numbers and goes straight to approving the saved controls. You can also re-check your movement first.' : 'Continuing repeats the ten-second rest check, then you approve the saved controls. You can also re-check your movement first.'}{canContinue ? '' : ' Start the camera to continue.'}</p>}
+    <section className="saved-setup" aria-labelledby="saved-profiles-heading">
+      <h2 id="saved-profiles-heading" className="sr-only">Saved on this device</h2>
       {!available && <p className="status-notice">Saving is not available in this browser (storage is blocked).</p>}
       {!readable && <p className="status-notice">The saved setup on this device could not be read. Delete it to start fresh.</p>}
       {rejected > 0 && <p className="status-notice">{rejected} saved item{rejected === 1 ? '' : 's'} could not be read and {rejected === 1 ? 'was' : 'were'} ignored.</p>}
-      {saved && <div className="button-row">
-        <button type="button" className="button button-primary" disabled={!canContinue} onClick={() => void resume(true)}>Continue with your last setup</button>
-        <button type="button" className="button" disabled={!canContinue} onClick={() => void resume(false)}>Continue and re-check my movement</button>
-      </div>}
-      {confirming
+      {saved && <>
+        <button type="button" className="button button-primary button-large" disabled={!canContinue} onClick={() => void resume(true)}>Continue with your last setup<Icon name="arrow" /></button>
+        <p className="helper-copy">{hasBaseline ? 'Goes straight to approving your saved controls.' : 'Starts with a 10-second rest check, then you approve your saved controls.'}{canContinue ? '' : ' Start the camera first.'}</p>
+      </>}
+      <div className="start-secondary">
+        {saved && <button type="button" className="button button-quiet" disabled={!canContinue} onClick={() => void resume(false)}>Re-check my movement first</button>}
+        {children}
+        {confirming
         ? <div className="button-row">
             <button type="button" className="button" onClick={() => { session.deleteAllProfiles(); setConfirming(false); }}>Yes, delete the saved setup</button>
             <button type="button" className="button button-quiet" onClick={() => setConfirming(false)}>Keep it</button>
           </div>
         : <button type="button" className="button button-quiet" onClick={() => setConfirming(true)}>Delete saved setup</button>}
+      </div>
     </section>
   );
 }
