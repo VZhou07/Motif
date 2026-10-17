@@ -2,6 +2,13 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Current task — merge `origin/main` into `ethan-features` (R19)
+
+- User (awake, 2026-10-17): "merge main". Base: branch `ethan-features` at the commit after this note; `origin/main` at `e2d5871`. Trial merge (throwaway worktree, removed) conflicts in 10 files.
+- State: **reviewing** — R19 design drafted (scratchpad draft, to be written into reasoning.md during the merge); independent reasoning review (r19_review) running. No merge started in the working tree yet.
+- Owner: Claude Code coordinator. Files: all conflict files plus tests adapted for navigation. Do not push. Leave the unrelated Supabase edits in `package.json`/`package-lock.json` uncommitted.
+- Next action: after R19 is APPROVED, `git merge --no-commit origin/main`, resolve, run tsc + full vitest, commit the merge; then follow-up small commits (favourite autosave rule, tests, docs); then independent testing review.
+
 ## Latest focused task — communication navigation and saved phrases (C1 / R14)
 
 - User (awake, 2026-10-17) asked for easier message navigation and saved/favourite messages, then approved planning C1. Base `ba15850` on branch `ethan-features`, clean tree.
