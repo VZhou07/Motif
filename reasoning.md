@@ -486,6 +486,15 @@ Demo needing code edits (A/B via profiles only); noise or flicker producing acti
 
 - **Adopted from the revision 2 re-review.** A medium noise case (±0.03 on coefficients, ±1.5° on head angles) must still calibrate with zero rest selections; the heavy case clamps coefficients to [0, 1] and asserts the "overlaps resting variation" reason; text over the live `<video>` preview is "unverifiable"; the focused-vs-unfocused comparison is made on elements without the scan highlight; text-size and colour fixes land as small token commits with layout and target checks rerun at both widths; a Tab walk wrapping to `body` or the first control is normal completion; the seeded reload profile is built with `buildProfile`.
 
+### Revision 3 addendum — MediaPipe usage logging (privacy fix)
+
+The expanded browser check found an external request: `POST https://odml.pa.googleapis.com/v1/log`. `@mediapipe/tasks-vision` 1.1.1 creates a usage logger for every task (`vision_bundle.mjs`, class with `setInterval(flush, 6e4)` and a flush on `close()`), sending performance/usage counters (not images) with global `fetch`. There is no public option to turn it off. It breaks the plan's rule that nothing leaves the device; the earlier check missed it because it ran under 60 s and never closed the model.
+
+Fix (smallest that enforces the existing invariant; no product change):
+1. `src/tracker/offline.ts` `installOfflineGuard(win)`: once, before the detector is created, wrap `win.fetch` so any request whose resolved URL is not same-origin, `blob:` or `data:` is rejected immediately with a `TypeError` and never reaches the network; also make `navigator.sendBeacon` return `false` for such URLs. MediaPipe's logger already treats a failed send as an error and stops its timer, so no retries and no console error. Same-origin model/WASM loading is unaffected.
+2. `index.html` adds a Content-Security-Policy meta with `connect-src 'self' blob: data:` as a second layer (any other external connection is refused by the browser even if the guard were bypassed).
+3. Tests: unit tests for the guard (external fetch rejected without calling the original, same-origin/blob/data passed through, idempotent, sendBeacon blocked); browser check: after the camera starts, Stop camera (which closes the model and flushes the logger) and assert no external request; plus a direct in-page `fetch('https://example.com/')` must reject with no request event. README privacy text states that MediaPipe's built-in usage logging is blocked.
+
 ### R10 review record
 
 | Revision | Reviewer | Findings / resolution | Verdict |
