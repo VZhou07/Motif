@@ -49,7 +49,7 @@ The browser check never opens a real webcam. It uses Chrome or Edge if installed
 
 1. Start the camera (a helper may click). Keep only the person being set up in view.
 2. Rest for ten seconds, then pick a movement from the list, or choose **Not sure? Find my movements**.
-3. Follow the prompts: rest, move and hold, return to rest. Then the separate checks and ten seconds of everyday activity.
+3. Follow **Rest** (5 seconds) then **Action** (5 seconds, hold your movement). The camera overlay shows the live reading and why an attempt is rejected. Then the separate checks and ten seconds of everyday activity.
 4. Say whether the movement is comfortable, choose controls and approve them. Practice first: nothing is spoken in practice.
 5. Communicate. To stop for a while, select **Pause**; the same movement resumes after a short rest.
 

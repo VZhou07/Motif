@@ -2,6 +2,7 @@ import type { Baseline, FeatureFrame, FeatureId, GestureModel, RuntimePhase, Tra
 import type { Mapping, MappingProposal, ScanMode } from './mapping';
 import type { DiscoveryResult } from './discovery';
 import type { MovementEvidence } from './scoring';
+import type { TrainingDiagnostics } from '../engine/calibration';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
@@ -11,7 +12,7 @@ export type Stage =
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
 /** `assisted` is the clearly labeled Space/mouse path; it never produces calibration evidence. */
 export type InputMode = 'gesture' | 'assisted';
-export type CapturePrompt = 'Rest' | 'Move' | 'Return to rest' | 'Everyday activity' | 'Explore freely';
+export type CapturePrompt = 'Rest' | 'Action' | 'Everyday activity' | 'Explore freely';
 
 export interface CaptureStatus {
   kind: 'baseline' | 'training' | 'verification' | 'negative' | 'discovery';
@@ -21,12 +22,19 @@ export interface CaptureStatus {
   prompt: CapturePrompt;
   phaseProgress: number;
   overallProgress: number;
+  /** Remaining valid-frame time; the recorder owns the displayed countdown. */
+  remainingMs: number;
+  /** Preview only: the user acts on `prompt`, never this upcoming cue. */
+  nextPrompt: CapturePrompt | null;
   /** Valid recorded milliseconds in the current recording or armed negative span. */
   validMs: number;
   interruptions: number;
   notice: string | null;
   /** The movement to perform in this training/check attempt, if any. */
   movement: string | null;
+  feature: FeatureId | null;
+  direction: 1 | -1 | null;
+  modelId: string | null;
 }
 
 export interface AttemptEvidence {
@@ -79,6 +87,10 @@ export interface SessionSnapshot {
   hidden: boolean;
   baseline: Baseline | null;
   choice: MovementChoice | null;
+  /** Compact evidence from actual fitting; retained after failure, never persisted. */
+  calibrationReport: TrainingDiagnostics | null;
+  /** Frozen expected model for overlay after failure; never used for control or storage. */
+  diagnosticModel: GestureModel | null;
   candidate: GestureModel | null;
   /** The select gesture of the approved set (or the first approved gesture). */
   approvedModel: GestureModel | null;

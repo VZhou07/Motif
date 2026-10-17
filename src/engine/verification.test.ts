@@ -22,6 +22,48 @@ describe('independent held-out evidence', () => {
     expect(evaluatePositiveAttempt(testModel, positive().slice(0, 27)).passed).toBe(false)
   })
 
+  it('accepts shared Rest that starts in relaxation when an Action window is supplied', () => {
+    const restBefore = [...stream(0, 400, { browOuterUpLeft: 0.8 }), ...stream(450, 4_550)]
+    const movement = stream(5_050, 4_900, { browOuterUpLeft: 0.8 })
+    const restAfter = stream(10_000, 5_000)
+    const frames = [...restBefore, ...movement, ...restAfter]
+    const window = { startMs: movement[0]!.timestampMs, endMs: restAfter[0]!.timestampMs }
+    const result = evaluatePositiveAttempt(testModel, frames, testModel.id, window)
+    expect(result.passed).toBe(true)
+    expect(result.eventCount).toBe(1)
+    expect(evaluatePositiveAttempt(testModel, frames).passed).toBe(false)
+    expect(evaluatePositiveAttempt(testModel, frames).reasons).toContain('Begin the attempt at rest.')
+  })
+
+  it('requires armed rest immediately before Action, not a dwell that started in Rest', () => {
+    // Hold begins 150 ms before Action so the last Rest frame is still pending, then the
+    // dwell completes inside Action (activationMs is 250). That must not pass.
+    const restBefore = [...stream(0, 4_850), ...stream(4_900, 100, { browOuterUpLeft: 0.8 })]
+    const movement = stream(5_050, 4_900, { browOuterUpLeft: 0.8 })
+    const restAfter = stream(10_000, 5_000)
+    const frames = [...restBefore, ...movement, ...restAfter]
+    const window = { startMs: movement[0]!.timestampMs, endMs: restAfter[0]!.timestampMs }
+    const result = evaluatePositiveAttempt(testModel, frames, testModel.id, window)
+    expect(result.passed).toBe(false)
+    expect(result.eventCount).toBe(1)
+    expect(result.reasons).toContain('Fresh rest did not arm before Action.')
+  })
+
+  it('rejects events in Rest, missing Action events, extra events and a malformed window', () => {
+    const rest = stream(0, 5_000)
+    const movement = stream(5_050, 4_900, { browOuterUpLeft: 0.8 })
+    const quietAfter = stream(10_000, 5_000)
+    const extraAfter = [...stream(10_000, 2_000), ...stream(12_100, 800, { browOuterUpLeft: 0.8 }), ...stream(13_000, 2_000)]
+    const window = { startMs: movement[0]!.timestampMs, endMs: quietAfter[0]!.timestampMs }
+    expect(evaluatePositiveAttempt(testModel, [...rest, ...movement, ...extraAfter], testModel.id, window).reasons)
+      .toContain('A recognition occurred outside Action.')
+    expect(evaluatePositiveAttempt(testModel, [...rest, ...stream(5_050, 4_900), ...quietAfter], testModel.id, window).eventCount).toBe(0)
+    expect(evaluatePositiveAttempt(testModel, [...rest, ...movement, ...quietAfter], testModel.id, { startMs: 9_000, endMs: 1_000 }).reasons)
+      .toContain('The Action window is invalid.')
+    expect(evaluatePositiveAttempt(testModel, [...rest, ...movement, ...quietAfter], testModel.id, { startMs: Number.NaN, endMs: 10_000 }).passed)
+      .toBe(false)
+  })
+
   it('cannot hide an interruption behind a later correct event', () => {
     const frames = positive()
     frames[4] = { timestampMs: 200, tracking: 'missing', values: {} }

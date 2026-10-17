@@ -4,8 +4,8 @@ import { GestureRuntime } from '../engine/recognition';
 import { evaluateNegativeWindow } from '../engine/verification';
 import type { CapturePrompt } from './types';
 
-/** Valid-frame durations from the approved protocol (R5). */
-export const CAPTURE_TIMING = { baselineMs: 10_000, restMs: 2_000, moveMs: 3_000, returnMs: 2_500, negativeMs: 10_000 } as const;
+/** Each visible Rest/Action lasts five valid-frame seconds. Adjacent attempts share only Rest. */
+export const CAPTURE_TIMING = { baselineMs: 10_000, restMs: 5_000, moveMs: 5_000, returnMs: 5_000, negativeMs: 10_000 } as const;
 
 export type RecorderUpdate<T> =
   | { kind: 'progress' }
@@ -43,39 +43,58 @@ export class BaselineRecorder {
   }
 }
 
-export interface TrialStatus { prompt: CapturePrompt; phaseProgress: number; overallProgress: number; elapsedMs: number }
+export interface TrialStatus {
+  prompt: CapturePrompt;
+  phaseProgress: number;
+  overallProgress: number;
+  elapsedMs: number;
+  remainingMs: number;
+  nextPrompt: CapturePrompt | null;
+}
 
 /**
- * Records one uninterrupted rest → move → return-to-rest attempt on valid frame time.
- * The prompt shown and the phase labels both derive from the same frame timestamps.
+ * Alternates Rest/Action. A completed trailing Rest is the next leading Rest,
+ * so there is never an extra five-second rest between attempts.
  */
 export class TrialRecorder {
   private frames: FeatureFrame[] = [];
+  private startedAt: number | null = null;
   interruptions = 0;
   readonly totalMs = CAPTURE_TIMING.restMs + CAPTURE_TIMING.moveMs + CAPTURE_TIMING.returnMs;
 
   status(): TrialStatus {
     const { restMs, moveMs, returnMs } = CAPTURE_TIMING;
-    const elapsedMs = this.frames.length ? this.frames[this.frames.length - 1]!.timestampMs - this.frames[0]!.timestampMs : 0;
+    const elapsedMs = this.frames.length && this.startedAt !== null ? this.frames[this.frames.length - 1]!.timestampMs - this.startedAt : 0;
     const overallProgress = Math.min(1, elapsedMs / this.totalMs);
-    if (elapsedMs < restMs) return { prompt: 'Rest', phaseProgress: elapsedMs / restMs, overallProgress, elapsedMs };
-    if (elapsedMs < restMs + moveMs) return { prompt: 'Move', phaseProgress: (elapsedMs - restMs) / moveMs, overallProgress, elapsedMs };
-    return { prompt: 'Return to rest', phaseProgress: Math.min(1, (elapsedMs - restMs - moveMs) / returnMs), overallProgress, elapsedMs };
+    if (elapsedMs < restMs) return { prompt: 'Rest', phaseProgress: elapsedMs / restMs, overallProgress, elapsedMs,
+      remainingMs: restMs - elapsedMs, nextPrompt: 'Action' };
+    if (elapsedMs < restMs + moveMs) return { prompt: 'Action', phaseProgress: (elapsedMs - restMs) / moveMs, overallProgress, elapsedMs,
+      remainingMs: restMs + moveMs - elapsedMs, nextPrompt: 'Rest' };
+    return { prompt: 'Rest', phaseProgress: Math.min(1, (elapsedMs - restMs - moveMs) / returnMs), overallProgress, elapsedMs,
+      remainingMs: Math.max(0, this.totalMs - elapsedMs), nextPrompt: 'Action' };
   }
 
   push(frame: FeatureFrame): RecorderUpdate<{ trial: TrainingTrial; frames: FeatureFrame[] }> {
     if (frame.tracking !== 'tracked') {
       if (!this.frames.length) return { kind: 'progress' };
       this.frames = [];
+      this.startedAt = null;
       this.interruptions += 1;
       return { kind: 'interrupted', reason: TRACKING_LOST };
     }
     this.frames.push(frame);
-    const start = this.frames[0]!.timestampMs;
+    this.startedAt ??= frame.timestampMs;
+    const start = this.startedAt;
     if (frame.timestampMs - start < this.totalMs) return { kind: 'progress' };
     const { restMs, moveMs } = CAPTURE_TIMING;
-    const frames = this.frames;
-    this.frames = [];
+    // The boundary frame starts the next Action; exclude it from the finished
+    // attempt. Carry only neutral evidence, never a previous movement window.
+    const frames = this.frames.filter((item) => item.timestampMs - start < this.totalMs);
+    const restAfter = frames.filter((item) => item.timestampMs - start >= restMs + moveMs);
+    this.frames = [...restAfter, frame];
+    // Keep the scheduled boundary, not the first sample after it. Otherwise
+    // frame jitter gradually lengthens Rest and mislabels a boundary sample.
+    this.startedAt = start + restMs + moveMs;
     return {
       kind: 'complete',
       value: {
@@ -83,7 +102,7 @@ export class TrialRecorder {
         trial: {
           restBefore: frames.filter((item) => item.timestampMs - start < restMs),
           movement: frames.filter((item) => item.timestampMs - start >= restMs && item.timestampMs - start < restMs + moveMs),
-          restAfter: frames.filter((item) => item.timestampMs - start >= restMs + moveMs),
+          restAfter,
         },
       },
     };

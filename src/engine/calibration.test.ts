@@ -62,7 +62,7 @@ describe('personalized calibration', () => {
   })
 })
 
-/** Prompt timing used by the app: rest 2 s, move 3 s, return 2.5 s. Movement is present only in [onset, offset]. */
+/** Historical 2/3/2.5-second synthetic trial, independent of app pacing. Motion only in [onset, offset]. */
 function promptedTrial(start: number, onsetMs: number, offsetMs = 3_000): TrainingTrial {
   const moveStart = start + 2_050
   const movement = stream(moveStart, 3_000).map((frame) => {

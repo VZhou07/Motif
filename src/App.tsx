@@ -11,7 +11,7 @@ const SETUP_STEP: Partial<Record<Stage, number>> = {
 };
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
-  const { snapshot, session, videoRef, startCamera, stopCamera } = useMotif(runtime);
+  const { snapshot, session, videoRef, startCamera, stopCamera, cueStatus, setCuesEnabled } = useMotif(runtime);
   const step = SETUP_STEP[snapshot.stage];
   const view = { snapshot, session };
   let content;
@@ -58,7 +58,8 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
           )}
           {content}
         </main>
-        <CameraPanel snapshot={snapshot} videoRef={videoRef} onStart={() => void startCamera()} onStop={stopCamera} />
+        <CameraPanel snapshot={snapshot} videoRef={videoRef} onStart={() => void startCamera()} onStop={stopCamera}
+          cueStatus={cueStatus} onCuesEnabled={setCuesEnabled} />
       </div>
       <p className="sr-only" aria-live="polite">{snapshot.announcement}</p>
       <footer className="app-footer"><span>Made for the way you move.</span><span>Assistive interaction prototype · not a medical device · no video is uploaded or saved</span></footer>

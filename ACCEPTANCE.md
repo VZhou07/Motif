@@ -21,10 +21,11 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | # | Steps | Expected | Observed | Pass/Fail | Date | Browser | Device |
 |---|---|---|---|---|---|---|---|
 | 3.1 | Start the rest check and rest 10 s. | Progress fills only while the face is tracked; looking away restarts it. | | | | | |
-| 3.2 | Pick a comfortable movement; follow Rest / Move / Return to rest three times. | Three attempts recorded; a lost face redoes the attempt. | | | | | |
+| 3.2 | Pick a comfortable movement; follow Rest / Action three times. Stay relaxed during Rest; make and hold the movement during Action. Watch the camera overlay (live reading, rest limit, why an attempt stops). Listen for a low beep on Rest and a higher beep on Action (mute on the camera panel). | Each Rest and Action lasts 5 tracked seconds with no extra Return-to-rest step. The next cue is previewed. Three attempts recorded; a lost face restarts a full Rest. Overlay shows real measurements, not a fake accuracy score. | | | | | |
 | 3.3 | Do the two separate checks, then 10 s of everyday activity (talk, look around). | Both checks pass with one recognition each; 0 accidental selections reported with the armed seconds. | | | | | |
 | 3.4 | Repeat with a very small movement. | Honest rejection ("overlaps resting variation") with retry / another movement / assisted options. | | | | | |
 | 3.5 | Say whether it is comfortable ("comfortable and easy" or "takes effort"). | Choice is accepted by the movement itself or a button. | | | | | |
+| 3.6 | In separate runs try a comfortable brow, mouth or head movement. Relax naturally between attempts rather than trying to reproduce exactly the same facial reading. | Small changes in relaxed position do not automatically fail training; gradual relaxation has time to settle. A movement that remains substantially held still fails. Separate checks and the everyday check must pass before approval. | | | | | |
 
 ## W4/W5 — Communication with one movement
 

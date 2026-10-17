@@ -68,12 +68,13 @@ export class Harness {
     const start = this.now;
     let prompt = this.snap.capture?.prompt;
     let since = this.now;
+    let returning = false;
     while (!done(this.snap)) {
       if (this.now - start > capMs) throw new Error(`followPrompts timed out in stage ${this.snap.stage}`);
       const current = this.snap.capture?.prompt;
-      if (current !== prompt) { prompt = current; since = this.now; }
+      if (current !== prompt) { returning = prompt === 'Action' && current === 'Rest'; prompt = current; since = this.now; }
       const elapsed = this.now - since;
-      const moving = (current === 'Move' && elapsed >= reactionMs) || (current === 'Return to rest' && elapsed < reactionMs);
+      const moving = (current === 'Action' && elapsed >= reactionMs) || (current === 'Rest' && returning && elapsed < reactionMs);
       this.step(moving ? (typeof movement === 'function' ? movement(this.snap) : movement) : REST);
     }
   }

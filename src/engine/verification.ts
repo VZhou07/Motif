@@ -1,4 +1,4 @@
-import type { FeatureFrame, GestureModel, VerificationResult } from '../domain/types'
+import type { FeatureFrame, GestureModel, RuntimePhase, VerificationResult } from '../domain/types'
 import { validateStream } from './features'
 import { GestureRuntime, observeGestures } from './recognition'
 
@@ -6,24 +6,54 @@ function listModels(models: GestureModel | readonly GestureModel[]): readonly Ge
   return Array.isArray(models) ? models : [models as GestureModel]
 }
 
+/** Half-open Action interval `[startMs, endMs)` from the recorder's movement / rest-after labels. */
+export interface ActionWindow { startMs: number; endMs: number }
+
+function windowInvalid(frames: readonly FeatureFrame[], window: ActionWindow): boolean {
+  const first = frames[0]!.timestampMs
+  const last = frames[frames.length - 1]!.timestampMs
+  return !Number.isFinite(window.startMs) || !Number.isFinite(window.endMs) || window.endMs <= window.startMs
+    || window.startMs < first || window.endMs > last
+}
+
 export function evaluatePositiveAttempt(
   models: GestureModel | readonly GestureModel[], frames: readonly FeatureFrame[], expectedId?: string,
+  actionWindow?: ActionWindow,
 ): VerificationResult {
   const modelList = listModels(models)
   const expected = expectedId ?? modelList[0]?.id
   const validation = validateStream(frames, 1_000)
   if (!validation.ok) return { passed: false, eventCount: 0, validDurationMs: 0, reasons: validation.reasons, events: [] }
+  const malformed = actionWindow !== undefined && windowInvalid(frames, actionWindow)
   const runtime = new GestureRuntime(modelList)
   const events: VerificationResult['events'] = []
+  let preAction: { phase: RuntimePhase; neutral: boolean } | undefined
   for (const frame of frames) {
     const update = runtime.step(frame)
     if (update.event) events.push(update.event)
+    if (actionWindow && !malformed && frame.timestampMs < actionWindow.startMs) {
+      preAction = { phase: update.phase, neutral: update.neutral }
+    }
   }
   const reasons: string[] = []
   if (!expected || !modelList.some((model) => model.id === expected)) reasons.push('The requested movement is not in the frozen model set.')
-  if (observeGestures(modelList, frames[0]!).kind !== 'neutral') reasons.push('Begin the attempt at rest.')
+  if (malformed) reasons.push('The Action window is invalid.')
+  else if (actionWindow) {
+    if (preAction?.phase !== 'armed' || !preAction.neutral) reasons.push('Fresh rest did not arm before Action.')
+    const inside = events.filter((event) => event.timestampMs >= actionWindow.startMs && event.timestampMs < actionWindow.endMs)
+    if (events.some((event) => event.timestampMs < actionWindow.startMs || event.timestampMs >= actionWindow.endMs)) {
+      reasons.push('A recognition occurred outside Action.')
+    }
+    if (inside.length !== 1 || inside[0]?.gestureId !== expected) {
+      reasons.push('The attempt must produce exactly one recognition of the intended movement.')
+    }
+  } else {
+    if (observeGestures(modelList, frames[0]!).kind !== 'neutral') reasons.push('Begin the attempt at rest.')
+    if (events.length !== 1 || events[0]?.gestureId !== expected) {
+      reasons.push('The attempt must produce exactly one recognition of the intended movement.')
+    }
+  }
   if (!runtime.snapshot.armed || !runtime.snapshot.neutral) reasons.push('Return to rest after the movement.')
-  if (events.length !== 1 || events[0]?.gestureId !== expected) reasons.push('The attempt must produce exactly one recognition of the intended movement.')
   return { passed: reasons.length === 0, eventCount: events.length, validDurationMs: validation.value, reasons, events }
 }
 
