@@ -167,5 +167,6 @@ function normalizeError(cause: unknown, stage: TrackerErrorCode): TrackerError {
   if (name === 'NotAllowedError' || name === 'PermissionDeniedError') return new TrackerError('permission', 'Camera permission was not granted. You can retry or choose assisted input.')
   if (stage === 'model') return new TrackerError('model', 'The local face model could not load. Check model assets and retry; assisted input is available.')
   if (stage === 'playback') return new TrackerError('playback', 'The camera preview could not start. Retry the camera or choose assisted input.')
+  if (name === 'NotReadableError' || name === 'TrackStartError') return new TrackerError('camera', 'The camera may be in use by another app. Close it and retry, or choose assisted input.')
   return new TrackerError('camera', 'No usable camera was found. Check the camera connection or choose assisted input.')
 }
