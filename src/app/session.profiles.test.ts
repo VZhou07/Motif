@@ -55,7 +55,7 @@ describe('saving a profile (R7)', () => {
     const raw = storage.data.get(PROFILE_KEY)!;
     expect(original.snap.message).toEqual(['I need water']);
     expect(raw).not.toMatch(/"message"|lastSpoken/);
-    expect(raw).not.toMatch(/statistics|heldOut|negative|frame/);
+    expect(raw).not.toMatch(/heldOut|negative|frame|timestamp/);
     const saved = JSON.parse(raw).profiles.find((profile: { name: string }) => profile.name === 'Person A');
     expect(saved.phrases[0]).toBe('Hello');
     expect(saved.scanIntervalMs).toBe(2_500);
@@ -108,7 +108,7 @@ describe('automatic last setup', () => {
     h.selectByGesture('slower');
     const saved = store.get('Last setup')!;
     expect(saved.scanIntervalMs).toBe(h.snap.scan!.intervalMs);
-    expect(storage.data.get(PROFILE_KEY)).not.toMatch(/"message"|lastSpoken|statistics/);
+    expect(storage.data.get(PROFILE_KEY)).not.toMatch(/"message"|lastSpoken|heldOut|negative|frame|timestamp/);
   });
 
   it('does not disturb input when storage is blocked', () => {
@@ -119,6 +119,34 @@ describe('automatic last setup', () => {
 });
 
 describe('quick continue', () => {
+  it('autosave keeps only summary resting numbers, and Continue skips the rest check using them', () => {
+    const { storage, store } = storeFor();
+    const h = new Harness({ profiles: store });
+    h.setUpToCommunication();
+    const saved = store.get('Last setup')!;
+    expect(Object.keys(saved.baseline!).sort()).toEqual(['durationMs', 'samples', 'statistics']);
+    expect(Object.keys(Object.values(saved.baseline!.statistics)[0]!).sort()).toEqual(['center', 'high', 'low', 'noise']);
+
+    const fresh = new Harness({ profiles: storeFor(storage).store });
+    fresh.session.setCamera('running');
+    expect(fresh.session.restoreProfile('Last setup', true)).toBe(true);
+    expect(fresh.snap.stage).toBe('mapping-confirm');
+    expect(fresh.snap.approvedModels).toEqual([]);
+    fresh.selectByGesture('approve-mapping');
+    expect(fresh.snap.stage).toBe('practice');
+    expect(fresh.snap.approvedModels).toHaveLength(1);
+  });
+
+  it('rejects a malformed saved baseline and still restores older profiles that have none', () => {
+    const { store } = storeFor();
+    const h = new Harness({ profiles: store });
+    h.setUpToCommunication();
+    const saved = store.get('Last setup')!;
+    expect(parseProfile({ ...saved, baseline: { ...saved.baseline, statistics: {} } }).ok).toBe(false);
+    const { baseline: _omitted, ...older } = saved;
+    expect(parseProfile(older).ok).toBe(true);
+  });
+
   function quickOn(storage: ReturnType<typeof createMemoryStorage>, rest: Values = REST): Harness {
     const h = new Harness({ profiles: storeFor(storage).store });
     h.session.setCamera('running');

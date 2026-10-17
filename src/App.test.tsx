@@ -212,7 +212,7 @@ describe('Motif app', () => {
     expect(screen.getByRole('button', { name: 'Continue with your last setup' })).toBeTruthy();
     // With the camera off, Continue starts it first, then begins the disarmed re-check.
     fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
-    await waitFor(() => expect(h.snap.stage).toBe('baseline'));
+    await waitFor(() => expect(h.snap.stage).toBe('mapping-confirm'));
     expect(h.snap.camera).toBe('running');
     expect(h.snap.restoring).toBe('Last setup');
     expect(screen.queryByRole('button', { name: 'Continue with your last setup' })).toBeNull();
