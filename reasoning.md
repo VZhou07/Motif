@@ -257,6 +257,15 @@ Recalibrate (R5) still restarts with one new gesture and replaces the whole set 
 
 Pure: proposal generation for 1–4 gestures, mapping validation (duplicate actions, missing select, previous without next, unknown ids). Session: add a second gesture with held-out + cross-check + negative on the set; a candidate that steals the old gesture fails its cross-check; duplicate movement refused; simultaneous A+B selects nothing in setup and communication; Next/Select step scanning has no timed advance and selects the stepped item; previous; pause gesture toggles and next is ignored while paused; one-gesture fallback ignores the unmapped gesture; Change controls requires confirmation and fresh neutral, Keep current controls preserves the old mapping; 3- and 4-gesture mappings reach every operational control; assisted mode unaffected. RTL: mapping proposals render with scan highlight. Then full suite, typecheck, build, browser check, independent test review.
 
+### R6 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| R6 revision 1 | r6_review | 3 blockers (per-action routing, step-mode fail-safe, armed set = verified set); resolved in revision 2. | CHANGES REQUIRED |
+| R6 revision 2 | r6_rereview | Blockers resolved. | APPROVED |
+| R6 implementation (`c7e4e7f`) | w6_test_review | Ran tsc, vitest 129/129, build, browser-check 12/12 itself; 10 of 15 mutants killed. BLOCKING: a paused step scan un-paused itself through the 60 s fallback and could then select; negative window over the set and select-only latching were not pinned by tests (mutants survived). | BLOCKING ISSUES |
+| R6 implementation (`e848456`) | w6_test_review (re-check) | Fixes `3e85aa3` (idle time not counted while paused), `2cefb57` (4 tests), `e848456` (visible fallback note). Ran tsc, vitest 134/134, build, browser-check 12/12; all previously surviving mutants and the paused probe killed. Non-blocking: helper Pause/Resume clicks should reset the idle timer (done in `6e017d0`); hint shows "Rest" before the fallback note while unarmed. | PASS — software verified; human acceptance pending |
+
 ## R7 — W7a: local profiles and restore (revision 2)
 
 Status: APPROVED (revision 2) by independent `r7_review` re-review; revision 1 had 4 blockers, resolved in "Revision 2 changes" below (stale lines above were edited to match). Owner: Claude Code coordinator (session 3). Builds on approved R4–R6. W6 independent testing review runs separately.

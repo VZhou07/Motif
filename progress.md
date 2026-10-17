@@ -32,8 +32,8 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 | --- | --- |
 | W0/W1/WF1/WF2 | Reached. |
 | W2–W5 (camera, calibration, one-gesture communication, first slice) | Software verified; human acceptance pending (real webcam, live values, anatomical/head-direction labels, comfort, speech audibility). Reviews: r5_review → r5_rereview APPROVED; w2_w4_test_review → fixes → w2_w4_recheck PASS. |
-| W6 remaining P0 (multi-gesture) | TESTING (session 3 coordinator owns `src/app/session.test.ts`, `src/app/session.ts`, `src/components/**`, `src/App.test.tsx`). R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
-| W7a profiles/recalibration | REVIEWING (R7 revision 1 under `r7_review`). |
+| W6 remaining P0 (multi-gesture) | Software verified; human acceptance pending (`w6_test_review` re-check PASS at `e848456`). R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
+| W7a profiles/recalibration | IMPLEMENTING. R7 revision 2 APPROVED (`r7_review`). Owner: session 3 coordinator; files `src/app/profiles.ts`, `src/app/profiles.test.ts`, `src/app/session.ts`, `src/app/types.ts`, session tests, `src/components/**`, `src/app/useMotif.ts`, `src/App.test.tsx`. |
 | W7b scoring/recommendations → W7c discovery | Authorized, not started. Each needs its own reasoning revision + independent review before code. |
 | W8 hardening | Authorized, not started. Human checks stay pending. |
 
@@ -49,8 +49,8 @@ Done and committed:
 
 1. DONE (session 3): W6 session tests (`describe('multiple gestures (R6)')`, 13 tests: add/cross-check/negative, interfering candidate, duplicate refusal, simultaneous movements, step mode, next across a boundary in fallback, idle fallback counting, previous, pause, one-movement mapping, Change controls/Keep current, Use previous, 4-movement reachability, 3-movement auto mapping, assisted, recalibration with a set). No session bugs found. Commits `b48b127`, `75f2ad1`, `5b9edcb`.
 2. DONE: UI follow-ups `aa5db2e` (camera panel lists movements + actions), `3dcd476` (chooser disables used movements while adding), `c7e4e7f` (evidence labels cross-checks; evidence also shown on the comfort screen; App test scans mapping proposals).
-3. IN PROGRESS: `w6_test_review` found BLOCKING ISSUES at `c7e4e7f` (paused step scan un-paused itself via the 60 s fallback and could then select; negative-window-over-set and select-only-latch not pinned by tests). Fixed: `3e85aa3 Keep paused step scans paused`, `2cefb57 Test step fallback and latch edge cases`, `e848456 Show step fallback note` (vitest 134 PASS, tsc PASS). Re-check by the same reviewer running. Then record in `reasoning.md` (R6 table), here, and `plan.md` (W6 software verified; human acceptance pending).
-4. W7a: R7 revision 1 → `r7_review` CHANGES REQUIRED (B1 restore state/approval gate, B2 exits at restore stages, B3 validation vs `isGestureModel`, B4 Save must not drop unreadable entries). Revision 2 written (`86109ba`); re-review running. No profile code yet. After APPROVED: implement in small commits — `src/app/profiles.ts` + `profiles.test.ts` first, then session wiring (`session.ts`, `types.ts`, session tests), then UI (`SetupViews`, `CommunicationView`, `useMotif`, App tests). Then W7b, W7c, W8 per `plan.md`.
+3. DONE: W6 software verified; human acceptance pending. `w6_test_review` BLOCKING at `c7e4e7f` → fixes `3e85aa3`, `2cefb57`, `e848456` → re-check PASS (tsc, vitest 134, build, browser 12/12, mutants killed). Follow-up `6e017d0` (helper Pause/Resume reset the idle timer; 135 tests). Recorded in `reasoning.md` R6 review record and `plan.md`.
+4. W7a: R7 revision 2 APPROVED (`5bd372b`). Implement in small commits: (a) `src/app/profiles.ts` + `profiles.test.ts` (parse/validate, store with raw-entry preservation); (b) session wiring (`restoring` state, save/delete/restore, recheck plan, `reject-profile`, `profile-mismatch`) + session tests; (c) UI (welcome profile list, Save form in communication, evidence labels) + `useMotif` local store + App tests. Then full checks and independent testing review. Then W7b, W7c, W8 per `plan.md`.
 
 ## Known notes and risks
 
