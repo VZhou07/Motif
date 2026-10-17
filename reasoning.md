@@ -442,6 +442,8 @@ Pure (`discovery.test.ts`): rest only → none; a repeated mouth opening → one
 | --- | --- | --- | --- |
 | R9 revision 1 | r9_review | B1 grouping chained through shared channels (opposite directions and independent movements could merge); B2 channels outside `MOVEMENT_OPTIONS` gave jargon labels. Units, hysteresis, safety, privacy and accessibility confirmed sound. Resolved in revision 2 with the non-blocking items adopted. | CHANGES REQUIRED |
 | R9 revision 2 | r9_review (re-review) | B1/B2 resolved; thresholds, time/segment rules and session changes checked against the code; no new blockers. Non-blocking (stale text, Candidate type, scanned "use instead", broad-channel ranking) adopted. | APPROVED |
+| R9 implementation (`df979a0`) | w7c_test_review | Ran tsc, vitest 251, build, browser-check 12/12 itself; code matched R9 rev 2; 20 of 34 mutants killed. BLOCKING (tests only): chain test did not exercise chaining, ranking/nesting/cap not pinned, choice clearing and frame dropping untested. | BLOCKING ISSUES |
+| R9 implementation (`fefa186`) | w7c_test_review (re-check) | Tests `3529bad`, `4183a28`, `5588e48`, `8adc098`/`fefa186` (+ FailedView "Look for movements again"). Ran tsc, vitest 263, build, browser-check 12/12; M10–M12, M15, M20, M22, S1, S2 killed. Non-blocking open: noisy-baseline pinning of the `on`/`off` formulas; the unreachable-channel skip is defensive only. | PASS — software verified; human acceptance pending |
 
 ## R10 — W8: demo and accessibility hardening (revision 2)
 
