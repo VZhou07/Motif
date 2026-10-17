@@ -293,7 +293,7 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Not sure? Find my movements' }));
     expect(screen.getByText('FINDING YOUR MOVEMENTS')).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Try what feels/);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Explore/);
     const start = h.now;
     act(() => h.run(20_500, (now) => ((now - start - 500) % 4_000 >= 0 && (now - start - 500) % 4_000 < 1_000 ? MOUTH : REST)));
     const list = screen.getByRole('list', { name: 'Noticed movements' });

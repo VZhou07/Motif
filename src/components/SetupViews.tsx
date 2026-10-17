@@ -91,44 +91,41 @@ function PhraseField({ index, phrase, session }: { index: number; phrase: string
 }
 
 const PROMPT_TITLES: Record<CapturePrompt, ReactNode> = {
-  Rest: <>Rest <em>comfortably.</em></>,
-  Action: <>Make your movement<br /><em>and hold it.</em></>,
-  'Everyday activity': <>Be yourself.<br /><em>Move naturally.</em></>,
-  'Explore freely': <>Try what feels<br /><em>comfortable.</em></>,
+  Rest: <>Rest</>,
+  Action: <>Move</>,
+  'Everyday activity': <>Be yourself</>,
+  'Explore freely': <>Explore</>,
 };
 
 export function CaptureView({ snapshot, session }: ViewProps) {
   const capture = snapshot.capture;
   if (!capture) return null;
   const seconds = Math.max(0, Math.ceil(capture.remainingMs / 1_000));
-  const nextInstruction = capture.nextPrompt === 'Action' ? 'Next: Action. Stay relaxed until the Action cue.'
-    : capture.nextPrompt === 'Rest' ? 'Next: Rest. Relax when the Rest cue appears.' : null;
-  const timerLabel = capture.kind === 'negative' ? 'armed seconds remaining'
-    : capture.prompt === 'Rest' && capture.nextPrompt === 'Action' ? 'seconds until action'
-      : capture.prompt === 'Action' ? 'seconds until rest' : 'seconds in this step';
-  const eyebrow = capture.kind === 'baseline' ? 'STEP 1 · YOUR RESTING BASELINE'
-    : capture.kind === 'training' ? `MOVEMENT PRACTICE · ${capture.index} OF ${capture.total}`
-      : capture.kind === 'verification' ? `SEPARATE CHECK · ${capture.index} OF ${capture.total}`
-        : capture.kind === 'discovery' ? 'FINDING YOUR MOVEMENTS' : 'EVERYDAY ACTIVITY CHECK';
-  const lead = capture.kind === 'baseline' ? 'Rest in a position that feels natural. Only clear, uninterrupted camera input counts.'
-    : capture.kind === 'negative' ? 'Look around, talk or make small ordinary movements — but please avoid your chosen movement. We count any accidental selections.'
-      : capture.kind === 'discovery' ? 'Try any movements you can comfortably make, a few times each, holding each for a moment and resting in between. Nothing is selected while exploring.'
-      : capture.kind === 'verification' ? 'A new attempt that checks what was learned. It does not change the learned movement.'
-        : 'Rest for five seconds, then make and hold your movement during five seconds of Action. Relax when Rest appears.';
+  const nextInstruction = capture.nextPrompt === 'Action' ? 'Next: Move. Stay relaxed until the cue.'
+    : capture.nextPrompt === 'Rest' ? 'Next: Rest. Relax when the cue appears.' : null;
+  const eyebrow = capture.kind === 'baseline' ? 'REST CHECK'
+    : capture.kind === 'training' ? `RECORDING · ${capture.index} OF ${capture.total}`
+      : capture.kind === 'verification' ? `CHECK · ${capture.index} OF ${capture.total}`
+        : capture.kind === 'discovery' ? 'FINDING YOUR MOVEMENTS' : 'EVERYDAY ACTIVITY';
+  const lead = capture.kind === 'baseline' ? 'Sit comfortably and rest. Motif learns what your face looks like at rest.'
+    : capture.kind === 'negative' ? 'Look around, talk or move normally, but avoid your chosen movement. We count any accidental selections.'
+      : capture.kind === 'discovery' ? 'Try any movements that feel comfortable, a few times each, resting between. Nothing is selected.'
+        : capture.kind === 'verification' ? 'One more attempt to check what was learned. It does not change your movement.'
+          : 'Rest, then make your movement and hold it while the cue says Move. Relax when Rest returns.';
   return (
     <>
       <Heading eyebrow={eyebrow} title={PROMPT_TITLES[capture.prompt]} lead={lead} />
       {capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
       <div className={`recording-card ${capture.prompt === 'Action' ? 'recording-move' : ''}`}>
-        <div><span className="recording-dot" /><span>{capture.prompt}</span></div>
-        <strong className="timer" aria-hidden="true">{seconds}<small>{timerLabel}</small></strong>
+        <div><span className="recording-dot" /><span>{capture.prompt === 'Action' ? 'Move' : capture.prompt}</span></div>
+        <strong className="timer" aria-hidden="true">{seconds}<small>seconds</small></strong>
         <progress max={100} value={percent(capture.overallProgress)} aria-label={`${capture.kind} recording progress`} />
       </div>
       {nextInstruction && <p className="helper-copy">{nextInstruction}</p>}
       <p className="helper-copy">
-        {capture.kind === 'negative'
-          ? `Observed so far: ${(capture.validMs / 1_000).toFixed(1)} s armed. Restarts: ${capture.interruptions}.`
-          : `Interruptions this step: ${capture.interruptions}. Communication is off while recording.`}
+        {capture.kind === 'negative' ? `Counted so far: ${(capture.validMs / 1_000).toFixed(1)} s. ` : ''}
+        {capture.interruptions > 0 ? `Paused ${capture.interruptions} time${capture.interruptions === 1 ? '' : 's'} because your face wasn't clear. ` : ''}
+        Communication is off while recording.
       </p>
       {capture.notice && <p className="status-notice">{capture.notice}</p>}
       <div className="button-row"><button type="button" className="button button-quiet" onClick={() => session.cancel()}>Stop setup</button></div>
