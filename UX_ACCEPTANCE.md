@@ -59,3 +59,6 @@ Software verified: 2.1-2.7, 2.9-2.12 PASS (25 acceptance tests), 2.8 PASS (tsc, 
 | 3.7 | TEST | The discovery path (choosing a noticed movement) and adding a second movement still start training and approve as before. |
 | 3.8 | TEST | tsc, full vitest and build pass; baseline for this slice: 412 tests. |
 | 3.H | HUMAN | A helper can pick a movement with one click and finds where to rename it. |
+
+### Slice 3 result (round 1 of 3)
+Software verified: 3.1-3.7 PASS (19 acceptance tests), 3.8 PASS (tsc, 431 tests, build). Mutations: partial rename, blur-only apply, no-trim and input remount are all caught; allowing rename while restoring survives as an equivalent mutant (`candidate` is null then). **Human acceptance pending:** 3.H.
