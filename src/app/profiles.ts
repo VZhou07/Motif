@@ -9,6 +9,8 @@ import { STARTER_PHRASES } from './types';
  * stored; never video, frames, evidence or messages.
  */
 export const PROFILE_VERSION = 1;
+/** Bump when recognition or verification rules change; never upgrade old evidence. */
+export const VERIFICATION_POLICY_VERSION = 1;
 export const PROFILE_KEY = 'motif.profiles';
 export const MAX_PROFILES = 8;
 /** Reserved name the session refreshes automatically after approval, so a page refresh never loses the setup. */
@@ -34,7 +36,7 @@ export interface StoredProfile {
   checks?: StoredChecks;
 }
 
-export interface StoredChecks { restAt?: number; movementAt: Record<string, number> }
+export interface StoredChecks { policyVersion?: number; restAt?: number; movementAt: Record<string, number> }
 
 /** Same model, same key: the saved fields in a fixed order (R15/R17 recent-check times). */
 export function modelKey(model: GestureModel): string {
@@ -75,7 +77,9 @@ function isBaseline(value: unknown): value is Baseline {
 function isChecks(value: unknown, ids: ReadonlySet<string>): value is StoredChecks {
   if (!isRecord(value)) return false;
   const withRest = Object.hasOwn(value, 'restAt');
-  if (!hasExactKeys(value, withRest ? ['restAt', 'movementAt'] : ['movementAt'])) return false;
+  const withPolicy = Object.hasOwn(value, 'policyVersion');
+  if (!hasExactKeys(value, ['movementAt', ...(withRest ? ['restAt'] : []), ...(withPolicy ? ['policyVersion'] : [])])) return false;
+  if (withPolicy && (!Number.isSafeInteger(value.policyVersion) || (value.policyVersion as number) < 1)) return false;
   const time = (at: unknown) => typeof at === 'number' && Number.isFinite(at) && at > 0;
   if (withRest && !time(value.restAt)) return false;
   const movementAt = value.movementAt;
@@ -153,7 +157,7 @@ export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
     phrases: [...fields.phrases],
     scanIntervalMs: fields.scanIntervalMs,
     ...(fields.baseline ? { baseline: copyBaseline(fields.baseline) } : {}),
-    ...(fields.checks ? { checks: { ...(fields.checks.restAt !== undefined ? { restAt: fields.checks.restAt } : {}), movementAt: { ...fields.checks.movementAt } } } : {}),
+    ...(fields.checks ? { checks: { ...(fields.checks.policyVersion !== undefined ? { policyVersion: fields.checks.policyVersion } : {}), ...(fields.checks.restAt !== undefined ? { restAt: fields.checks.restAt } : {}), movementAt: { ...fields.checks.movementAt } } } : {}),
   });
 }
 

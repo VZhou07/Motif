@@ -106,7 +106,7 @@ describe('calibration pacing presentation (R13)', () => {
     const h = startTrial();
     renderApp(h);
     const announcer = document.querySelector('[aria-live]');
-    expect(announcer?.textContent).toBe('Rest');
+    expect(announcer?.textContent).toBe('Rest. Next Action: My eyebrow movement.');
     const initialAnnouncement = announcer?.textContent;
     act(() => h.run(1_000));
     expect(countdown().firstChild?.textContent).toBe('4');

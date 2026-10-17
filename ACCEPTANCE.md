@@ -50,6 +50,7 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | 6.3 | Make both movements at once. | Nothing is selected. | | | | | |
 | 6.4 | Rest for over a minute in step mode. | Scanning becomes automatic with a visible note; select still works. | | | | | |
 | 6.5 | Change controls → Keep current; Change controls → another option → Approve; Use previous controls. | Nothing changes without approval; previous controls return after approval. | | | | | |
+| 6.6 | On the isolated preview, train Open mouth, then add Tilt down; repeat separately with Turn right. During each Rest read/listen to Next Action and prepare that movement. Try the existing Next/Select assignments separately. Make both gestures fully together; then interrupt a check by looking away and return. | Small incidental co-motion below its own action threshold does not alone block a clear gesture. The requested cross-check is visible/spoken throughout preparation, including a restarted full Rest. Separate movements perform their assigned actions; fully simultaneous activation does nothing and needs fresh rest. A failed check names the measured missing/wrong/repeated/ambiguous evidence and retains the previous controls. Record actual failure numbers if it still fails. | | | | | |
 
 ## W7a — Saved profiles
 

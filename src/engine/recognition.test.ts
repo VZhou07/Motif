@@ -45,11 +45,13 @@ describe('gesture input state machine', () => {
     expect(feed(runtime, stream(650, 500, { browOuterUpLeft: 0.8 })).some((update) => update.event)).toBe(false)
   })
 
-  it('does not preserve arming through simultaneous bands or opposite-only movement', () => {
+  it('preserves prior arming through sub-activation bands but rejects opposite-only movement', () => {
     const mouth: GestureModel = { ...testModel, id: 'mouth', feature: 'jawOpen' }
     const runtime = new GestureRuntime([testModel, mouth])
     feed(runtime, stream(0, 500))
-    expect(runtime.step(makeFrame(550, { browOuterUpLeft: 0.3, jawOpen: 0.3 })).phase).toBe('unarmed')
+    const onset = runtime.step(makeFrame(550, { browOuterUpLeft: 0.3, jawOpen: 0.3 }))
+    expect(onset.phase).toBe('armed')
+    expect(onset.event).toBeUndefined()
     const yaw: GestureModel = { ...testModel, feature: 'headYaw', baselineCenter: 0, activationThreshold: 5, releaseThreshold: 2 }
     const yawRuntime = new GestureRuntime(yaw)
     feed(yawRuntime, stream(0, 500))
@@ -99,10 +101,10 @@ describe('gesture input state machine', () => {
     expect(feed(runtime, stream(2_200, 500, { headYaw: -8 })).filter((update) => update.event)[0]?.event?.gestureId).toBe(left.id)
   })
 
-  it('rejects simultaneous and cross-feature band conflicts', () => {
+  it('rejects simultaneous activation while tolerating a weaker cross-feature band', () => {
     const second: GestureModel = { ...testModel, id: 'mouth', feature: 'jawOpen' }
     expect(observeGestures([testModel, second], makeFrame(0, { browOuterUpLeft: 0.8, jawOpen: 0.8 })).kind).toBe('uncertain')
-    expect(observeGestures([testModel, second], makeFrame(0, { browOuterUpLeft: 0.8, jawOpen: 0.3 })).kind).toBe('uncertain')
+    expect(observeGestures([testModel, second], makeFrame(0, { browOuterUpLeft: 0.8, jawOpen: 0.3 }))).toEqual({ kind: 'active', gestureId: testModel.id })
     const runtime = new GestureRuntime([testModel, second])
     feed(runtime, stream(0, 500))
     expect(feed(runtime, stream(550, 500, { browOuterUpLeft: 0.8, jawOpen: 0.8 })).some((update) => update.event)).toBe(false)

@@ -418,7 +418,7 @@ describe('honest limits and setup settings', () => {
       h.run(10_500);
       h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Brow' });
       h.followPrompts((snap) => snap.capture?.index === 2);
-      expect(h.spoken.slice(0, 3)).toEqual(enabled ? ['Rest', 'Action', 'Rest'] : []);
+      expect(h.spoken.slice(0, 3)).toEqual(enabled ? ['Rest. Next Action: Brow.', 'Action', 'Rest. Next Action: Brow.'] : []);
     }
   });
 });
@@ -490,7 +490,7 @@ describe('multiple gestures (R6)', () => {
     const habit = (label: string | null): Values => (label === BROW_LABEL ? { ...BROW, browInnerUp: 0.7 } : { browInnerUp: 0.7 });
     h.addMovement({ feature: 'browInnerUp', direction: 1, label: 'Raise inner brows' }, habit);
     expect(h.snap.stage).toBe('setup-failed');
-    expect(h.snap.failure?.title).toMatch(/interfered with “Raise left outer eyebrow”/);
+    expect(h.snap.failure?.title).toBe('“Raise left outer eyebrow” did not pass its combined check');
     const attempts = h.snap.cycles[1]!.heldOut;
     expect(attempts.map((attempt) => [attempt.kind, attempt.passed])).toEqual([['held-out', true], ['held-out', true], ['cross-check', false]]);
     expect(h.snap.cycles[1]!.negative).toBeNull();
