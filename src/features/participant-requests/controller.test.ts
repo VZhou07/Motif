@@ -1,5 +1,8 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Each test starts a real PostgreSQL (PGlite); allow for a loaded machine running the full suite.
+vi.setConfig({ testTimeout: 30_000 });
 import { CareError } from '../../care';
 import { ParticipantRequestController, reasonFor, statusText } from './controller';
 import { createCareWorld, deferred } from './requests.test-support';
@@ -9,7 +12,7 @@ let close: (() => Promise<void>) | undefined;
 beforeEach(() => { vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] }); });
 afterEach(async () => { await close?.(); close = undefined; vi.useRealTimers(); });
 
-async function until(condition: () => boolean, ms = 4_000): Promise<void> {
+async function until(condition: () => boolean, ms = 15_000): Promise<void> {
   const end = Date.now() + ms;
   while (!condition()) {
     if (Date.now() > end) throw new Error('Condition not reached in time.');

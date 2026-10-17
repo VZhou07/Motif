@@ -1,5 +1,8 @@
 // @vitest-environment node
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// Each test starts a real PostgreSQL (PGlite); allow for a loaded machine running the full suite.
+vi.setConfig({ testTimeout: 30_000 });
 import { createCareWorld } from './requests.test-support';
 
 let close: (() => Promise<void>) | undefined;
