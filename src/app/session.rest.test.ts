@@ -80,9 +80,9 @@ describe('calibration with a changing relaxed face (R12)', () => {
     expect(h.snap.message).toEqual([]);
     expect(h.snap.approvedModel).toEqual(frozen);
 
-    h.selectByGesture('phrase:0', movement(motion), 60_000, 5_000, 1_000);
+    h.selectByGesture('phrase:g1:0', movement(motion), 60_000, 5_000, 1_000);
     expect(h.snap.message).toEqual(['Yes']); // A long hold is still only one selection.
-    h.selectByGesture('phrase:0', movement(motion));
+    h.selectByGesture('phrase:g1:0', movement(motion));
     expect(h.snap.message).toEqual(['Yes', 'Yes']);
   });
 

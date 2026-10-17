@@ -57,7 +57,7 @@ describe('effort and observed use (R8)', () => {
     for (let i = 0; i < 4; i += 1) h.step(REST, 'missing'); // tracking loss mid-dwell
     h.run(600);
     expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 1, unfinished: 1 });
-    h.selectByGesture('phrase:0');
+    h.selectByGesture('phrase:g1:0');
     expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 2, unfinished: 1 });
   });
 
@@ -123,7 +123,7 @@ describe('reporting a tiring movement (R8)', () => {
 
   it('lets the person name the movement, then recommends controls that leave it unused', () => {
     const h = twoStep();
-    h.stepTo('phrase:2');
+    h.stepTo('phrase:g2:0');
     const [brow, mouth] = h.snap.approvedModels;
     h.stepTo('tiring');
     expect(h.snap.stage).toBe('tiring');

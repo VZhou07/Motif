@@ -35,7 +35,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
 
     // Person B: mouth selects, cheek puff moves next; an edited phrase.
     const b = new Harness({ profiles: store() });
-    b.session.setPhrase(1, 'Coffee please');
+    b.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 1, text: 'Coffee please' });
     b.session.setCamera('running');
     b.session.startBaseline();
     b.run(10_500);
@@ -71,7 +71,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterA.run(800, MOUTH); laterA.run(800);
     laterA.run(800, CHEEK); laterA.run(800); // Person B's movements do nothing here
     expect(laterA.snap.message).toEqual([]);
-    laterA.selectByGesture('phrase:2');
+    laterA.selectByGesture('phrase:g2:0');
     laterA.selectByGesture('speak');
     expect(laterA.spoken).toEqual(['I need water']);
 
@@ -88,7 +88,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterB.stepTo('finish-practice', CHEEK, MOUTH);
     laterB.run(600, BROW); laterB.run(600);
     expect(laterB.snap.message).toEqual([]);
-    laterB.stepTo('phrase:1', CHEEK, MOUTH);
+    laterB.stepTo('phrase:g1:1', CHEEK, MOUTH);
     expect(laterB.snap.message).toEqual(['Coffee please']);
     laterB.stepTo('speak', CHEEK, MOUTH);
     expect(laterB.spoken).toEqual(['Coffee please']);
@@ -100,7 +100,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterB.selectByGesture('approve-mapping', MOUTH);
     laterB.selectByGesture('finish-practice', MOUTH);
     expect(laterB.snap.scanMode).toBe('auto');
-    laterB.selectByGesture('phrase:0', MOUTH);
+    laterB.selectByGesture('phrase:g1:0', MOUTH);
     expect(laterB.snap.message).toEqual(['Coffee please', 'Yes']);
 
     // Zero gestures: assisted Space only.
@@ -122,7 +122,7 @@ describe('noise, lighting and flicker (R10)', () => {
       h.run(60_000);
       expect(h.snap.message).toEqual([]);
       expect(used(h)).toBe(before);
-      for (let i = 0; i < 3; i += 1) h.selectByGesture('phrase:0');
+      for (let i = 0; i < 3; i += 1) h.selectByGesture('phrase:g1:0');
       expect(h.snap.message).toEqual(['Yes', 'Yes', 'Yes']);
       expect(used(h)).toBe(before + 3);
     });
@@ -161,7 +161,7 @@ describe('noise, lighting and flicker (R10)', () => {
     h.run(20_000);
     expect(used(h) - before).toBe(1); // one action for the whole shifted period, never repeated
     h.noise = null;
-    h.selectByGesture('phrase:3');
+    h.selectByGesture('phrase:g2:1');
     expect(h.snap.message.at(-1)).toBe('Please help me');
   });
 

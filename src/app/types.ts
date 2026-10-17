@@ -3,6 +3,7 @@ import type { Mapping, MappingProposal, ScanMode } from './mapping';
 import type { DiscoveryResult } from './discovery';
 import type { MovementEvidence } from './scoring';
 import type { TrainingDiagnostics } from '../engine/calibration';
+import type { Vocabulary } from './vocabulary';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
@@ -113,7 +114,8 @@ export interface SessionSnapshot {
   decisions: ScanTarget[];
   scan: ScanView | null;
   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
-  phrases: string[];
+  /** Phrase groups (Favourites first); deliberately saved settings, never message history (R14). */
+  vocabulary: Vocabulary;
   message: string[];
   lastSpoken: string | null;
   speech: { available: boolean; voiceName: string | null };

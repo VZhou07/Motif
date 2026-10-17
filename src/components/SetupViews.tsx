@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { liveDeviation, MOVEMENT_OPTIONS, type MovementOption } from '../app/movements';
 import type { MotifSession } from '../app/session';
 import type { CapturePrompt, SessionSnapshot } from '../app/types';
+import { VOCABULARY_LIMITS, type PhraseGroup } from '../app/vocabulary';
 import { Icon } from './Icon';
 import { SavedProfiles } from './ProfileViews';
 import { DecisionList } from './ScanBoard';
@@ -51,19 +52,22 @@ export function SetupOptions({ snapshot, session }: ViewProps) {
           onChange={(event) => session.setSpokenPrompts(event.target.checked)} />
         Speak setup prompts aloud {snapshot.speech.available ? `(local voice: ${snapshot.speech.voiceName})` : '(no local voice available on this device)'}
       </label>
-      <div className="phrase-edit-grid">
-        {snapshot.phrases.map((phrase, index) => <PhraseField key={`${index}:${phrase}`} index={index} phrase={phrase} session={session} />)}
-      </div>
+      {snapshot.vocabulary.groups.filter((group) => group.phrases.length).map((group) => (
+        <div key={group.id} className="phrase-edit-grid" role="group" aria-label={group.name}>
+          {group.phrases.map((phrase, index) => (
+            <PhraseField key={`${group.id}:${index}:${phrase}`} group={group} index={index} phrase={phrase} session={session} />))}
+        </div>
+      ))}
     </details>
   );
 }
 
-function PhraseField({ index, phrase, session }: { index: number; phrase: string; session: MotifSession }) {
+function PhraseField({ group, index, phrase, session }: { group: PhraseGroup; index: number; phrase: string; session: MotifSession }) {
   const [draft, setDraft] = useState(phrase);
   return (
-    <label className="text-field">Phrase {index + 1}
-      <input value={draft} maxLength={60} onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => { if (!session.setPhrase(index, draft)) setDraft(phrase); }} />
+    <label className="text-field">{group.name} phrase {index + 1}
+      <input value={draft} maxLength={VOCABULARY_LIMITS.phraseMax} onChange={(event) => setDraft(event.target.value)}
+        onBlur={() => { if (!session.editVocabulary({ kind: 'edit-phrase', group: group.id, index, text: draft }).ok) setDraft(phrase); }} />
     </label>
   );
 }

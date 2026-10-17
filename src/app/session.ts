@@ -1,4 +1,4 @@
-import type { Baseline, FeatureFrame, GestureModel, TrackingState, TrainingTrial } from '../domain/types';
+import type { Baseline, FeatureFrame, GestureModel, Result, TrackingState, TrainingTrial } from '../domain/types';
 import { fitGesture, type TrainingDiagnostics } from '../engine/calibration';
 import type { CueAudio } from './audio';
 import { FeatureProcessor, MAX_FRAME_GAP_MS } from '../engine/features';
@@ -9,9 +9,10 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
+import { applyEdit, defaultVocabulary, type Vocabulary, type VocabularyEdit } from './vocabulary';
 import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
-  STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
+  type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
   type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
 } from './types';
 
@@ -130,7 +131,7 @@ export class MotifSession {
   private recalibrating = false;
   private cycles: CycleEvidence[] = [];
   private failure: Failure | null = null;
-  private phrases = [...STARTER_PHRASES];
+  private vocabulary: Vocabulary = defaultVocabulary();
   private message: string[] = [];
   private lastSpoken: string | null = null;
   private spokenPrompts = false;
@@ -592,7 +593,7 @@ export class MotifSession {
         || cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index])) return;
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
-      this.phrases = [...restored.profile.phrases];
+      this.vocabulary = restored.profile.vocabulary;
       this.intervalMs = restored.profile.scanIntervalMs;
     } else if (this.candidate) {
       if (!cycle || cycle.outcome !== 'verified') return;
@@ -615,7 +616,7 @@ export class MotifSession {
       const { profile } = restored;
       this.activeProfile = profile.name;
       // Compared with what was saved, so approving different controls marks the setup unsaved.
-      this.activeSignature = this.signature(profile.models, profile.mapping.assignments, profile.phrases, profile.scanIntervalMs);
+      this.activeSignature = this.signature(profile.models, profile.mapping.assignments, profile.vocabulary, profile.scanIntervalMs);
       this.refreshProfiles();
     }
     this.enterPractice();
@@ -752,13 +753,13 @@ export class MotifSession {
     this.publish();
   }
 
-  setPhrase(index: number, text: string): boolean {
-    const phrase = text.trim();
-    if (!['welcome', 'choose', 'setup-failed'].includes(this.stage) || !Number.isInteger(index)
-      || index < 0 || index >= this.phrases.length || phrase.length < 1 || phrase.length > 60) return false;
-    this.phrases[index] = phrase;
+  /** Conventional helper edit of the phrase vocabulary during setup; returns the plain reason when refused. */
+  editVocabulary(edit: VocabularyEdit): Result<Vocabulary> {
+    if (!['welcome', 'choose', 'setup-failed'].includes(this.stage)) return { ok: false, reasons: ['Phrases can be edited during setup.'] };
+    const result = applyEdit(this.vocabulary, edit);
+    if (result.ok) this.vocabulary = result.value;
     this.publish();
-    return true;
+    return result;
   }
 
   setSpokenPrompts(enabled: boolean): void {
@@ -884,16 +885,16 @@ export class MotifSession {
 
   /** Everything a profile stores, to tell whether the approved setup still matches the saved one. */
   private signature(models: readonly GestureModel[] = this.approvedModels, assignments: Mapping['assignments'] | null = this.mapping?.assignments ?? null,
-    phrases: readonly string[] = this.phrases, intervalMs: number = this.intervalMs): string {
+    vocabulary: Vocabulary = this.vocabulary, intervalMs: number = this.intervalMs): string {
     // Assignment order does not matter: the same controls picked again must not read as a change.
-    return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, phrases, intervalMs]);
+    return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, vocabulary, intervalMs]);
   }
 
   /** Explicit, caregiver-assisted Save of the approved setup. Never reachable from the scanner. */
   saveProfile(name: string, replace = false): StoreResult {
     const refuse = (reason: string): StoreResult => { this.announce(reason); this.publish(); return { ok: false, code: 'invalid', reason }; };
     if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from practice or communication.');
-    const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs });
+    const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, vocabulary: this.vocabulary, scanIntervalMs: this.intervalMs });
     if (!built.ok) return refuse(built.reasons[0] ?? 'This setup cannot be saved.');
     const result = this.store.save(built.value, replace);
     this.refreshProfiles();
@@ -988,16 +989,22 @@ export class MotifSession {
 
   // ── Scanning and communication ───────────────────────────────────────────
 
+  /** Resolves `phrase:<groupId>:<index>` against the current vocabulary; stale ids resolve to nothing. */
   private phraseFor(id: string): string | undefined {
-    const match = /^phrase:(\d+)$/.exec(id);
-    return match ? this.phrases[Number(match[1])] : undefined;
+    const match = /^phrase:([^:]+):(\d+)$/.exec(id);
+    return match ? this.vocabulary.groups.find((group) => group.id === match[1])?.phrases[Number(match[2])] : undefined;
+  }
+
+  private phraseTargets(): ScanTarget[] {
+    return this.vocabulary.groups.flatMap((group) => group.phrases.map((label, index) =>
+      ({ id: `phrase:${group.id}:${index}`, label, kind: 'phrase' as const })));
   }
 
   private enterPractice(): void {
     this.setStage('practice');
     this.practice = { selections: 0, last: null };
     const targets: ScanTarget[] = [
-      ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
+      ...this.phraseTargets(),
       { id: 'finish-practice', label: CONTROL_LABELS['finish-practice']!, kind: 'control' },
       ...this.decisionTargets(this.allowedDecisions()),
     ];
@@ -1012,7 +1019,7 @@ export class MotifSession {
       : ['speak', 'clear', 'pause', ...speed, 'practice', 'change-controls', ...(this.approvedModels.length > 1 ? ['tiring'] : []),
         ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
     const targets: ScanTarget[] = [
-      ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
+      ...this.phraseTargets(),
       ...controls.map((id) => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' as const })),
     ];
     this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
@@ -1224,7 +1231,7 @@ export class MotifSession {
       scan: scanner ? { targets: this.scanTargets, index: scanner.index, latched: scanner.latchedTarget ?? null, paused: scanner.paused,
         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,
-      phrases: [...this.phrases], message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
+      vocabulary: this.vocabulary, message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
       spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],

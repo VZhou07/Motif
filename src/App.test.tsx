@@ -109,10 +109,10 @@ describe('Motif app', () => {
   it('lets a helper edit a phrase during setup and shows it on the board', () => {
     const h = new Harness();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    const input = screen.getByRole('textbox', { name: 'Phrase 1' });
+    const input = screen.getByRole('textbox', { name: 'Quick phrase 1' });
     fireEvent.change(input, { target: { value: 'Good morning' } });
     fireEvent.blur(input);
-    expect(h.snap.phrases[0]).toBe('Good morning');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Good morning');
     fireEvent.click(screen.getByRole('button', { name: /assisted input/i }));
     expect(screen.getByRole('button', { name: 'Add “Good morning” to message' })).toBeTruthy();
   });
@@ -295,7 +295,7 @@ describe('Motif app', () => {
       screen.queryAllByRole(role, { name: (name) => name.trim() === '' }).map((element) => `${role}: ${element.outerHTML.slice(0, 80)}`));
     const announcers = () => document.querySelectorAll('[aria-live]').length;
     const h = new Harness();
-    h.session.setPhrase(0, 'Yes');
+    h.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 0, text: 'Yes' });
     const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     const screens: Array<[string, () => void]> = [
       ['welcome', () => {}],

@@ -14,7 +14,7 @@ function storeFor(storage = createMemoryStorage()): { storage: ReturnType<typeof
 function savedPersonA() {
   const { storage, store } = storeFor();
   const h = new Harness({ profiles: store });
-  h.session.setPhrase(0, 'Hello');
+  h.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 0, text: 'Hello' });
   h.setUpToCommunication();
   h.selectByGesture('slower');
   h.addMovement(OPEN_MOUTH, perform);
@@ -22,7 +22,7 @@ function savedPersonA() {
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
   h.stepTo('finish-practice');
-  h.session.selectTarget('phrase:2'); // a message that must never be saved
+  h.session.selectTarget('phrase:g2:0'); // a message that must never be saved
   expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
   return { storage, store, original: h };
 }
@@ -57,7 +57,7 @@ describe('saving a profile (R7)', () => {
     expect(raw).not.toMatch(/"message"|lastSpoken/);
     expect(raw).not.toMatch(/statistics|heldOut|negative|frame/);
     const saved = JSON.parse(raw).profiles[0];
-    expect(saved.phrases[0]).toBe('Hello');
+    expect(saved.vocabulary.groups[1]!.phrases[0]).toBe('Hello');
     expect(saved.scanIntervalMs).toBe(2_500);
     expect(saved.models).toHaveLength(2);
   });
@@ -111,9 +111,9 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.restoring).toBe('Person A');
     expect(h.snap.approvedModels).toEqual([]);
-    h.session.selectTarget('phrase:0');
+    h.session.selectTarget('phrase:g1:0');
     expect(h.snap.message).toEqual([]);
-    expect(h.snap.phrases[0]).toBe('Yes'); // saved phrases apply only on approval
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes'); // saved phrases apply only on approval
 
     recheck(h);
     expect(h.snap.stage).toBe('comfort');
@@ -137,14 +137,14 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.restoring).toBeNull();
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
     expect(h.snap.scanMode).toBe('step');
-    expect(h.snap.phrases[0]).toBe('Hello');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Hello');
     expect(h.snap.scan?.intervalMs).toBe(2_500);
     expect(h.snap.profiles).toMatchObject({ active: 'Person A', unsaved: false });
     expect(h.snap.evidence.map((item) => item.effort)).toEqual(['unknown', 'unknown']); // effort is not saved in v1 profiles
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
     h.run(600);
     h.stepTo('finish-practice');
-    h.stepTo('phrase:0');
+    h.stepTo('phrase:g1:0');
     expect(h.snap.message).toEqual(['Hello']);
     // Today's rest becomes the approved baseline, so adding a movement later still works.
     h.stepTo('add-movement');
@@ -177,7 +177,7 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.failure?.title).toBe('Profile not used');
     expect(h.snap.approvedModels).toEqual([]);
     expect(h.snap.restoring).toBeNull();
-    expect(h.snap.phrases[0]).toBe('Yes');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes');
     expect(h.snap.cycles.at(-1)!.outcome).toBe('rejected');
   });
 
@@ -242,7 +242,7 @@ describe('restoring a profile (R7)', () => {
     expect(assisted.snap.restoring).toBeNull();
     expect(assisted.snap.inputMode).toBe('assisted');
     expect(assisted.snap.approvedModels).toEqual([]);
-    expect(assisted.snap.phrases[0]).toBe('Yes');
+    expect(assisted.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes');
   });
 
   it('refuses without a camera, with an approved setup, for a missing profile, or with storage blocked', () => {

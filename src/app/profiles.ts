@@ -2,12 +2,16 @@ import { FEATURE_IDS, type GestureModel, type Result } from '../domain/types';
 import { isGestureModel } from '../engine/recognition';
 import { validateMapping, type Assignments, type Mapping } from './mapping';
 import { STARTER_PHRASES } from './types';
+import { FAVOURITES_ID, parseVocabulary, type Vocabulary } from './vocabulary';
 
 /**
  * Opt-in local profiles (R7). Only approved movement thresholds, controls, phrases and scan
  * speed are stored; never video, frames, baseline statistics, evidence or messages.
+ * The storage wrapper and each entry carry separate versions (R14 B3): the wrapper stays 1 so older
+ * builds can still open the store, and entries are 2 (phrase groups). Version 1 entries migrate on read.
  */
-export const PROFILE_VERSION = 1;
+export const CONTAINER_VERSION = 1;
+export const PROFILE_VERSION = 2;
 export const PROFILE_KEY = 'motif.profiles';
 export const MAX_PROFILES = 8;
 export const FEATURE_SCHEMA = FEATURE_IDS.join(',');
@@ -15,7 +19,8 @@ export const FEATURE_SCHEMA = FEATURE_IDS.join(',');
 export const PROFILE_SCAN = { minMs: 1_000, maxMs: 6_000, stepMs: 500 } as const;
 export const NAME_MAX = 40;
 const LABEL_MAX = 60;
-const PHRASE_MAX = 60;
+/** Version 1 entries held exactly six phrases of at most this length. */
+const V1_PHRASE_MAX = 60;
 
 export interface StoredProfile {
   version: typeof PROFILE_VERSION;
@@ -23,11 +28,12 @@ export interface StoredProfile {
   name: string;
   models: GestureModel[];
   mapping: { assignments: Assignments };
-  phrases: string[];
+  vocabulary: Vocabulary;
   scanIntervalMs: number;
 }
 
-const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
+const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'vocabulary', 'scanIntervalMs'];
+const V1_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
 const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -44,9 +50,33 @@ export function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
-/** Strict validation of anything read from storage (R7 revision 2, B3). */
-export function parseProfile(value: unknown): Result<StoredProfile> {
-  if (!isRecord(value)) return { ok: false, reasons: ['A saved profile is not readable.'] };
+/**
+ * A version 1 entry becomes version 2 with its six phrases kept, in order, as one group called "Phrases"
+ * (no guessing at groups). Repeats are dropped because a group cannot hold the same phrase twice.
+ * Only the parsed copy changes; the stored bytes stay as they are until the entry is saved again.
+ */
+function migrateV1(value: Record<string, unknown>): Result<Record<string, unknown>> {
+  if (!hasExactKeys(value, V1_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  const { phrases, ...rest } = value;
+  if (!Array.isArray(phrases) || phrases.length !== STARTER_PHRASES.length
+    || !phrases.every((phrase) => typeof phrase === 'string' && phrase.trim().length > 0 && phrase.length <= V1_PHRASE_MAX)) {
+    return { ok: false, reasons: [`A version 1 profile must hold exactly ${STARTER_PHRASES.length} phrases of 1–${V1_PHRASE_MAX} characters.`] };
+  }
+  const kept: string[] = [];
+  for (const phrase of phrases as string[]) if (!kept.some((entry) => sameName(entry, phrase))) kept.push(phrase.trim());
+  return { ok: true, value: { ...rest, version: PROFILE_VERSION, vocabulary: { groups: [
+    { id: FAVOURITES_ID, name: 'Favourites', phrases: [] }, { id: 'g1', name: 'Phrases', phrases: kept }] } } };
+}
+
+/** Strict validation of anything read from storage (R7 revision 2, B3); version 1 entries are migrated first. */
+export function parseProfile(input: unknown): Result<StoredProfile> {
+  if (!isRecord(input)) return { ok: false, reasons: ['A saved profile is not readable.'] };
+  let value = input;
+  if (input.version === 1) {
+    const migrated = migrateV1(input);
+    if (!migrated.ok) return migrated;
+    value = migrated.value;
+  }
   if (value.version !== PROFILE_VERSION) return { ok: false, reasons: ['This profile was made by a different version of Motif.'] };
   if (!hasExactKeys(value, PROFILE_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
   if (value.featureSchema !== FEATURE_SCHEMA) return { ok: false, reasons: ['This profile uses a different set of face measurements.'] };
@@ -73,20 +103,17 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
     const valid = validateMapping(models as GestureModel[], mapping.assignments as Assignments);
     if (!valid.ok) reasons.push(...valid.reasons);
   }
-  const phrases = value.phrases;
-  if (!Array.isArray(phrases) || phrases.length !== STARTER_PHRASES.length
-    || !phrases.every((phrase) => typeof phrase === 'string' && phrase.trim().length > 0 && phrase.length <= PHRASE_MAX)) {
-    reasons.push(`A profile must hold exactly ${STARTER_PHRASES.length} phrases of 1–${PHRASE_MAX} characters.`);
-  }
+  const vocabulary = parseVocabulary(value.vocabulary);
+  if (!vocabulary.ok) reasons.push(...vocabulary.reasons);
   const interval = value.scanIntervalMs;
   if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < PROFILE_SCAN.minMs || interval > PROFILE_SCAN.maxMs || interval % PROFILE_SCAN.stepMs !== 0) {
     reasons.push('The saved scan speed is out of range.');
   }
-  if (reasons.length) return { ok: false, reasons };
-  return { ok: true, value: value as unknown as StoredProfile };
+  if (reasons.length || !vocabulary.ok) return { ok: false, reasons };
+  return { ok: true, value: { ...(value as unknown as StoredProfile), vocabulary: vocabulary.value } };
 }
 
-export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; phrases: readonly string[]; scanIntervalMs: number }
+export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; vocabulary: Vocabulary; scanIntervalMs: number }
 
 /** Builds a profile from explicit fields only, then validates it exactly as a stored one. */
 export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
@@ -96,7 +123,7 @@ export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
     name: fields.name.trim(),
     models: fields.models.map((model) => Object.fromEntries(MODEL_KEYS.map((key) => [key, model[key as keyof GestureModel]]))),
     mapping: { assignments: { ...fields.mapping.assignments } },
-    phrases: [...fields.phrases],
+    vocabulary: fields.vocabulary,
     scanIntervalMs: fields.scanIntervalMs,
   });
 }
@@ -143,7 +170,7 @@ export function createLocalProfileStore(getStorage: () => StorageLike | null | u
     if (raw === null) return { kind: 'ok', entries: [] };
     try {
       const parsed: unknown = JSON.parse(raw);
-      if (!isRecord(parsed) || parsed.version !== PROFILE_VERSION || !Array.isArray(parsed.profiles) || !hasExactKeys(parsed, ['version', 'profiles'])) return { kind: 'unreadable' };
+      if (!isRecord(parsed) || parsed.version !== CONTAINER_VERSION || !Array.isArray(parsed.profiles) || !hasExactKeys(parsed, ['version', 'profiles'])) return { kind: 'unreadable' };
       return { kind: 'ok', entries: parsed.profiles };
     } catch { return { kind: 'unreadable' }; }
   };
@@ -151,7 +178,7 @@ export function createLocalProfileStore(getStorage: () => StorageLike | null | u
   const write = (entries: unknown[]): StoreResult => {
     const store = storage();
     if (!store) return { ok: false, code: 'unavailable', reason: UNAVAILABLE };
-    try { store.setItem(PROFILE_KEY, JSON.stringify({ version: PROFILE_VERSION, profiles: entries })); return { ok: true }; } catch {
+    try { store.setItem(PROFILE_KEY, JSON.stringify({ version: CONTAINER_VERSION, profiles: entries })); return { ok: true }; } catch {
       return { ok: false, code: 'unavailable', reason: UNAVAILABLE };
     }
   };

@@ -30,14 +30,14 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     expect(h.snap.mapping?.mode).toBe('auto');
     expect(h.snap.cycles[0]!.outcome).toBe('approved');
 
-    h.selectByGesture('phrase:0');
+    h.selectByGesture('phrase:g1:0');
     expect(h.snap.practice).toEqual({ selections: 1, last: 'Yes' });
     expect(h.snap.message).toEqual([]);
     expect(h.spoken).toEqual([]);
     h.selectByGesture('finish-practice');
     expect(h.snap.stage).toBe('communication');
 
-    h.selectByGesture('phrase:2');
+    h.selectByGesture('phrase:g2:0');
     expect(h.snap.message).toEqual(['I need water']);
     h.selectByGesture('speak');
     expect(h.spoken).toEqual(['I need water']);
@@ -52,7 +52,7 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Brow' });
     h.session.decide('approve-mapping');
     h.session.chooseSetupTarget('map:0');
-    h.session.selectTarget('phrase:0');
+    h.session.selectTarget('phrase:g1:0');
     h.session.switchPress();
     expect(h.snap.stage).toBe('training');
     expect(h.snap.message).toEqual([]);
@@ -217,19 +217,19 @@ describe('communication safety', () => {
     const h = ready();
     let since = h.now;
     let index = h.snap.scan!.index;
-    while (!(h.highlightedId() === 'phrase:1' && h.now - since >= 1_850 && h.snap.runtime?.armed)) {
+    while (!(h.highlightedId() === 'phrase:g1:1' && h.now - since >= 1_850 && h.snap.runtime?.armed)) {
       h.step(REST);
       if (h.snap.scan!.index !== index) { index = h.snap.scan!.index; since = h.now; }
     }
     h.run(600, BROW);
-    expect(h.highlightedId()).toBe('phrase:1');
+    expect(h.highlightedId()).toBe('phrase:g1:1');
     h.run(600);
     expect(h.snap.message).toEqual(['No']);
   });
 
   it('emits once per hold and rearms only after full neutral', () => {
     const h = ready();
-    h.selectByGesture('phrase:0', BROW, 60_000, 8_000, 0);
+    h.selectByGesture('phrase:g1:0', BROW, 60_000, 8_000, 0);
     expect(h.snap.message).toEqual(['Yes']);
     h.run(600, { browOuterUpLeft: 0.3 });
     h.run(600, BROW);
@@ -246,7 +246,7 @@ describe('communication safety', () => {
     const index = h.snap.scan!.index;
     h.run(6_000);
     expect(h.snap.scan?.index).toBe(index);
-    h.session.selectTarget('phrase:0');
+    h.session.selectTarget('phrase:g1:0');
     h.run(500);
     h.run(600, BROW);
     h.run(600);
@@ -324,7 +324,7 @@ describe('communication safety', () => {
   it('keeps text visible and explains when no local voice is available', () => {
     const h = ready();
     h.speechAvailable = false;
-    h.selectByGesture('phrase:3');
+    h.selectByGesture('phrase:g2:1');
     h.selectByGesture('speak');
     expect(h.spoken).toEqual([]);
     expect(h.snap.lastSpoken).toBe('Please help me');
@@ -367,13 +367,16 @@ describe('assisted input (clearly labeled zero-gesture path)', () => {
 describe('honest limits and setup settings', () => {
   it('edits phrases only during setup, validates input, and uses the edit everywhere', () => {
     const h = new Harness();
-    expect(h.session.setPhrase(0, '  Hello there  ')).toBe(true);
-    for (const [index, text] of [[-1, 'x'], [6, 'x'], [1.5, 'x'], [1, '   '], [1, 'x'.repeat(61)]] as const) {
-      expect(h.session.setPhrase(index, text)).toBe(false);
+    const edit = (index: number, text: string, group = 'g1') => h.session.editVocabulary({ kind: 'edit-phrase', group, index, text }).ok;
+    expect(edit(0, '  Hello there  ')).toBe(true);
+    for (const [index, text] of [[-1, 'x'], [3, 'x'], [1.5, 'x'], [1, '   '], [1, 'x'.repeat(121)], [1, 'hello there']] as const) {
+      expect(edit(index, text)).toBe(false);
     }
-    expect(h.snap.phrases).toEqual(['Hello there', 'No', 'I need water', 'Please help me', 'I am uncomfortable', 'Thank you']);
+    expect(edit(0, 'x', 'g9')).toBe(false);
+    expect(h.snap.vocabulary.groups.map((group) => group.phrases)).toEqual([[], ['Hello there', 'No', 'Thank you'], ['I need water', 'Please help me', 'I am uncomfortable']]);
     h.session.useAssisted();
-    expect(h.session.setPhrase(1, 'Changed during use')).toBe(false);
+    expect(edit(1, 'Changed during use')).toBe(false);
+    expect(h.session.editVocabulary({ kind: 'add-group', name: 'Late' }).ok).toBe(false);
     expect(h.snap.scan?.targets[0]?.label).toBe('Hello there');
     h.session.switchPress(h.now);
     expect(h.snap.message).toEqual(['Hello there']);
@@ -507,7 +510,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.mapping).toEqual(before);
     expect(h.snap.adding).toBe(false);
-    h.selectByGesture('phrase:1');
+    h.selectByGesture('phrase:g1:1');
     expect(h.snap.message).toEqual(['No']);
   });
 
@@ -559,7 +562,7 @@ describe('multiple gestures (R6)', () => {
     h.run(600);
     expect(h.snap.scan!.index).toBe((index + 1) % h.snap.scan!.targets.length);
     expect(h.snap.message).toEqual([]);
-    h.stepTo('phrase:2');
+    h.stepTo('phrase:g2:0');
     expect(h.snap.message).toEqual(['I need water']);
   });
 
@@ -579,7 +582,7 @@ describe('multiple gestures (R6)', () => {
     h.run(800);
     expect(h.snap.message).toEqual([]);
     expect(h.snap.scan!.latched).toBeNull();
-    h.selectByGesture('phrase:3');
+    h.selectByGesture('phrase:g2:1');
     expect(h.snap.message).toEqual(['Please help me']);
   });
 
@@ -648,14 +651,14 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.mapping?.assignments).toEqual({ [h.snap.approvedModels[0]!.id]: 'select' });
     expect(h.snap.scanMode).toBe('auto');
     h.selectByGesture('finish-practice');
-    h.selectByGesture('phrase:0', MOUTH);
+    h.selectByGesture('phrase:g1:0', MOUTH);
     expect(h.snap.message).toEqual([]);
     expect(h.snap.stage).toBe('communication');
     h.run(1_000);
     h.run(800, { ...BROW, ...MOUTH });
     h.run(800);
     expect(h.snap.message).toEqual([]);
-    h.selectByGesture('phrase:0');
+    h.selectByGesture('phrase:g1:0');
     expect(h.snap.message).toEqual(['Yes']);
   });
 
@@ -708,13 +711,13 @@ describe('multiple gestures (R6)', () => {
     addAndApprove(h, PUFF_CHEEKS);
     h.stepTo('finish-practice');
     const ids = h.snap.scan!.targets.map((target) => target.id);
-    expect(ids).toEqual(['phrase:0', 'phrase:1', 'phrase:2', 'phrase:3', 'phrase:4', 'phrase:5',
+    expect(ids).toEqual(['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2',
       'speak', 'clear', 'pause', 'practice', 'change-controls', 'tiring', 'recalibrate']);
     const seen = new Set<string>();
     h.run(600);
     for (let i = 0; i < ids.length; i += 1) { seen.add(h.highlightedId()!); h.run(600, MOUTH); h.run(600); }
     expect([...seen].sort()).toEqual([...ids].sort());
-    h.stepTo('phrase:5');
+    h.stepTo('phrase:g1:2');
     h.stepTo('speak');
     expect(h.spoken).toEqual(['Thank you']);
     h.stepTo('clear');
@@ -754,7 +757,7 @@ describe('multiple gestures (R6)', () => {
     h.run(800, MOUTH); h.run(800);
     h.run(800, BROW); h.run(800);
     expect(h.snap.message).toEqual([]);
-    while (h.highlightedId() !== 'phrase:1') h.step();
+    while (h.highlightedId() !== 'phrase:g1:1') h.step();
     h.session.switchPress(h.now);
     expect(h.snap.message).toEqual(['No']);
     expect(h.snap.approvedModels).toHaveLength(2);

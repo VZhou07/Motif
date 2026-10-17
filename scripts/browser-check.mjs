@@ -147,17 +147,24 @@ async function focusWalk(page, label) {
   check(`Tab order completes without a trap: ${label}`, completed);
 }
 
-/** A valid saved profile built with the app's own validator, so it always matches the current schema. */
+/**
+ * A saved profile in the version 1 entry format earlier builds wrote (six flat phrases), so the browser
+ * exercises migration on read (R14). Built with the app's own validator, then turned back into version 1.
+ */
 async function seededProfile() {
   const vite = await createServer({ server: { middlewareMode: true }, appType: 'custom', logLevel: 'error' });
   try {
-    const { buildProfile } = await vite.ssrLoadModule('/src/app/profiles.ts');
+    const { buildProfile, parseProfile } = await vite.ssrLoadModule('/src/app/profiles.ts');
     const { STARTER_PHRASES } = await vite.ssrLoadModule('/src/app/types.ts');
+    const { defaultVocabulary } = await vite.ssrLoadModule('/src/app/vocabulary.ts');
     const model = { id: 'browOuterUpLeft:1:1', label: 'Raise left outer eyebrow', feature: 'browOuterUpLeft', direction: 1,
       baselineCenter: 0.1, activationThreshold: 0.3, releaseThreshold: 0.15, activationMs: 250, releaseMs: 350 };
-    const built = buildProfile({ name: 'Seeded', models: [model], mapping: { assignments: { [model.id]: 'select' }, mode: 'auto' }, phrases: STARTER_PHRASES, scanIntervalMs: 2_000 });
+    const built = buildProfile({ name: 'Seeded', models: [model], mapping: { assignments: { [model.id]: 'select' }, mode: 'auto' }, vocabulary: defaultVocabulary(), scanIntervalMs: 2_000 });
     if (!built.ok) throw new Error(built.reasons.join('; '));
-    return JSON.stringify({ version: 1, profiles: [built.value] });
+    const { vocabulary: _vocabulary, ...rest } = built.value;
+    const v1 = { ...rest, version: 1, phrases: STARTER_PHRASES };
+    if (!parseProfile(v1).ok) throw new Error('seeded version 1 profile does not migrate');
+    return JSON.stringify({ version: 1, profiles: [v1] });
   } finally { await vite.close(); }
 }
 
