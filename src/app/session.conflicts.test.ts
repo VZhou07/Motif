@@ -77,6 +77,7 @@ describe('Open mouth plus head controls with Rest preparation (R15)', () => {
     h.stepTo('finish-practice', physicalMotion(head.label, head), MOUTH);
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.mapping?.mode).toBe('step');
+    h.stepTo('group:g1', physicalMotion(head.label, head), MOUTH); // phrases are in groups (R18)
     h.run(800);
     const before = h.snap.scan!.index;
     h.run(800, physicalMotion(head.label, head)); h.run(800);
@@ -84,6 +85,7 @@ describe('Open mouth plus head controls with Rest preparation (R15)', () => {
     expect(h.snap.message).toEqual([]);
     h.run(5_000, physicalMotion(MOUTH_LABEL, head)); h.run(800);
     expect(h.snap.message).toHaveLength(1); // A long selecting hold still acts only once.
+    expect(h.snap.announcement).toBe(`Added "${h.snap.message[0]}". Back to the main list.`); // no second action on the main list
   });
 
   it('a genuinely colliding new movement fails without replacing the old mouth controls', () => {

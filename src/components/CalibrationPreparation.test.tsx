@@ -22,6 +22,7 @@ function preparingCrossCheck(): Harness {
   h.run(11_000, HEAD_WOBBLE);
   h.selectByGesture('approve-comfortable', MOUTH);
   h.selectByGesture('finish-practice', MOUTH);
+  h.reach('add-movement', (id) => h.session.selectTarget(id)); // Add movement is under More (R18)
   h.session.selectTarget('add-movement');
   h.session.chooseMovement({ feature: 'headPitch', direction: 1, label: HEAD_LABEL });
   h.followPrompts((snap) => snap.stage === 'setup-failed'
