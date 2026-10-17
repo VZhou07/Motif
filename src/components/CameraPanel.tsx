@@ -1,3 +1,4 @@
+import { holdLabel, SHORT_HOLD_MAX_MS } from '../app/movements';
 import { useState, type ReactNode, type RefObject } from 'react';
 import { FEATURE_DEFINITIONS } from '../domain/types';
 import type { CueAudioStatus } from '../app/audio';
@@ -85,7 +86,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, co
         <div className="learned-controls">
           <h2>{models.length === 1 ? 'Your movement' : 'Your movements'}</h2>
           {models.map((approved) => (
-            <div key={approved.id}><span>{approved.label}</span><strong>{actionLabel(snapshot, approved.id)}</strong></div>
+            <div key={approved.id}><span>{approved.label}{approved.activationMs > SHORT_HOLD_MAX_MS && <small className="hold-note"> · {holdLabel(approved.activationMs)}</small>}</span><strong>{actionLabel(snapshot, approved.id)}</strong></div>
           ))}
           {snapshot.runtime && <div><span>Recognizer</span><strong>{runtimeLabels[snapshot.runtime.phase]}</strong></div>}
         </div>

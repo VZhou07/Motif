@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { liveDeviation, MOVEMENT_OPTIONS } from '../app/movements';
+import { HOLD_OPTIONS, holdMsFor, liveDeviation, MOVEMENT_OPTIONS, type HoldOptionId } from '../app/movements';
 import type { MotifSession } from '../app/session';
 import type { CapturePrompt, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
@@ -124,6 +124,7 @@ export function CaptureView({ snapshot, session }: ViewProps) {
 }
 
 export function ChooseView({ snapshot, session }: ViewProps) {
+  const [hold, setHold] = useState<HoldOptionId>('auto');
   const regions = [...new Set(MOVEMENT_OPTIONS.map((option) => option.region))];
   // While adding, movements already in the approved set are refused by the session; show that up front.
   const inUse = new Set(snapshot.adding ? snapshot.approvedModels.map((model) => `${model.feature}:${model.direction}`) : []);
@@ -134,6 +135,18 @@ export function ChooseView({ snapshot, session }: ViewProps) {
       <p className="helper-copy">The rhythm alternates: 5 seconds of Rest, then 5 seconds of Action. Stay relaxed during Rest; make and hold your movement during Action. The camera overlay shows what Motif is measuring.</p>
       {(snapshot.recalibrating || snapshot.adding) && <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />}
       {snapshot.adding && <p className="status-notice">Adding a movement to: {snapshot.mappingLabel}. Movements you already use cannot be chosen twice.</p>}
+      <fieldset className="hold-fieldset">
+        <legend id="hold-legend">How long to hold</legend>
+        <div className="hold-options" role="radiogroup" aria-labelledby="hold-legend">
+          {HOLD_OPTIONS.map((option) => (
+            <label key={option.id} className={hold === option.id ? 'hold-selected' : ''}>
+              <input type="radio" name="hold-length" value={option.id} checked={hold === option.id} onChange={() => setHold(option.id)} />
+              {option.label}
+            </label>
+          ))}
+        </div>
+        <p className="helper-copy">Auto uses a long hold (0.8 s) for closing an eye, so ordinary blinks never count, and a short hold for everything else.{hold === 'short' ? ' A short hold is not recommended for closing an eye.' : ''}</p>
+      </fieldset>
       {regions.map((region) => (
         <fieldset className="feature-fieldset" key={region}>
           <legend>{region}</legend>
@@ -144,7 +157,7 @@ export function ChooseView({ snapshot, session }: ViewProps) {
               const used = inUse.has(key);
               return (
                 <button key={key} type="button" className="button feature-button" disabled={used || snapshot.camera !== 'running'}
-                  onClick={() => session.chooseMovement({ feature: option.feature, direction: option.direction, label: option.label })}>
+                  onClick={() => session.chooseMovement({ feature: option.feature, direction: option.direction, label: option.label, holdMs: holdMsFor(hold, option.feature) })}>
                   {option.label}<span>{used ? 'already in use' : deviation === null ? '—' : `${Math.max(0, deviation).toFixed(1)}× rest`}</span>
                 </button>
               );
