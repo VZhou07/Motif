@@ -24,6 +24,18 @@ function profile(overrides: Partial<StoredProfile> = {}): StoredProfile {
 const viaJson = (value: unknown): unknown => JSON.parse(JSON.stringify(value));
 
 describe('profile validation', () => {
+  it('copying legacy evidence preserves its missing policy marker', () => {
+    const legacy = profile({ checks: { movementAt: { [brow.id]: 123 } } });
+    const mapping = validateMapping(legacy.models, legacy.mapping.assignments);
+    if (!mapping.ok) throw new Error('fixture mapping');
+    const copy = buildProfile({ ...legacy, mapping: mapping.value });
+    expect(copy.ok && copy.value.checks?.movementAt[brow.id]).toBe(123);
+    expect(copy.ok && Object.hasOwn(copy.value.checks!, 'policyVersion')).toBe(false);
+    expect(parseProfile({ ...legacy, checks: { ...legacy.checks, policyVersion: 2 } }).ok).toBe(true);
+    expect(parseProfile({ ...legacy, checks: { ...legacy.checks, policyVersion: 0 } }).ok).toBe(false);
+    expect(parseProfile({ ...legacy, checks: { ...legacy.checks, policyVersion: '1' } }).ok).toBe(false);
+  });
+
   it('round-trips a valid profile through JSON and keeps only the allowed fields', () => {
     const parsed = parseProfile(viaJson(profile()));
     expect(parsed.ok).toBe(true);

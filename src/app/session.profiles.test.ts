@@ -278,6 +278,29 @@ describe('back to start from assisted input (R16)', () => {
 });
 
 describe('Continue within an hour of the checks (R17)', () => {
+  it.each([undefined, 2])('rechecks legacy or incompatible policy %s without deleting the profile', (policyVersion) => {
+    const { h, storage, store } = twoAndBack();
+    editLast(storage, (profile) => {
+      if (policyVersion === undefined) delete profile.checks!.policyVersion;
+      else profile.checks!.policyVersion = policyVersion;
+    });
+    expect(store.get(LAST)?.models).toHaveLength(2);
+    h.now += MINUTE;
+    expect(h.session.restoreProfile(LAST, true)).toBe(true);
+    expect(h.snap.stage).toBe('baseline');
+    expect(h.snap.approvedModels).toEqual([]);
+    h.run(10_500);
+    expect(h.snap.stage).toBe('verify');
+    finishRechecks(h);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.cycles.at(-1)?.heldOut).toHaveLength(4);
+    expect(h.snap.cycles.at(-1)?.negative?.passed).toBe(true);
+    expect(h.snap.approvedModels).toEqual([]);
+    h.selectByGesture('comfortable');
+    approveSaved(h);
+    expect(lastSetup(store).checks?.policyVersion).toBe(1);
+  });
+
   it('an explicit Save says that check times are stored', () => {
     const h = new Harness({ profiles: storeFor().store });
     h.setUpToCommunication();
@@ -288,7 +311,7 @@ describe('Continue within an hour of the checks (R17)', () => {
   it('stores only times with the setup, with ids of its own movements', () => {
     const { store, storage } = twoAndBack();
     const saved = lastSetup(store);
-    expect(Object.keys(saved.checks!).sort()).toEqual(['movementAt', 'restAt']);
+    expect(Object.keys(saved.checks!).sort()).toEqual(['movementAt', 'policyVersion', 'restAt']);
     expect(Object.keys(saved.checks!.movementAt).sort()).toEqual(saved.models.map((model) => model.id).sort());
     expect(storage.data.get(PROFILE_KEY)).not.toMatch(/heldOut|negative|frame|timestamp|"message"/);
     expect(parseProfile({ ...saved, checks: { ...saved.checks, movementAt: { other: 5 } } }).ok).toBe(false);

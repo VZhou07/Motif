@@ -9,7 +9,7 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
+import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, VERIFICATION_POLICY_VERSION, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
   type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
@@ -932,7 +932,7 @@ export class MotifSession {
       const at = this.checkedAt.get(modelKey(model));
       if (at !== undefined) movementAt[model.id] = at;
     }
-    return { ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
+    return { policyVersion: VERIFICATION_POLICY_VERSION, ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
   }
 
   /** R17 B1: after a failed restore, never skip that profile's checks again until fresh ones pass. */
@@ -1063,7 +1063,7 @@ export class MotifSession {
     this.choice = null;
     const models = profile.models.map((model) => ({ ...model }));
     // R17: Continue reuses only times stored with this profile; Re-check and a forgotten profile reuse nothing.
-    const reuse = quick && !this.noReuse.has(profile.name.trim().toLowerCase());
+    const reuse = quick && profile.checks?.policyVersion === VERIFICATION_POLICY_VERSION && !this.noReuse.has(profile.name.trim().toLowerCase());
     this.checkedAt.clear();
     if (reuse) {
       for (const model of models) {
