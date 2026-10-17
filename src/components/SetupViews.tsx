@@ -70,9 +70,7 @@ function PhraseField({ index, phrase, session }: { index: number; phrase: string
 
 const PROMPT_TITLES: Record<CapturePrompt, ReactNode> = {
   Rest: <>Rest <em>comfortably.</em></>,
-  'Get ready': <>Get ready.<br /><em>Stay relaxed.</em></>,
-  Move: <>Make your movement<br /><em>and hold it.</em></>,
-  'Return to rest': <>Gently return<br /><em>to rest.</em></>,
+  Action: <>Make your movement<br /><em>and hold it.</em></>,
   'Everyday activity': <>Be yourself.<br /><em>Move naturally.</em></>,
   'Explore freely': <>Try what feels<br /><em>comfortable.</em></>,
 };
@@ -81,12 +79,11 @@ export function CaptureView({ snapshot, session }: ViewProps) {
   const capture = snapshot.capture;
   if (!capture) return null;
   const seconds = Math.max(0, Math.ceil(capture.remainingMs / 1_000));
-  const nextInstruction = capture.nextPrompt === 'Move' ? 'Next: make your movement. Stay relaxed until the Move cue.'
-    : capture.nextPrompt === 'Return to rest' ? 'Next: relax when the Return to rest cue appears.'
-      : capture.prompt === 'Return to rest' ? 'Stay relaxed while this attempt finishes.' : null;
+  const nextInstruction = capture.nextPrompt === 'Action' ? 'Next: Action. Stay relaxed until the Action cue.'
+    : capture.nextPrompt === 'Rest' ? 'Next: Rest. Relax when the Rest cue appears.' : null;
   const timerLabel = capture.kind === 'negative' ? 'armed seconds remaining'
-    : capture.prompt === 'Get ready' ? 'seconds until movement'
-      : capture.prompt === 'Move' ? 'seconds until rest' : 'seconds in this step';
+    : capture.prompt === 'Rest' && capture.nextPrompt === 'Action' ? 'seconds until action'
+      : capture.prompt === 'Action' ? 'seconds until rest' : 'seconds in this step';
   const eyebrow = capture.kind === 'baseline' ? 'STEP 1 · YOUR RESTING BASELINE'
     : capture.kind === 'training' ? `MOVEMENT PRACTICE · ${capture.index} OF ${capture.total}`
       : capture.kind === 'verification' ? `SEPARATE CHECK · ${capture.index} OF ${capture.total}`
@@ -95,12 +92,12 @@ export function CaptureView({ snapshot, session }: ViewProps) {
     : capture.kind === 'negative' ? 'Look around, talk or make small ordinary movements — but please avoid your chosen movement. We count any accidental selections.'
       : capture.kind === 'discovery' ? 'Try any movements you can comfortably make, a few times each, holding each for a moment and resting in between. Nothing is selected while exploring.'
       : capture.kind === 'verification' ? 'A new attempt that checks what was learned. It does not change the learned movement.'
-        : 'Follow the prompt at a comfortable pace. Return to rest when asked.';
+        : 'Rest for five seconds, then make and hold your movement during five seconds of Action. Relax when Rest appears.';
   return (
     <>
       <Heading eyebrow={eyebrow} title={PROMPT_TITLES[capture.prompt]} lead={lead} />
       {capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
-      <div className={`recording-card ${capture.prompt === 'Move' ? 'recording-move' : ''}`}>
+      <div className={`recording-card ${capture.prompt === 'Action' ? 'recording-move' : ''}`}>
         <div><span className="recording-dot" /><span>{capture.prompt}</span></div>
         <strong className="timer" aria-hidden="true">{seconds}<small>{timerLabel}</small></strong>
         <progress max={100} value={percent(capture.overallProgress)} aria-label={`${capture.kind} recording progress`} />
@@ -126,8 +123,8 @@ export function ChooseView({ snapshot, session }: ViewProps) {
   return (
     <>
       <Heading eyebrow="STEP 2 · FIND YOUR MOVEMENT" title={<>A movement that<br /><em>works for you.</em></>}
-        lead="Choose any movement you can comfortably repeat and hold until the relax cue. The number shows how strongly it registers compared with your own rest." />
-      <p className="helper-copy">Each attempt has a steady rhythm: 3 seconds to get ready, 3 seconds to make and hold your movement, then 3 seconds to return to rest. Stay relaxed until Move appears.</p>
+        lead="Choose any movement you can comfortably repeat and hold until the Rest cue. The number shows how strongly it registers compared with your own rest." />
+      <p className="helper-copy">The rhythm alternates: 5 seconds of Rest, then 5 seconds of Action. Stay relaxed during Rest; make and hold your movement during Action. The camera overlay shows what Motif is measuring.</p>
       {(snapshot.recalibrating || snapshot.adding) && <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />}
       {snapshot.adding && <p className="status-notice">Adding a movement to: {snapshot.mappingLabel}. Movements you already use cannot be chosen twice.</p>}
       {regions.map((region) => (

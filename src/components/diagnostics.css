@@ -1,0 +1,28 @@
+.camera-card .camera-preview.camera-with-diagnostics { min-height: 310px; }
+.camera-card .camera-preview.camera-with-diagnostics.camera-running { min-height: 465px; aspect-ratio: auto; }
+.camera-with-diagnostics .camera-placeholder { justify-content: flex-start; padding-top: 22px; }
+.camera-with-diagnostics .camera-placeholder svg { width: 90px; height: 90px; }
+.camera-with-diagnostics .preview-caption { top: 8px; bottom: auto; }
+.camera-diagnostics { position: absolute; left: 8px; right: 8px; bottom: 8px; max-height: 62%; overflow: auto; background: #102b21; color: #f5faf5; border: 1px solid #8db9a0; border-radius: 9px; padding: 11px; font-size: 12px; line-height: 1.45; text-align: left; transform: none; overflow-wrap: anywhere; }
+.camera-diagnostics p { margin: 6px 0; font-size: 12px; color: #f5faf5; }
+.diagnostics-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.diagnostics-heading strong { color: #ddffb9; font-size: 14px; }
+.diagnostics-heading span { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.camera-diagnostics .diagnostics-tracking, .camera-diagnostics .diagnostics-footnote { color: #d2e4d8; }
+.diagnostics-feature span { display: block; color: #d2e4d8; }
+.diagnostics-values { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 12px; margin: 8px 0; font-variant-numeric: tabular-nums; }
+.diagnostics-values > div { min-width: 0; }
+.diagnostics-values dt { color: #d2e4d8; }
+.diagnostics-values dd { margin: 0; color: #fff; font-weight: 600; }
+.diagnostics-values .diagnostics-wide { grid-column: 1 / -1; }
+.camera-diagnostics .diagnostics-explanation { border-top: 1px solid #527160; padding-top: 7px; }
+.camera-diagnostics .diagnostics-warning, .diagnostics-failure { color: #ffe3b4; }
+.diagnostics-failure { border-top: 1px solid #8d7450; margin-top: 8px; padding-top: 8px; }
+.diagnostics-failure p { color: #ffe3b4; }
+.diagnostics-failure ul { margin: 6px 0; padding-left: 16px; }
+.diagnostics-failure li { margin-bottom: 5px; }
+@media (max-width: 500px) {
+  .camera-card .camera-preview.camera-with-diagnostics { grid-column: 1 / -1; min-height: 330px; }
+  .camera-card .camera-preview.camera-with-diagnostics.camera-running { min-height: 440px; }
+  .camera-diagnostics { max-height: 60%; }
+}

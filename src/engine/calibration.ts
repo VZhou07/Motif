@@ -58,7 +58,23 @@ export interface FitGestureOptions {
 export const RELEASE_FRACTION = 0.25
 export const ACTIVATION_FRACTION = 0.65
 
-export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
+/** Numeric evidence from the same computations used to fit/reject, not raw recordings. */
+export interface TrainingDiagnostics {
+  feature: FeatureId
+  direction: 1 | -1
+  baselineCenter: number
+  noise: number
+  weakestMovement: number
+  restLimit: number
+  restCeiling: number
+  margin: number
+  minimumMargin: number
+  phases: Array<{ attempt: number; phase: 'before' | 'after'; restDistance: number }>
+}
+
+export type GestureFitResult = Result<GestureModel> & { diagnostics?: TrainingDiagnostics }
+
+export function fitGesture(options: FitGestureOptions): GestureFitResult {
   const { baseline, trials, feature, direction } = options
   if (trials.length !== 3) return { ok: false, reasons: ['Record three separate training attempts.'] }
   const statistics = baseline.statistics[feature]
@@ -69,7 +85,9 @@ export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
   const rests: number[] = []
   const movementLows: number[] = []
   const stableRestPhases: number[][] = []
-  let previousTrialEnd = -1
+  const phases: TrainingDiagnostics['phases'] = []
+  const restTimestamps = new Set<number>()
+  let previousTrial: TrainingTrial | undefined
   for (const trial of trials) {
     for (const phase of [trial.restBefore, trial.movement, trial.restAfter]) {
       const validation = validateStream(phase, 600)
@@ -78,20 +96,30 @@ export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
     // Also check the joins. Duplicate, reordered or missing frames cannot hide between labels.
     const entire = validateStream([...trial.restBefore, ...trial.movement, ...trial.restAfter], 1_800)
     if (!entire.ok) return entire
-    if (trial.restBefore[0]!.timestampMs <= previousTrialEnd) {
-      return { ok: false, reasons: ['Training attempts must be separate recordings, not reused or overlapping data.'] }
-    }
-    previousTrialEnd = trial.restAfter[trial.restAfter.length - 1]!.timestampMs
-    for (const rest of [trial.restBefore, trial.restAfter]) {
-      const middle = (rest[0]!.timestampMs + rest[rest.length - 1]!.timestampMs) / 2
-      const settledFrames = rest === trial.restAfter ? settledReturn(rest) : rest.filter((frame) => frame.timestampMs >= middle)
-      if (rest === trial.restAfter) {
-        const validation = validateStream(settledFrames, SETTLED_RETURN_MS)
-        if (!validation.ok) return { ok: false, reasons: ['Not enough steady rest was recorded after the movement.', ...validation.reasons] }
+    if (previousTrial && trial.restBefore[0]!.timestampMs <= previousTrial.restAfter.at(-1)!.timestampMs) {
+      const shared = previousTrial.restAfter
+      const exactNeutral = trial.restBefore.length === shared.length && trial.restBefore.every((frame, index) => {
+        const previous = shared[index]!
+        return frame.timestampMs === previous.timestampMs && FEATURE_IDS.every((id) => frame.values[id] === previous.values[id])
+      })
+      if (!exactNeutral || trial.movement[0]!.timestampMs <= previousTrial.restAfter.at(-1)!.timestampMs) {
+        return { ok: false, reasons: ['Training attempts must have new movement recordings; only an exact adjacent rest may be shared.'] }
       }
+    }
+    previousTrial = trial
+    for (const rest of [trial.restBefore, trial.restAfter]) {
+      // A shared Rest is the same physical interval under both labels. Apply the
+      // same settling rule, and don't double-weight its samples in pooled noise.
+      const settledFrames = settledReturn(rest)
+      const validation = validateStream(settledFrames, SETTLED_RETURN_MS)
+      if (!validation.ok) return { ok: false, reasons: ['Not enough steady rest was recorded around the movement.', ...validation.reasons] }
       const settled = settledFrames.map((frame) => Math.abs(frame.values[feature]! - statistics.center))
       stableRestPhases.push(settled)
-      rests.push(...settled)
+      phases.push({ attempt: movementLows.length + 1, phase: rest === trial.restBefore ? 'before' : 'after', restDistance: quantile(settled, 0.9) })
+      settledFrames.forEach((frame, index) => {
+        if (!restTimestamps.has(frame.timestampMs)) rests.push(settled[index]!)
+        restTimestamps.add(frame.timestampMs)
+      })
     }
     const settled = settledMovement(trial.movement)
     const settledValidation = validateStream(settled, SETTLED_MOVEMENT_MS)
@@ -107,26 +135,30 @@ export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
   const baselineRestLimit = Math.max(6 * statistics.noise,
     2 * Math.abs(statistics.low - statistics.center), 2 * Math.abs(statistics.high - statistics.center),
     RELEASE_FRACTION * weakestMovement)
-  if (stableRestPhases.some((phase) => quantile(phase, 0.9) > baselineRestLimit)) {
-    return { ok: false, reasons: ['An attempt did not return to the personal resting baseline.'] }
-  }
   const restCeiling = Math.max(3 * statistics.noise,
     Math.abs(statistics.low - statistics.center), Math.abs(statistics.high - statistics.center), quantile(rests, 0.95))
   const margin = weakestMovement - restCeiling
-  if (!Number.isFinite(margin) || margin < Math.max(3 * statistics.noise, 3 * featureNoiseFloor(feature))) {
-    return { ok: false, reasons: ['The movement overlaps resting variation. Try a different comfortable movement or record again.'] }
+  const minimumMargin = Math.max(3 * statistics.noise, 3 * featureNoiseFloor(feature))
+  const diagnostics: TrainingDiagnostics = { feature, direction, baselineCenter: statistics.center, noise: statistics.noise,
+    weakestMovement, restLimit: baselineRestLimit, restCeiling, margin, minimumMargin, phases }
+  if (stableRestPhases.some((phase) => quantile(phase, 0.9) > baselineRestLimit)) {
+    return { ok: false, reasons: ['An attempt did not return to the personal resting baseline.'], diagnostics }
+  }
+  if (!Number.isFinite(margin) || margin < minimumMargin) {
+    return { ok: false, reasons: ['The movement overlaps resting variation. Try a different comfortable movement or record again.'], diagnostics }
   }
   const releaseThreshold = restCeiling + margin * RELEASE_FRACTION
   // Every repetition must also fit the learned neutral range around the original baseline.
   if (stableRestPhases.some((phase) => quantile(phase, 0.9) > releaseThreshold)) {
-    return { ok: false, reasons: ['An attempt did not return to a stable resting position.'] }
+    return { ok: false, reasons: ['An attempt did not return to a stable resting position.'], diagnostics }
   }
   const strongestMovement = Math.max(...movementLows)
   if (strongestMovement > weakestMovement * 4) {
-    return { ok: false, reasons: ['The three movement attempts were too inconsistent. Please retry comfortably.'] }
+    return { ok: false, reasons: ['The three movement attempts were too inconsistent. Please retry comfortably.'], diagnostics }
   }
   return {
     ok: true,
+    diagnostics,
     value: {
       id: options.id ?? `${feature}:${direction}`, label: options.label ?? feature,
       feature, direction, baselineCenter: statistics.center,
