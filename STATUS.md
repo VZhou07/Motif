@@ -1,10 +1,9 @@
 # Motif build update
 
-I am Agent 3, building the Supabase accounts and request foundation on the separate `feature/request-relay` branch. It now has caregiver accounts, private groups, participant invitations, request updates and permission tests. The other three teammates own participant screens, the caregiver dashboard and browser controls.
+The shared starting point for the team is ready. I am Agent 3, building caregiver accounts and the request foundation on the `feature/request-relay` branch. It now has caregiver sign-in, private groups, participant invitations, request updates, permission tests, and the frozen list of browser commands Agent 4 needs. The committed changes from `main` are merged in, so everyone builds on the same code.
 
-Independent tests passed: 455 tests, typecheck and configured browser privacy checks. The production build is being rechecked after installing the local camera runtime files. I am preparing one tested starting commit that includes the committed main changes, so everyone can build against the same API.
+**Start the other three agents from commit `2055e1c` on `feature/request-relay`.** On that exact code: 496 tests pass, the typecheck passes, and the production build passes. Nothing has been pushed.
 
-Supabase does not need a GitHub link. Each laptop needs the exact `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` variables. The shared project still needs its SQL migration, anonymous sign-in and private demo caregiver accounts; see `docs/supabase-setup.md`.
+What is being built next: the participant request screen, the caregiver dashboard, and the browser companion, each by its own teammate in its own copy of the project. I then connect them and add the role-aware pages.
 
-The participant/dashboard screens and browser companion are not connected yet. Hosted delivery and real-person camera checks remain pending. Teammate checkouts and the separate head/mouth preview at port 5187 are untouched. Nothing pushed.
-
+What remains untested: the shared Supabase project still needs its database setup, sign-in and demo caregiver accounts on a laptop (see `docs/supabase-setup.md`), so no request has travelled between two real devices yet. The browser privacy check has not been rerun on the newest commit. Camera behaviour with a real person is still untested because the camera is covered.
