@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import App from '../App';
 import { BROW, Harness } from '../app/session.test-support';
@@ -33,6 +33,7 @@ describe('calibration pacing presentation (R13)', () => {
     const h = startTrial();
     renderApp(h);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest');
+    fireEvent.click(screen.getByRole('button', { name: /Details/ })); // diagnostics sit behind Details
     const preview = document.querySelector('.camera-preview');
     const diagnostics = screen.getByRole('region', { name: 'Live camera diagnostics' });
     expect(preview?.contains(diagnostics)).toBe(false);

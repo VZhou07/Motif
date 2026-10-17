@@ -78,6 +78,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, co
   // While communicating the side panel stays quiet: diagnostics and beeps live in the Helper panel.
   const quiet = snapshot.stage === 'communication' || snapshot.stage === 'practice';
   const slim = !!compact || quiet;
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const running = snapshot.camera === 'running';
   const tracked = running && snapshot.tracking === 'tracked';
   const model = snapshot.approvedModel;
@@ -97,7 +98,6 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, co
           </div>
           {running && <span className="preview-caption">Mirrored preview · left and right mean your own sides</span>}
         </div>
-        {!slim && <CameraDiagnostics snapshot={snapshot} />}
         {!compact && <div className="camera-status"><span className={`status-dot ${tracked ? 'status-good' : ''}`} /><strong>{trackingLabel(snapshot)}</strong></div>}
         <p className="camera-help">{running
           ? 'Keep only the calibrated person in view. When tracking is unclear, controls safely wait.'
@@ -120,6 +120,14 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, co
             disabled={cueStatus?.available === false} onChange={(event) => onCuesEnabled(event.target.checked)} />
           Rest/Action beeps {cueStatus?.available === false ? '(unavailable in this browser)' : cueStatus?.ready ? '' : '(play after you start the camera)'}
         </label>}
+        {!slim && (
+          <div className="panel-details">
+            <button type="button" className="helper-toggle" aria-expanded={detailsOpen} aria-controls="panel-details" onClick={() => setDetailsOpen(!detailsOpen)}>
+              <span>Details</span><span aria-hidden="true">{detailsOpen ? '−' : '+'}</span>
+            </button>
+            {detailsOpen && <div id="panel-details"><CameraDiagnostics snapshot={snapshot} /><SignalDashboard snapshot={snapshot} /></div>}
+          </div>
+        )}
         {children}
       </div>
       {model && (
@@ -131,7 +139,6 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, co
           {snapshot.runtime && <div><span>Recognizer</span><strong>{runtimeLabels[snapshot.runtime.phase]}</strong></div>}
         </div>
       )}
-      {!slim && <SignalDashboard snapshot={snapshot} />}
     </aside>
   );
 }
