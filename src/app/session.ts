@@ -82,7 +82,7 @@ export class MotifSession {
   private activeProfile: string | null = null;
   private activeSignature: string | null = null;
   /** A saved profile being re-checked (R7). Its models never act until its controls are approved. */
-  private restoring: { profile: StoredProfile; models: GestureModel[] } | null = null;
+  private restoring: { profile: StoredProfile; models: GestureModel[]; quick: boolean } | null = null;
   private readonly processor = new FeatureProcessor();
   private readonly listeners = new Set<() => void>();
   private snap!: SessionSnapshot;
@@ -588,8 +588,8 @@ export class MotifSession {
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
-      if (!cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified'
-        || cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index])) return;
+      if (!cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified') return;
+      if (!cycle.quick && (cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index]))) return;
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.phrases = [...restored.profile.phrases];
@@ -934,7 +934,8 @@ export class MotifSession {
   }
 
   /** Disarmed restore: fresh rest check → rest fit → re-checks → everyday activity → comfort → approval (R7). */
-  restoreProfile(name: string): boolean {
+  /** `quick` skips the movement re-checks and everyday-activity window; rest must still fit and controls still need approval. */
+  restoreProfile(name: string, quick = false): boolean {
     const refuse = (reason: string) => { this.announce(reason); this.publish(); return false; };
     if (!['welcome', 'setup-failed'].includes(this.stage) || this.hasApproved) return refuse('A saved profile can be restored from the start screen before any setup is approved.');
     if (this.camera !== 'running') return refuse('Start the camera first.');
@@ -944,7 +945,7 @@ export class MotifSession {
     if (!profile) return refuse(`The saved profile “${name}” could not be found or read.`);
     this.choice = null;
     this.beginBaseline();
-    this.restoring = { profile, models: profile.models.map((model) => ({ ...model })) };
+    this.restoring = { profile, models: profile.models.map((model) => ({ ...model })), quick };
     this.announce(`Restoring “${profile.name}”: rest comfortably for ten seconds. Nothing is turned on until you approve.`);
     this.publish();
     return true;
@@ -967,6 +968,13 @@ export class MotifSession {
       return;
     }
     const { profile, models } = restoring;
+    if (restoring.quick) {
+      this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”`, training: null, heldOut: [], negative: null,
+        outcome: 'verified', source: 'restored', verifiedIds: [], profile: profile.name, quick: true });
+      this.announce('Rest fits your saved movement. Check the controls, then approve; practice comes first and nothing is spoken.');
+      this.offerSavedControls();
+      return;
+    }
     const assignments = profile.mapping.assignments;
     const ordered = [...models].sort((a, b) => Number(assignments[b.id] === 'select') - Number(assignments[a.id] === 'select'));
     this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”`, training: null, heldOut: [], negative: null,
