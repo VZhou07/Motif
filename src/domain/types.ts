@@ -87,8 +87,6 @@ export interface RuntimeUpdate {
   /** Set with `cancelled: true`: the movement whose dwell ended, and why. */
   cancelledId?: string
   cancelCause?: CancelCause
-  /** Set with `cancelled: true` when a frame time is known: how long the dwell had been pending. */
-  pendingMs?: number
   event?: ControlEvent
 }
 

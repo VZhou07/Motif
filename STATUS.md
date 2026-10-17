@@ -11,8 +11,4 @@
 
 **Not checked:** a 1280-wide window.
 
-**Also new (branch `ux-landing`):** a simpler start screen, and a **How long to hold** choice when picking a movement. Closing an eye defaults to a 0.8 s hold, so normal blinks do not click.
-
-**Also check:** set up **Close left eye (hold)** with Auto. Blink normally for a minute: nothing should be selected. Close your eye on purpose for about a second: it should select.
-
 **Next:** `ux-comm-screen` (message bar, Undo, Repeat, Helper panel). Nothing is pushed.

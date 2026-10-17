@@ -62,23 +62,3 @@ Software verified: 2.1-2.7, 2.9-2.12 PASS (25 acceptance tests), 2.8 PASS (tsc, 
 
 ### Slice 3 result (round 1 of 3)
 Software verified: 3.1-3.7 PASS (19 acceptance tests), 3.8 PASS (tsc, 431 tests, build). Mutations: partial rename, blur-only apply, no-trim and input remount are all caught; allowing rename while restoring survives as an equivalent mutant (`candidate` is null then). **Human acceptance pending:** 3.H.
-
-## Branch ux-landing, slice H: hold length per movement ("long blink = click")
-
-| ID | Tag | Criterion |
-| --- | --- | --- |
-| H.1 | TEST | `fitGesture` takes an optional `activationMs` (default 250, unchanged behaviour); the fitted model's `activationMs` equals the chosen hold; `releaseMs` stays 350; thresholds are identical for the same trials whatever the hold. |
-| H.2 | TEST | The choose screen has a "How long to hold" radio group: Auto (recommended), Short 0.25 s, Long 0.8 s, Extra long 1.5 s. Auto uses the movement's default: closing an eye 800 ms, everything else 250 ms. The chosen hold is used when a tile is clicked (and for discovered movements, which use Auto). |
-| H.3 | TEST | With a Long (800 ms) eye-closing model, a 400 ms closure (an ordinary blink) selects nothing in practice or communication; a 1 s closure selects exactly once. |
-| H.4 | TEST | The held-out checks and the everyday-activity check use the chosen hold: with Long, 400 ms blinks during the everyday window are not counted as accidental selections; with Short the same stream is. |
-| H.5 | TEST | The hold is kept in the autosaved setup and is unchanged after Continue (quick and re-check), after renaming, and after "same movement" recalibration. |
-| H.6 | TEST | The approve screen preview and the camera panel's movement list state the hold with the movement (for example "long hold, 0.8 s"). |
-| H.7 | TEST | With automatic scanning at 2 s, a 1.5 s hold that starts on one target selects that target, not the next one. |
-| H.9 | TEST | When the person lets go before the hold completes (`released`, or `band` on the way down), the scan resumes with the time that was left at latch start (minimum 0.5 s). Committed selections, suspend, pause, target or interval changes, and tracking-loss or conflicting-movement cancels (`invalid`, `conflict`) still restart the full interval. |
-| H.10 | TEST | Ordinary blinks (pending for less than half the hold) do not count as unfinished uses; a release after at least half the hold does. |
-| H.8 | TEST | tsc, full vitest and build pass; baseline 431 tests. |
-| H.H | HUMAN | With the real camera: set up "Close left eye (hold)" with Auto. Normal blinking for a minute selects nothing; a deliberate long close selects. |
-
-### Slice H result (rounds: 2 of 3)
-Software verified: H.1-H.10 PASS (25 acceptance tests; suite 456/456, tsc, build). Round 1 found that a let-go reaches the runtime as a `band` cancel, so the resume-remaining-time path was unreachable; fixed by treating `band` like `released`. Mutations caught: no 0.5 s minimum, `fitGesture` ignoring the hold, eye default of 250 ms, released-only routing. Not covered: a `conflict` cancel restart (needs two competing approved movements; existing code path unchanged). The >300 ms guard on unfinished counting is a deliberate compatibility choice, not tested.
-**Human acceptance pending:** H.H (real camera: ordinary blinking for a minute selects nothing; a deliberate long close selects).

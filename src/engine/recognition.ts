@@ -70,10 +70,9 @@ export class GestureRuntime {
 
   /** Disarms like `invalidate`, keeping time-continuity validation, and names why a pending dwell ended. */
   private disarm(frame: FeatureFrame, cause: CancelCause): RuntimeUpdate {
-    const pendingMs = this.pendingSince === undefined ? undefined : frame.timestampMs - this.pendingSince
     const result = this.invalidate(cause)
     this.lastTimestamp = frame.timestampMs
-    return result.cancelled && pendingMs !== undefined ? { ...result, pendingMs } : result
+    return result
   }
 
   step(frame: FeatureFrame, nowMs = frame.timestampMs): RuntimeUpdate {
@@ -97,7 +96,6 @@ export class GestureRuntime {
     if (observation.kind === 'neutral') {
       const cancelled = this.phase === 'pending'
       const cancelledId = this.pendingId
-      const pendingMs = this.pendingSince === undefined ? 0 : frame.timestampMs - this.pendingSince
       this.pendingSince = undefined
       this.pendingId = undefined
       if (this.phase !== 'armed') {
@@ -106,7 +104,7 @@ export class GestureRuntime {
         const neutralMs = Math.max(...this.models.map((model) => model.releaseMs))
         if (frame.timestampMs - this.neutralSince >= neutralMs) this.phase = 'armed'
       }
-      return cancelled ? { ...this.snapshot, cancelled, cancelledId, cancelCause: 'released', pendingMs } : { ...this.snapshot, cancelled }
+      return cancelled ? { ...this.snapshot, cancelled, cancelledId, cancelCause: 'released' } : { ...this.snapshot, cancelled }
     }
     this.neutralSince = undefined
     if (this.phase === 'armed') {
