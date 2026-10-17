@@ -173,6 +173,7 @@ describe('free movement discovery (R9)', () => {
     expect(first.candidates.map((candidate) => [candidate.label, candidate.episodes])).toEqual([
       ['Tilt head toward your right shoulder', 6], ['Purse lips', 5], ['Puff cheeks', 4], ['Open mouth', 3],
     ]);
+    expect(DISCOVERY.maxCandidates).toBe(4);
     expect(discoverCandidates(baseline, segments)).toEqual(first);
   });
 
