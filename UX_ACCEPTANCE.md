@@ -52,8 +52,8 @@ Software verified: 2.1-2.7, 2.9-2.12 PASS (25 acceptance tests), 2.8 PASS (tsc, 
 | --- | --- | --- |
 | 3.1 | TEST | Clicking a movement tile starts training immediately (stage `training`). The choose screen has no "Record this movement" button and no name field. |
 | 3.2 | TEST | Tiles are disabled while the camera is not running; movements already in use stay disabled while adding. |
-| 3.3 | TEST | The comfort screen for a first movement has a "Name this movement" field prefilled with the default label. Editing it and approving stores that label in `approvedModels`, the controls label and the autosaved profile. |
-| 3.4 | TEST | A blank name or one over 60 characters is refused with a plain message and the default is kept; renaming is refused outside the comfort stage, when restoring, and never approves anything. |
+| 3.3 | TEST | The comfort screen for a first movement has a "Name this movement" field prefilled with the default label. Editing it and approving (with no blur between typing and approving) stores that label in `approvedModels`, the controls label, `diagnosticModel`, the evidence cycle's movement and the autosaved profile, all equal; the model id and thresholds are unchanged. |
+| 3.4 | TEST | A blank name, one over 60 characters after trimming (a 60-character name plus surrounding spaces is accepted and stored trimmed), or a duplicate of an approved movement's label while adding is refused with a plain message and the last valid name is kept; renaming is refused outside the comfort stage, when restoring, and never approves anything. |
 | 3.5 | TEST | "Record again" keeps the chosen name. |
 | 3.6 | TEST | Counting selections with a synthetic stream: Get started, pick movement, Approve = 3 to reach practice. |
 | 3.7 | TEST | The discovery path (choosing a noticed movement) and adding a second movement still start training and approve as before. |
