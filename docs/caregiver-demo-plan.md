@@ -1,6 +1,6 @@
 # Selected connected caregiver demo plan
 
-Status: the user selected **caregiver requests plus a limited browser companion prototype**, including real two-device delivery and deliberately sent request metadata, while camera/calibration data remains local. This supersedes the earlier no-backend/no-external-control scope for these bounded features only. It is an approved product direction; detailed engineering designs, contracts and technical reviews still precede implementation. No implementation agents, external services or deployments have been started. Keep the original checkout and the communication teammate's active work untouched.
+Status: the user selected **caregiver requests plus a limited browser companion prototype**, then selected Supabase Free and requested foundation implementation. Camera/calibration data remains local. R16 revision 2 independently approved the database/client/config foundation on `feature/request-relay`; hosted setup, the passing shared base and complete application integration remain pending. This supersedes earlier no-backend/no-external-control scope only for these bounded features. No external service was created or deployed by the agent. Keep the original checkout and communication teammate's active work untouched.
 
 ## Product loop
 
@@ -17,7 +17,7 @@ First real demo: person A selects Send water request; caregiver on another devic
 - The caregiver dashboard remains open during the demo. It has an explicit Enable sound control and connection status; background/locked-phone push is excluded from the first slice.
 - Transmit only pairing/auth traffic and the deliberately selected request's ID, participant alias/ID, kind, status, revision and timestamps. No video, landmarks, gesture streams, calibration profiles, browsing history or automatically uploaded composition.
 - Retain requests for the demo session and allow the caregiver to clear/revoke the group afterward. Cross-session history/analytics is deferred. Retention and revocation must be implemented server-side, not merely hidden in the UI.
-- A small HTTPS backend provides real two-device delivery. Transport/provider choice is a coordinator decision before implementation: a same-origin app/API is preferred; a hosted service needs an exact reviewed origin exception. External account creation, paid services and deployment still require their applicable approval; local preparation and scoped feature work do not require another product-scope question.
+- Supabase Free is the selected HTTPS Postgres/Auth provider; the user creates the project. R16 permits only the exact configured project's Auth/REST paths. Updates use authorized two-second polling, not Realtime publications, broadcasts or WebSockets. Follow [Supabase setup](supabase-setup.md); do not invent another provider or broaden the network policy. External account creation, paid services and deployment still require their applicable approval.
 - Browser controls are Chrome-only for the first prototype: Scroll up/down, Back and Return to communication, on explicitly supported ordinary pages. Arbitrary OS control, sensitive form actions and automatic emergency detection are excluded.
 
 ## Four concurrent owners
@@ -76,6 +76,8 @@ The final handoff names tested commit, routes, account/pairing setup, required c
 ## Shared contract before branching
 
 The coordinator commits version 1 contracts on a reconciled, passing base before the four branches start. First integrate the current wink/conflict fixes and inspect the communication teammate's changes; do not blindly merge over active work.
+
+The R16 foundation supplies [versioned contracts](../src/care/contracts.ts), [the real client](../src/care/client.ts) and [configuration parsing](../src/care/config.ts). Use `createSupabaseCareClient`, with one SDK/client per visible control surface and awaited disposal before replacement. All frontends consume the same snapshots/epoch and clear old-session state. The foundation does not by itself finish C1: latest-main/teammate reconciliation and a tested shared commit remain the integrator's next gate. Hosted and real two-device results must be observed separately; [setup and smoke steps](supabase-setup.md) describe the actual APIs without claiming the screens are wired.
 
 - `CareRequest`: stable client request ID, backend-authorized participant/group IDs, request kind, server timestamps, status and monotonic revision. Alias comes from the authorized pairing record.
 - `AuthSession`/access contract: authenticated caregiver account or paired participant identity, authoritative group/participant scope, current session revision/expiry and signed-out/revoked states. Provider/transport details stay behind a shared adapter; consumers must not invent their own role flag or credentials. Commit auth/pairing operations with request operations before dependent feature implementation.
