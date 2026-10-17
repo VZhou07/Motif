@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.cache/
+coverage/
+test-results/
+playwright-report/
+public/mediapipe/
+public/models/
+public/runtime-assets.json
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
