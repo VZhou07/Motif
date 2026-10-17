@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STARTER_PHRASES } from './types';
 import {
-  addFavourite, addGroup, addPhrase, addProblem, defaultVocabulary, editPhrase, FAVOURITES_ID, movePhrase, parseVocabulary,
+  addFavourite, addGroup, addPhrase, addProblem, applyEdit, defaultVocabulary, editPhrase, FAVOURITES_ID, movePhrase, parseVocabulary,
   phraseCount, removeGroup, removePhrase, renameGroup, VOCABULARY_LIMITS, type Vocabulary,
 } from './vocabulary';
 
@@ -203,5 +203,23 @@ describe('parsing stored vocabulary', () => {
   it('accepts the limits exactly', () => {
     const six = groups(...['g1', 'g2', 'g3', 'g4', 'g5'].map((id) => ({ id, name: 'n'.repeat(23) + id.slice(1), phrases: full(12) })));
     expect(parseVocabulary(six).ok).toBe(true);
+  });
+});
+
+describe('typed edits', () => {
+  it('routes every edit kind to its operation with the same result', () => {
+    const v = defaultVocabulary();
+    const pairs: Array<[ReturnType<typeof applyEdit>, ReturnType<typeof applyEdit>]> = [
+      [applyEdit(v, { kind: 'add-phrase', group: 'g1', text: 'Maybe' }), addPhrase(v, 'g1', 'Maybe')],
+      [applyEdit(v, { kind: 'edit-phrase', group: 'g1', index: 0, text: 'Yep' }), editPhrase(v, 'g1', 0, 'Yep')],
+      [applyEdit(v, { kind: 'remove-phrase', group: 'g2', index: 2 }), removePhrase(v, 'g2', 2)],
+      [applyEdit(v, { kind: 'move-phrase', group: 'g2', from: 0, to: 2 }), movePhrase(v, 'g2', 0, 2)],
+      [applyEdit(v, { kind: 'add-group', name: 'Family' }), addGroup(v, 'Family')],
+      [applyEdit(v, { kind: 'rename-group', group: 'g2', name: 'Care' }), renameGroup(v, 'g2', 'Care')],
+      [applyEdit(v, { kind: 'remove-group', group: 'g2' }), removeGroup(v, 'g2')],
+      [applyEdit(v, { kind: 'remove-group', group: 'g2', force: true }), removeGroup(v, 'g2', true)],
+    ];
+    for (const [routed, direct] of pairs) expect(routed).toEqual(direct);
+    expect(pairs[6]![0].ok).toBe(false);
   });
 });

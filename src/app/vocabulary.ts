@@ -169,3 +169,25 @@ export function parseVocabulary(value: unknown): Result<Vocabulary> {
 }
 
 export const phraseCount = (vocabulary: Vocabulary) => vocabulary.groups.reduce((sum, group) => sum + group.phrases.length, 0);
+
+/** One helper edit, so the UI and session pass a typed change instead of a free function. */
+export type VocabularyEdit =
+  | { kind: 'add-phrase'; group: string; text: string }
+  | { kind: 'edit-phrase'; group: string; index: number; text: string }
+  | { kind: 'remove-phrase'; group: string; index: number }
+  | { kind: 'move-phrase'; group: string; from: number; to: number }
+  | { kind: 'add-group'; name: string }
+  | { kind: 'rename-group'; group: string; name: string }
+  | { kind: 'remove-group'; group: string; force?: boolean };
+
+export function applyEdit(vocabulary: Vocabulary, edit: VocabularyEdit): Result<Vocabulary> {
+  switch (edit.kind) {
+    case 'add-phrase': return addPhrase(vocabulary, edit.group, edit.text);
+    case 'edit-phrase': return editPhrase(vocabulary, edit.group, edit.index, edit.text);
+    case 'remove-phrase': return removePhrase(vocabulary, edit.group, edit.index);
+    case 'move-phrase': return movePhrase(vocabulary, edit.group, edit.from, edit.to);
+    case 'add-group': return addGroup(vocabulary, edit.name);
+    case 'rename-group': return renameGroup(vocabulary, edit.group, edit.name);
+    case 'remove-group': return removeGroup(vocabulary, edit.group, edit.force);
+  }
+}
