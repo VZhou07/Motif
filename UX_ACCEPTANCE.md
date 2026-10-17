@@ -23,3 +23,17 @@ Tags: TEST = automated, CHROME = observed in the running app (assisted mode, cam
 ### Slice 1 result (rounds: 2 of 3)
 Software verified: 1.1-1.8, 1.9, 1.10 TEST PASS (24 acceptance tests; suite 387/387, tsc, build); 1.7c PASS (all start-screen text 14px, contrast 4.6-9.6); 1.C PASS at 1470x762 (1280x720 not tested: window could not be resized). Mutation checks: removing both in-flight guards fails 1.9; the post-await check in getStarted is redundant with startCamera's epoch check and the session's own refusal (defense in depth).
 **Human acceptance pending:** 1.H (real camera: one click on Get started asks for permission and the rest check begins by itself; start screen is clear to a helper).
+
+## Slice 2: one approve screen for a first movement (click-to-record and rename move to slice 3)
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| 2.1 | TEST | New setup with exactly one movement (no approved movements, not restoring, adding or recalibrating): after the checks pass, the comfort screen offers "Approve and practice", "Approve, but it takes effort", "Record again" and "Try another movement". The mapping and mapping-confirm screens never appear. |
+| 2.2 | TEST | "Approve and practice" reaches `practice` with that one movement approved (select only), the cycle `approved`, effort recorded `easy`; "Approve, but it takes effort" does the same and records `effort`. |
+| 2.3 | TEST | Nothing is approved or armed while the comfort screen is showing; only the two Approve decisions turn controls on; "Record again" and "Try another movement" approve nothing. |
+| 2.4 | TEST | The screen states what will turn on (the controls label and automatic-scanning explanation) next to the checks passed, the accidental count and the "not a guarantee" note. |
+| 2.5 | TEST | Counting selections with a synthetic stream: Get started, pick movement, Record, Approve = 4 to reach practice (was 6 after Get started: tile, Record, Comfortable, map, Approve, plus Get started). |
+| 2.6 | TEST | Unchanged: adding a second movement, recalibration, restoring a saved setup and the saved-setup Continue still go through their existing screens and approve correctly (existing tests pass unmodified). |
+| 2.7 | TEST | With the gesture scanner, the comfort decisions are scan targets and a first movement needs one scan selection to approve instead of three. |
+| 2.8 | TEST | tsc, full vitest and build pass; Baseline for this slice: 387 tests. |
+| 2.H | HUMAN | A helper reading the comfort screen understands exactly what "Approve and practice" will turn on. |
