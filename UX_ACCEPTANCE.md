@@ -74,5 +74,7 @@ Software verified: 3.1-3.7 PASS (19 acceptance tests), 3.8 PASS (tsc, 431 tests,
 | H.5 | TEST | The hold is kept in the autosaved setup and is unchanged after Continue (quick and re-check), after renaming, and after "same movement" recalibration. |
 | H.6 | TEST | The approve screen preview and the camera panel's movement list state the hold with the movement (for example "long hold, 0.8 s"). |
 | H.7 | TEST | With automatic scanning at 2 s, a 1.5 s hold that starts on one target selects that target, not the next one. |
+| H.9 | TEST | A cancelled selection resumes the scan with the time that was left (minimum 0.5 s), instead of restarting the full interval; a committed selection still restarts it. |
+| H.10 | TEST | Ordinary blinks (pending for less than half the hold) do not count as unfinished uses; a release after at least half the hold does. |
 | H.8 | TEST | tsc, full vitest and build pass; baseline 431 tests. |
 | H.H | HUMAN | With the real camera: set up "Close left eye (hold)" with Auto. Normal blinking for a minute selects nothing; a deliberate long close selects. |
