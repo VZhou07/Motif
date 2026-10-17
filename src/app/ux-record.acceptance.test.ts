@@ -308,8 +308,8 @@ describe('3.7 other record paths unchanged', () => {
     h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
     act(() => h.run(11_000, HEAD_WOBBLE));
     expect(h.snap.stage).toBe('comfort');
-    expect(h.snap.decisions.map((decision) => decision.id)).toContain('comfortable');
-    h.selectByGesture('comfortable');
+    expect(h.snap.decisions.map((decision) => decision.id)).toContain('approve-comfortable');
+    h.selectByGesture('choose-different'); // the cards stay available after slice B
     h.selectByGesture('map:0');
     h.selectByGesture('approve-mapping');
     expect(h.snap.approvedModels).toHaveLength(2);

@@ -27,9 +27,7 @@ function ready(options: ConstructorParameters<typeof Harness>[0] = {}): Harness 
 function ready2(): Harness {
   const h = ready();
   h.addMovement(OPEN_MOUTH, perform);
-  h.selectByGesture('comfortable');
-  h.selectByGesture('map:0');
-  h.selectByGesture('approve-mapping');
+  h.selectByGesture('approve-comfortable'); // slice B: adding approves from the comfort screen
   h.stepTo('finish-practice');
   expect(h.snap.stage).toBe('communication');
   return h;
@@ -233,17 +231,17 @@ describe('C6 Helper panel', () => {
     expect(ids(h)).toEqual(['close-helper', 'change-controls', 'add-movement', 'recalibrate', 'slower', 'faster', 'practice', 'pause']);
   });
 
-  it('C6 with two movements Tiring is offered and, in step scanning, there is no slower/faster', () => {
+  it('C6 with two movements Tiring moved into Change controls and, in step scanning, there is no slower/faster', () => {
     const h = ready2();
     expect(h.snap.scanMode).toBe('step');
     say(h, 'helper');
     const list = ids(h);
     expect(list[0]).toBe('close-helper');
-    expect(list).toEqual(expect.arrayContaining(['change-controls', 'add-movement', 'recalibrate', 'tiring', 'practice', 'pause']));
+    expect(list).toEqual(expect.arrayContaining(['change-controls', 'add-movement', 'recalibrate', 'practice', 'pause']));
+    expect(list).not.toContain('tiring');
     expect(list).not.toContain('slower');
     expect(list).not.toContain('faster');
     expect(list[list.length - 1]).toBe('pause');
-    expect(list.indexOf('tiring')).toBeLessThan(list.indexOf('practice'));
   });
 
   it('C6 the assisted panel offers a movement setup choice instead of the gesture controls', () => {
@@ -298,8 +296,7 @@ describe('C7 helper ids need the panel', () => {
     const cases: Array<[string, () => Harness, (h: Harness) => void]> = [
       ['change-controls', () => ready(), (h) => expect(h.snap.stage).toBe('mapping')],
       ['add-movement', () => ready(), (h) => { expect(h.snap.stage).toBe('choose'); expect(h.snap.adding).toBe(true); }],
-      ['recalibrate', () => ready(), (h) => expect(h.snap.stage).toBe('recalibrate-confirm')],
-      ['tiring', () => ready2(), (h) => expect(h.snap.stage).toBe('tiring')],
+      ['recalibrate', () => ready(), (h) => { expect(h.snap.stage).toBe('communication'); expect(snap(h).confirmingRecalibrate).toBe(true); }],
       ['practice', () => ready(), (h) => expect(h.snap.stage).toBe('practice')],
     ];
     for (const [id, make, check] of cases) {
@@ -487,7 +484,7 @@ describe('C15 Speak and list integrity', () => {
     expect(ids(add)).not.toContain('phrase:0');
     const recal = ready();
     say(recal, 'helper', 'recalibrate');
-    expect(ids(recal)).toEqual(expect.arrayContaining(['start-recalibration', 'keep-current']));
+    expect(ids(recal)).toEqual(['recalibrate-no', 'recalibrate-yes']);
     expect(ids(recal)).not.toContain('phrase:0');
     const practice = ready();
     say(practice, 'helper', 'practice');

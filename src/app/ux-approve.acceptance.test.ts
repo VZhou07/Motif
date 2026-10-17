@@ -132,7 +132,7 @@ describe('2.4 the screen says what turns on', () => {
     expect(text).toMatch(/not a guarantee/);
     expect(screen.getByRole('button', { name: 'Approve and practice' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approve, but it takes effort' })).toBeTruthy();
-    expect(h.snap.comfortPreview).toEqual({ label: expect.stringContaining(`${BROW_LABEL} selects`), mode: 'auto' });
+    expect(h.snap.comfortPreview).toEqual({ label: expect.stringContaining(`${BROW_LABEL} selects`), mode: 'auto', parts: expect.any(Array) });
   });
 });
 
@@ -251,30 +251,30 @@ describe('2.10 refusals are clean', () => {
 });
 
 describe('2.11 other paths never offer the new ids', () => {
-  const notNew = (h: Harness) => {
+  // Slice B replaced this: adding and recalibrating now approve from the comfort screen too (no approve-effort with 2+ movements).
+  const notNew = (h: Harness, expected: string[]) => {
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).toContain('comfortable');
-    expect(ids(h)).not.toContain('approve-comfortable');
-    expect(ids(h)).not.toContain('approve-effort');
-    expect(h.snap.comfortPreview).toBeNull();
+    expect(ids(h)).toEqual(expected);
+    expect(ids(h)).not.toContain('comfortable');
+    expect(h.snap.comfortPreview).not.toBeNull();
   };
   it('2.11 adding a movement', () => {
     const h = new Harness();
     setUpFirst(h);
     h.addMovement(OPEN_MOUTH, perform);
-    notNew(h);
+    notNew(h, ['record-again', 'approve-comfortable', 'effort-choose', 'choose-different', 'another-movement', 'keep-current']);
   });
   it('2.11 recalibrating', () => {
     const h = new Harness();
     setUpFirst(h);
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     h.run(10_500);
     h.selectByGesture('same-movement');
     h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.recalibrating).toBe(true);
-    notNew(h);
+    notNew(h, ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement', 'keep-current']);
   });
   it('2.11 re-checking a restored setup', () => {
     const storage = createMemoryStorage();
@@ -288,8 +288,7 @@ describe('2.11 other paths never offer the new ids', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.restoring).toBe('Last setup');
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).not.toContain('approve-comfortable');
-    expect(ids(h)).not.toContain('approve-effort');
+    expect(ids(h)).toEqual(['choose-different', 'approve-saved', 'another-movement']);
   });
 });
 
@@ -321,11 +320,9 @@ describe('2.6 other paths keep their screens', () => {
     setUpFirst(h);
     h.addMovement(OPEN_MOUTH, perform);
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).toEqual(expect.arrayContaining(['comfortable', 'comfortable-effort', 'record-again', 'another-movement']));
-    expect(ids(h)).not.toContain('approve-comfortable');
+    expect(ids(h)).toEqual(expect.arrayContaining(['record-again', 'approve-comfortable', 'effort-choose', 'choose-different', 'another-movement']));
     expect(ids(h)).not.toContain('approve-effort');
-    expect(h.snap.comfortPreview).toBeNull();
-    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different'); // the cards stay available
     expect(h.snap.stage).toBe('mapping');
     h.selectByGesture('map:0');
     expect(h.snap.stage).toBe('mapping-confirm');
@@ -345,8 +342,8 @@ describe('2.6 other paths keep their screens', () => {
     h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).toEqual(['comfortable', 'another-movement', 'reject-profile']);
-    expect(h.snap.comfortPreview).toBeNull();
+    expect(ids(h)).toEqual(['choose-different', 'approve-saved', 'another-movement']);
+    expect(h.snap.comfortPreview).not.toBeNull();
   });
 
   it('2.6 the first-movement Approve ids are not offered outside the comfort stage', () => {
