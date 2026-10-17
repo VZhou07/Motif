@@ -2,26 +2,29 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
-## Current focused task — calibration pacing (R11)
+## Latest focused task — return-to-rest rejection (R12)
 
-- Latest user request: make the rest/action timing feel more natural. This authorizes only this fix; the existing overall build Goal remains paused.
-- State: **T1 software verified; human pacing/comfort pending.** R11 revision 1 explicitly APPROVED by timing_review; independent implementation/testing verdict PASS from timing_tests. Base `9d23802`; working tree was clean. Current-machine baseline: 22 files/277 tests PASS. Sandbox launch failed EPERM; native launch works.
-- Ownership: all worker file ownership released to coordinator; no agents editing. Coordinator integrated recorder/session/types and tests; timing_review implemented SetupViews.tsx + SetupViews.test.tsx after reasoning approval; timing_tests independently reviewed/executed checks. All read canonical skill and four project docs.
-- Design: fixed 3/3/3 ready/move/relax rhythm, preview next cue, authoritative countdown, remove spurious completion Rest and stale spoken cue on interruption. Keep all training/held-out/negative safety gates unchanged.
-- Coordinator checks: `npm test -- --reporter=dot` → 25 files/294 PASS; `npm run typecheck` → PASS; `npm run build` → assets/typecheck/production PASS; `node scripts/browser-check.mjs` → 67/67 PASS (synthetic camera). Independent timing_tests ran focused 68 tests, full 294 tests, typecheck and build itself, all PASS. UI implementer independently ran 6 UI tests + typecheck PASS. Coverage includes exact boundaries, jitter, interrupted countdowns, five-attempt speech, final/failing transitions, frozen models, 700/950 ms onset and release in both directions, early/brief rejection, frame stalls, previews and accessible countdowns.
-- Remaining: human pacing/comfort, audible speech alignment and actual webcam use (ACCEPTANCE.md 3.2). Saved-profile exact speech sequence was code-reviewed/shared logic, not a new dedicated assertion. Do not open the real camera unattended. No decisions, observed failures or unrelated software work remain for this request. No commands remain running after browser cleanup.
-- Local commits: `b6cea2b Smooth calibration timing` (app/UI), `ffab538 Test calibration timing` (recorder/session tests), `a055bf9 Test calibration prompts` (six UI tests), followed by this documentation handoff. All code/tests independently verified together; no pushes. No partial code remains. Next: await the user's real-person feedback. Preserve the earlier overall Goal's paused status.
+- User reported all attempted movements fail "An attempt did not return to the personal resting baseline." Base `7914520`, clean tree at start. This authorized a focused fix; the earlier overall Goal stays paused.
+- State: **T2 software verified; real-user calibration/comfort pending.** R12 revisions 1 and 2 independently APPROVED by rest_review before implementation; independent rest_tests final verdict PASS. All agents read the canonical checkpoint skill and four project docs. Worker ownership released; no partial code or running processes remain.
+- Fix: preserve the original baseline, but permit rest variation bounded by noise/range or a quarter of the weakest personal movement. Judge the final third of the return instruction with at least 600 ms of valid, dense evidence. No signal-dependent tail search, held-out fitting or change to live recognition/approval gates.
+- Reproduction: original code failed all 7 new session cases with the reported error; unit cases were 10 failing/5 passing. First fix passed 5 session cases but still failed both gradual head returns. Reviewed revision 2 then passed all 27 new tests without weakening the original head fixtures.
+- Coordinator: `npm test -- src/engine/calibration.rest.test.ts src/app/session.rest.test.ts --reporter=dot` → 27 PASS; `npm run typecheck` PASS. Independent rest_tests: `npm test -- --reporter=dot` → 27 files/321 PASS; `npm run typecheck` PASS; `npm run build` → local assets/typecheck/production PASS. Coordinator: `node scripts/browser-check.mjs` → 67/67 PASS with a synthetic camera; clean exit, servers closed. Sandbox Vite spawn EPERM required native-approved execution as before.
+- Coverage: quiet baseline then varied relaxed face, gradual recovery, brows/mouth and signed head directions, unchanged frozen models, no approval before held-out/negative checks, 60 s varied rest with no actions, one selection per long hold, genuine no-return and negative activation rejection, weak/strong attempts, opposite residuals, sparse return tails and timestamp boundaries. Independent in-memory probes caught five bad alternatives (old strict cap, removed gate, strongest-attempt cap, signed rest distance, old premature return window); shared files unchanged.
+- Local commits: `e01b8d9 Fix relaxed gesture returns`, `1aeb492 Test relaxed gesture returns`, `e234992 Test calibration recovery`; documentation handoff follows. Nothing pushed.
+- Next actionable criterion needs a person: refresh the app, repeat calibration with natural relaxation, and record ACCEPTANCE.md 3.6. The fixed 3-second return window still cannot accommodate every possible slow movement. No real camera was opened, and actual success/comfort is not claimed. No unresolved automated failures or new product decisions remain; await user feedback.
+
+Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cues were independently verified at `7914520` (294 tests and 67 browser checks). R12 addresses the user failure that ideal-stream T1 tests missed; R11 pacing stays in place.
 
 ## Resume first (next agent)
 
-1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R11 is the latest timing change) and `.agents/skills/motif-checkpoint/SKILL.md`.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R12 revision 2 is the latest bug fix) and `.agents/skills/motif-checkpoint/SKILL.md`.
 2. Run `git status` and `git log --oneline -n 10`. Expected: clean tree; compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last passing code/test commit: `a055bf9 Test calibration prompts` (Windows); documentation follows. Current checks: typecheck PASS; vitest 25 files/294 PASS; build PASS; browser-check 67/67 PASS; independent timing_tests PASS. Prior baseline at `e40adc9`: 277 tests/typecheck/build/browser67 PASS on Linux.
+- Last passing code/test commit: `e234992 Test calibration recovery` (Windows); documentation follows. Current checks: typecheck PASS; vitest 27 files/321 PASS; build PASS; browser-check 67/67 PASS; independent rest_tests PASS. Prior timing baseline at `7914520`: 294 tests/typecheck/build/browser67 PASS.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)
