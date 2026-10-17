@@ -50,3 +50,58 @@ describe('offline guard (R10 revision 3)', () => {
     expect(fetch).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('deliberately configured care traffic (R16)', () => {
+  const origin = 'https://project123.supabase.co'
+  const config = { url: origin, publishableKey: 'sb_publishable_test_public_key_1234567890' }
+
+  it('allows only the configured Auth/REST API and prevents redirect escape', async () => {
+    const { win, fetch } = fakeWindow()
+    installOfflineGuard(win, config)
+    await win.fetch(`${origin}/auth/v1/token?grant_type=password`, { method: 'POST' })
+    await win.fetch(new URL(`${origin}/rest/v1/rpc/motif_access`))
+    await win.fetch(new Request(`${origin}/rest/v1/care_requests`), { redirect: 'follow' })
+    expect(fetch).toHaveBeenCalledTimes(3)
+    for (const call of fetch.mock.calls as unknown as [unknown, RequestInit][]) expect(call[1].redirect).toBe('error')
+    expect(win.motifBlockedRequests).toBe(0)
+  })
+
+  it.each([
+    'https://different.supabase.co/rest/v1/care_requests',
+    'https://project123.supabase.co.evil.test/auth/v1/token',
+    'https://person:password@project123.supabase.co/auth/v1/token',
+    `${origin}/storage/v1/object`, `${origin}/realtime/v1/websocket`, `${origin}/auth/v10/token`,
+    `${origin}/rest/v1`, `${origin}/rest/v1/../../storage/v1/object`,
+    'https://odml.pa.googleapis.com/v1/log',
+  ])('refuses unapproved connection %s before touching the network', async (url) => {
+    const { win, fetch } = fakeWindow()
+    installOfflineGuard(win, config)
+    await expect(win.fetch(url)).rejects.toThrow(TypeError)
+    expect(fetch).not.toHaveBeenCalled()
+    expect(win.motifBlockedRequests).toBe(1)
+  })
+
+  it('never permits remote beacons, even to the configured project', () => {
+    const { win, sendBeacon } = fakeWindow()
+    installOfflineGuard(win, config)
+    expect(win.navigator.sendBeacon(`${origin}/rest/v1/care_requests`, 'private')).toBe(false)
+    expect(sendBeacon).not.toHaveBeenCalled()
+  })
+
+  it('validates URL-like objects from another realm by their actual URL', async () => {
+    const { win, fetch } = fakeWindow()
+    installOfflineGuard(win, config)
+    const otherRealmUrl = { toString: () => 'https://evil.test/collect' } as unknown as URL
+    await expect(win.fetch(otherRealmUrl)).rejects.toThrow(TypeError)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not broaden permissions for forged or later replacement configuration', async () => {
+    const { win, fetch } = fakeWindow()
+    installOfflineGuard(win, { url: 'https://evil.test', publishableKey: config.publishableKey })
+    await expect(win.fetch('https://evil.test/auth/v1/token')).rejects.toThrow(TypeError)
+    installOfflineGuard(win, config)
+    await expect(win.fetch(`${origin}/auth/v1/token`)).rejects.toThrow(TypeError)
+    expect(fetch).not.toHaveBeenCalled()
+  })
+})
