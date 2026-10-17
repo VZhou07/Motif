@@ -52,7 +52,7 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 | C1.5 | Build a message, More → Save message to Favourites → Save. Then Favourites. | The message appears in Favourites; only the select movement can confirm. | | | | | |
 | C1.6 | Undo, then Say again after speaking. | Undo removes only the last phrase; Say again repeats the last spoken message. | | | | | |
 | C1.7 | A helper edits groups during setup and while paused. | Changes show on the board; Resume after a change starts from the main list. | | | | | |
-| C1.8 | Save a profile with favourites; reload; restore it. | Favourites come back; DevTools Application shows no message or spoken text stored. | | | | | |
+| C1.8 | With a movement approved, save a favourite; reload; Continue (and separately: Set up again). | Favourites come back both ways (kept with Last setup); DevTools Application shows no message or spoken text stored. Delete removes them. | | | | | |
 | C1.9 | Do the default groups (Quick, Needs) make sense to the person? | Note what they would change. | | | | | |
 
 ## W6 — Two or more movements

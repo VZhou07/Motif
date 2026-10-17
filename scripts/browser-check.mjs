@@ -236,7 +236,7 @@ try {
   await page.getByRole('button', { name: 'Save “Yes” to Favourites' }).click();
   const favouriteTile = await page.getByRole('button', { name: 'Open Favourites, 1 phrase' }).count();
   const afterFavourite = await page.evaluate(() => localStorage.length);
-  check('a confirmed favourite appears on the main list and is not written to browser storage', favouriteTile === 1 && afterFavourite === 0,
+  check('assisted only (no movement setup): a confirmed favourite appears on the main list and is not written to browser storage', favouriteTile === 1 && afterFavourite === 0,
     `tile=${favouriteTile} localStorage=${afterFavourite}`);
   await page.getByRole('button', { name: 'Needs', exact: true }).click();
   await auditScreen(page, 'assisted communication, Needs group');
