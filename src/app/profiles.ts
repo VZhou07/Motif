@@ -4,8 +4,9 @@ import { validateMapping, type Assignments, type Mapping } from './mapping';
 import { STARTER_PHRASES } from './types';
 
 /**
- * Opt-in local profiles (R7). Only approved movement thresholds, controls, phrases and scan
- * speed are stored; never video, frames, baseline statistics, evidence or messages.
+ * Local profiles (R7). Only approved movement thresholds, controls, phrases, scan speed, the
+ * automatic setup's resting summary numbers and the times its checks last passed (R17) are
+ * stored; never video, frames, evidence or messages.
  */
 export const PROFILE_VERSION = 1;
 export const PROFILE_KEY = 'motif.profiles';
@@ -29,10 +30,19 @@ export interface StoredProfile {
   scanIntervalMs: number;
   /** Summary numbers of the resting face (never frames), so Continue can skip the rest check. Absent in older profiles. */
   baseline?: Baseline;
+  /** R17: wall-clock times (ms) the rest check and each movement's checks last really passed. Absent in older profiles. */
+  checks?: StoredChecks;
+}
+
+export interface StoredChecks { restAt?: number; movementAt: Record<string, number> }
+
+/** Same model, same key: the saved fields in a fixed order (R15/R17 recent-check times). */
+export function modelKey(model: GestureModel): string {
+  return JSON.stringify(MODEL_KEYS.map((key) => model[key as keyof GestureModel]));
 }
 
 const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
-const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
+export const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -62,12 +72,23 @@ function isBaseline(value: unknown): value is Baseline {
   });
 }
 
+function isChecks(value: unknown, ids: ReadonlySet<string>): value is StoredChecks {
+  if (!isRecord(value)) return false;
+  const withRest = Object.hasOwn(value, 'restAt');
+  if (!hasExactKeys(value, withRest ? ['restAt', 'movementAt'] : ['movementAt'])) return false;
+  const time = (at: unknown) => typeof at === 'number' && Number.isFinite(at) && at > 0;
+  if (withRest && !time(value.restAt)) return false;
+  const movementAt = value.movementAt;
+  return isRecord(movementAt) && Object.entries(movementAt).every(([id, at]) => ids.has(id) && time(at));
+}
+
 /** Strict validation of anything read from storage (R7 revision 2, B3). */
 export function parseProfile(value: unknown): Result<StoredProfile> {
   if (!isRecord(value)) return { ok: false, reasons: ['A saved profile is not readable.'] };
   if (value.version !== PROFILE_VERSION) return { ok: false, reasons: ['This profile was made by a different version of Motif.'] };
   const withBaseline = Object.hasOwn(value, 'baseline');
-  if (!hasExactKeys(value, withBaseline ? [...PROFILE_KEYS, 'baseline'] : PROFILE_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  const withChecks = Object.hasOwn(value, 'checks');
+  if (!hasExactKeys(value, [...PROFILE_KEYS, ...(withBaseline ? ['baseline'] : []), ...(withChecks ? ['checks'] : [])])) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
   if (value.featureSchema !== FEATURE_SCHEMA) return { ok: false, reasons: ['This profile uses a different set of face measurements.'] };
   const reasons: string[] = [];
   const name = value.name;
@@ -98,6 +119,8 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
     reasons.push(`A profile must hold exactly ${STARTER_PHRASES.length} phrases of 1–${PHRASE_MAX} characters.`);
   }
   if (withBaseline && !isBaseline(value.baseline)) reasons.push('The saved resting numbers are not readable.');
+  const ids = new Set(Array.isArray(models) ? models.map((model) => (isRecord(model) ? model.id : undefined)).filter((id): id is string => typeof id === 'string') : []);
+  if (withChecks && !isChecks(value.checks, ids)) reasons.push('The saved check times are not readable.');
   const interval = value.scanIntervalMs;
   if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < PROFILE_SCAN.minMs || interval > PROFILE_SCAN.maxMs || interval % PROFILE_SCAN.stepMs !== 0) {
     reasons.push('The saved scan speed is out of range.');
@@ -106,7 +129,7 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
   return { ok: true, value: value as unknown as StoredProfile };
 }
 
-export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; phrases: readonly string[]; scanIntervalMs: number; baseline?: Baseline | null }
+export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; phrases: readonly string[]; scanIntervalMs: number; baseline?: Baseline | null; checks?: StoredChecks | null }
 
 /** Explicit fields only, so nothing extra attached to a live baseline is ever stored. */
 function copyBaseline(baseline: Baseline): Baseline {
@@ -130,6 +153,7 @@ export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
     phrases: [...fields.phrases],
     scanIntervalMs: fields.scanIntervalMs,
     ...(fields.baseline ? { baseline: copyBaseline(fields.baseline) } : {}),
+    ...(fields.checks ? { checks: { ...(fields.checks.restAt !== undefined ? { restAt: fields.checks.restAt } : {}), movementAt: { ...fields.checks.movementAt } } } : {}),
   });
 }
 

@@ -625,3 +625,125 @@ Test exact5s Rest↔Action cycles across all training/held-out/cross-check/profi
 - **Tests:** rows 3.1-3.8.
 - **Revision 2 (after review of 2d78b07: CHANGES REQUIRED; fixed):** (1) `renameMovement` replaces, not mutates, every copy of the label together: `candidate`, `diagnosticModel`, `choice.label`, and `cycles.at(-1).movement`; `id` and thresholds are never touched; `comfortPreview` is re-derived. (2) The field applies a valid draft on every change (cheap, no stage change, no approval), so an approval by gesture, scanner or helper never loses a typed name and needs no blur; the refusal message (blank, over 60 after trimming, duplicate of an approved movement's label while adding) is shown on blur or Enter and the last valid name is kept meanwhile. (3) Trim first, then check 1-60 on the trimmed value (profile validation checks untrimmed length). (4) Visible `<label>`, `maxLength=60`, `aria-describedby` to the `role=status` line. (5) Rows 3.3/3.4 extended; 3.6 pinned using the existing synthetic-stream helper.
 - **Review verdict (slice 3, revision 2 = 6a34eda):** independent reviewer APPROVED. Implementation must also keep the name input a locally controlled input (draft in component state, not re-keyed or derived from the snapshot label) so a publish per keystroke does not remount it or steal focus; test typing several characters in one input element with focus kept.
+
+## R14 — Wink channels and a 600 ms peak hold (revision 1)
+
+Status: superseded. Independent review: CHANGES REQUIRED (B1 — `strongestHold` window underspecified). See revision 2.
+
+## R14 — Wink channels and a 600 ms peak hold (revision 2)
+
+Status: independently APPROVED (wink_rereview). Implementing. User reports a blink fires “close one eye”, and only Open mouth calibrates/holds well. Focused fix; overall Goal remains paused. No real webcam in this change. Held-out attempts, the armed 10 s negative window, and frozen thresholds stay as they are: fit only on the three training trials; evaluate on a frozen model; do not retune at runtime.
+
+Diagnosis: MediaPipe `eyeBlinkLeft/Right` rise on a two-eye blink, so the one-eye chooser is a blink detector. Open mouth works because it is easy to hold for most of a 5 s Action; `fitGesture` currently takes q25 of the last two-thirds of Action, so a 1 s eyebrow or head hold looks like rest.
+
+Design:
+
+- Derive wink from **raw** blendshapes in `extractFeatures` after they validate, using one pure helper: `winkLeft = clamp(eyeBlinkLeft − eyeBlinkRight, 0, 1)` and `winkRight` symmetrically. Do not put wink in `BLENDSHAPE_FEATURES`. Keep raw blink on the frame for the dashboard only. Do not recompute wink from independently smoothed blinks. The same helper fills synthetic frames so a bilateral blink cannot sit next to a rest-level wink.
+- Chooser and discovery `MOVEMENT_OPTIONS` “Close left/right eye (hold)” use `winkLeft` / `winkRight` only. Do not keep raw blink as a selectable movement. Do not remap saved `eyeBlink*` models onto wink.
+- Fit wink models with `activationMs` 500 written onto the model at fit time (`releaseMs` 350). Other features stay 250. The recognizer does not special-case wink. Do not learn dwell from the training hold.
+- Feature schema string changes when `winkLeft` / `winkRight` join `FEATURE_IDS` (coefficient, `[0, 1]`, noise floor 0.001). Saved profiles from before this change refuse restore on the existing mismatch path. Do not bump `PROFILE_VERSION`. Keep the R12 rest envelope; do not lower floors.
+
+`strongestHold` (Action only):
+
+1. Candidates are **contiguous Action slices** whose **timestamp span** is at least `SETTLED_MOVEMENT_MS` (600), not N frames.
+2. Score q25 signed distance of the **selected feature only**, and only on slices that pass the same `validateStream(..., 600)` density / gap / finite checks as today’s settled movement.
+3. Skip a slice whose q75 is more than four times `max(q25, feature noise floor)` — the same 4× consistency gate already used across training attempts — so a spike plus decay is not scored as a hold.
+4. Keep the legal window with the highest q25. That measures the strongest valid hold; it is not a search for any interval that makes the fit pass.
+5. If no legal window exists, fail with the existing incomplete-hold reason (`Hold the movement a little longer after it starts.`).
+6. **Rest / R12 tails stay the fixed final-third (or 600 ms) timestamp rule.** Never choose a rest interval by maximizing or minimizing a score.
+
+Tests: bilateral blink → wink 0; unilateral close → matching wink; 500 ms wink dwell ignores 200–350 ms both-eye blinks and accepts a 500 ms+ one-eye hold; negative window full of 200–350 ms two-eye blinks emits no wink event; wink path still cannot approve before held-out and negative; 800 ms mid-Action brow hold fits where last-two-thirds q25 would fail; 300 ms early spike still rejected (replace the old 900 ms start-then-release case); discovery still ignores blink and short unilateral wink spikes. Full unit/typecheck/build; independent tests. Real-camera success remains pending.
+
+### R14 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| R14 revision 1 | wink_review | B1: `strongestHold` underspecified (frame-count / sparse / rest-hunt risk). Revision 2 locks contiguous Action timestamp spans ≥ 600 ms, `validateStream(..., 600)`, fail closed if none, rest tails time-fixed. Held-out/negative/frozen thresholds unchanged. | CHANGES REQUIRED |
+| R14 revision 2 | wink_rereview | B1 resolved: every valid Action subarray with timestamp span ≥ 600 ms and `validateStream(..., 600)`; highest q25; rest tails time-fixed; wink from raw blinks; dwell 500/250; schema fail-closed. Non-blocking: pin 350 ms vs 500 ms+ unilateral wink; do not grow a window from a peak sample. | APPROVED |
+| R14 revision 2 implementation | r14_testing | Ran tsc, vitest 361, build, browser 67/67. BLOCKING: 4× skip and density untested. Tests added (smoothed 150 ms spike; 4-frame 600 ms density). Mutants confirmed. Recheck PASS: tsc, vitest 364, build. Coordinator: 364 tests, typecheck, build. | PASS — software verified; real-user wink/hold pending |
+
+## R15 — Back to start, and one-hour reuse of recent checks (branch cat-features; numbered R14 there) (revision 1)
+
+User request (2026-10-17, awake and directing): (a) after saving, a helper button returns to the start screen; (b) restoring the profile just left skips the rest check if it passed within the last hour, and skips re-checking any saved movement verified within the last hour; older checks run again. This changes the plan.md rule "rest/revalidation precede arming a restored profile" only for checks that already passed in this same page session less than an hour ago.
+
+### Back to start (already implemented, uncommitted)
+- `MotifSession.returnToStart()` is helper-only (plain button, not scanned) and refused unless the approved setup is saved and unchanged since saving. It cancels speech/cues, clears every setup/communication field to constructor defaults (models, mapping, baseline, message, phrases, cycles, evidence, scan speed, input mode), keeps camera/tracking state, and enters `welcome`. Restore is then allowed because nothing is approved.
+
+### Recent-check memory (contract)
+- Session timestamps use `this.clock()` (performance.now in the app; fake clock in tests). `RECENT_CHECK_MS = 60 * 60 * 1000`.
+- `baselineAt`: set when a rest check completes. `approvedBaselineAt` set wherever `approvedBaseline = baseline` is set, and `baseline = approvedBaseline` copies it back (keep current, cancel).
+- `checkedAt: Map<modelKey, number>`: set to now for every model in the set when a cycle reaches `verified` (after held-out/re-checks AND the everyday-activity check). `modelKey` is the canonical JSON of the saved model fields (id, label, feature, direction, baselineCenter, thresholds, timings), so a changed model never matches.
+- `returnToStart()` stores `recent = { name, baseline: approvedBaseline, baselineAt: approvedBaselineAt }`. The `checkedAt` map survives `returnToStart()`; nothing is written to storage. A page reload forgets everything (full checks).
+
+### Restore decision
+- Reuse applies only when restoring the same profile name that `returnToStart()` just left (`sameName`), on this page. Another profile always gets full checks (a different person may be seated).
+- Rest: if `recent.baselineAt` is within the hour, skip the rest recording; use `recent.baseline` and `recent.baselineAt`, still run the existing rest-fit (misfit) test against the saved models. Otherwise run the normal 10 s rest check.
+- Movements: `verifyPlan` includes only saved models whose `checkedAt` is missing or older than an hour (2 attempts if mapped, as now). The everyday-activity check runs when at least one movement was re-checked. If none needed re-checking, the restored cycle becomes `verified` with `verifiedIds` = all saved model ids, no attempts, a movement label stating it was checked within the last hour, and the flow skips the comfort question and goes straight to the saved-controls confirmation.
+- Original check times carry forward (a skipped check does not refresh its time), so the hour always counts from the real check.
+- Mapping confirmation (explicit approval) and practice before speaking are always kept. Fresh neutral/rearming after every stage change is unchanged.
+
+### Failure modes
+- Different person within the hour: other profile names never reuse; same name is the helper's responsibility (stated next to the button).
+- Changed lighting/position within the hour: the everyday check and practice still precede speaking only when movements are re-checked; with full skip, the practice stage (not spoken) and rearming still apply. Accepted by the user's explicit request.
+- Clock: `performance.now` is monotonic; a negative or non-finite age is treated as stale.
+
+### Tests
+- Session: back-to-start reset and refusal (done); restore within the hour skips rest and re-checks → mapping-confirm → practice; after 61 minutes full checks; rest older than an hour but a movement added within the hour: rest check runs, only the older movement is re-checked, then the everyday check; other profile name gets full checks; reload (new session) gets full checks; a skipped restore keeps the original times so a second return after the hour runs full checks.
+
+### R15 revision 2 changes (resolving review)
+- B1: `checkedAt` is stamped only for ids with a passing positive attempt in this cycle (`cycle.heldOut` entries with `passed`, by `expectedId`), and only once the everyday check passes. Skipped movements keep their original time; a full skip stamps nothing. A trained/added movement is stamped the same way (its held-out attempts and cross-checks pass, then the everyday check).
+- B2: `recent` is cleared whenever a rest check starts that is not the reuse restore (`beginBaseline`), whenever a different profile is restored, and on assisted input. Both rest and movement reuse require `recent` present with the same name; without it, every check runs. `checkedAt` is only consulted under that gate.
+- `baselineAt`/`approvedBaselineAt` are copied at every site that copies `baseline`/`approvedBaseline` (captureBaseline, approveMapping ×2, keepCurrent, useAssisted, returnToStart). A missing baseline or non-finite/negative/≥ one hour age is stale (exactly 60 minutes is stale).
+- The skip path does not call `beginBaseline()`: it repeats its resets (close open cycle, clear candidate/diagnostic/report), sets `restoring`, uses `recent.baseline`, and calls `beginRecheck()` without stamping a new rest time.
+- `modelKey` is built from `MODEL_KEYS` order. Evidence text for a skipped cycle states that no attempts or everyday check ran this time ("checked within the last hour; not repeated"). The helper text next to the button says the same person must restore within the hour to skip the checks.
+- Added tests: partial restore stamping (B1); reuse cleared by an intervening rest check, failed setup, or another profile (B2); exactly 60 minutes stale; nothing armed before approval on the full-skip path; rest-fit failure with a reused baseline is still reported.
+
+## R16 — Back to start from assisted input (branch cat-features; numbered R15 there)
+
+User request (2026-10-17): the same "Done, back to start screen" button inside assisted input started from the start screen ("Use assisted input (Space switch) instead" next to Start camera).
+- Case: `communication` stage, `inputMode === 'assisted'`, no approved movement setup. The save panel is absent there (nothing to save), so the button is rendered by CommunicationView itself, helper-only (plain button, not a scan target; the existing scanned "Set up a movement" control is unchanged).
+- `returnToStart()` accepts this case without the saved-profile guard: there is no setup to lose. It cancels speech/cues, clears the message and last spoken text, sets `inputMode = 'gesture'`, resets scan/practice state via `setStage('welcome')`, and keeps phrases (they may have been edited on the start screen; nothing restores them otherwise) and scan speed. `recent` is not touched (assisted input already cleared it).
+- Assisted input that has an approved movement setup keeps the existing guarded behaviour (must be saved first; save panel shows the button).
+- Tests: assisted-only button returns to welcome with message cleared, inputMode gesture, phrases kept, Space no longer selects; button absent during practice; assisted with an unsaved approved setup still refused.
+
+### R16 review record
+- Reasoning review: APPROVED (revision 1) with two conditions, both implemented: guard requires `communication` + assisted + no approved setup (practice refused); plain announcement naming no profile. Candidate/diagnostic/report also cleared.
+- Testing review: FAIL (no test that the button is hidden in assisted practice) → test added → re-check PASS. tsc clean; vitest 31 files/374 PASS; build PASS; mutations (stage check, !hasApproved, message, inputMode, speech.cancel, practice visibility) each caught.
+
+## R17 — Merging automatic Last setup with the one-hour rule (revision 1)
+
+Merge of `main` (a0be7f0: automatic "Last setup", Continue skips the rest check from saved resting numbers and always skips movement re-checks) into `cat-features` (R15 one-hour in-memory reuse, R16 back to start). User decision (2026-10-17): keep main's automatic saving and Continue, keep both back-to-start buttons, and apply the one-hour rule to Continue. R15's in-memory `recent` memory is replaced by times stored with the profile, so the hour also holds after a page reload.
+
+### Stored data (profiles.ts)
+- `StoredProfile.checks?: { restAt?: number; movementAt: Record<string, number> }` — wall-clock milliseconds (`Date.now`) when the rest check and each movement's positive checks last really passed. Keys must be ids of this profile's models; values finite and > 0. Optional: older profiles without it parse and behave as "nothing recent". Strict exact-key validation as for `baseline`. Times only, never frames or evidence. The plan's "never stored" list gains nothing else.
+- `buildProfile` takes `checks` from explicit fields only.
+
+### Session (session.ts)
+- `SessionOptions.wallClock?: () => number` (default `Date.now`) for check times; the monotonic `clock` stays for capture timing. Harness passes the same fake `now` for both.
+- `baselineAt` / `approvedBaselineAt` and `checkedAt: Map<modelKey, number>` keep R15's set-points and B1 stamping rule (only ids with a passing positive attempt, after the everyday check), but use `wallClock`. `recent` and its clearing rules are removed: the stored Last setup is what Continue uses.
+- `autoSaveProfile()` (and `saveProfile`) store `checks = { restAt: approvedBaselineAt, movementAt: {id: checkedAt.get(modelKey(model))} }` for approved models that have a time.
+- `restoreProfile(name, quick)`: clears `checkedAt`, then loads `profile.checks.movementAt` into it for this profile's models (carry-forward; a skip never refreshes a time).
+  - quick (Continue): if `profile.baseline` exists and `checks.restAt` is recent → skip the rest recording, use the saved baseline, `baselineAt = restAt`; else run the normal rest check. Then the existing rest-fit test. Then due = models whose stored time is not recent. None due → main's quick cycle (`quick: true`, straight to saved-controls confirmation). Some due → re-check only those (2 attempts if mapped) then the everyday check, then comfort, as R15.
+  - not quick ("Continue and re-check my movement"): full R7 restore regardless of times.
+- Recent = finite, `0 ≤ age < 1 h`; future or non-finite times are stale.
+- `returnToStart()` (gesture): routed stage, approved setup; calls `autoSaveProfile()` and refuses unless the stored Last setup now matches the current setup (storage blocked or full → "This browser could not keep your setup…"). Assisted-only branch (R16) unchanged.
+- approveMapping guard: main's (quick skips the id comparison); partial restores mark `verifiedIds` = all restored ids after the everyday check, as today.
+
+### UI
+- CommunicationView: "Done, back to start screen" shown when not practising and either assisted without a movement setup (R16) or an approved setup with storage available. Helper text: ends the session; Continue from the start screen skips checks that passed within the last hour.
+- SavedProfiles text: Continue skips the rest check and movement checks that passed within the last hour; older ones run again; controls still need approval. "Continue and re-check my movement" always checks everything.
+
+### Tests
+- Profile: `checks` validation (unknown id, non-finite, extra keys rejected; absent accepted); never contains frames/evidence.
+- Session: Continue within the hour after back to start and after a reload → mapping-confirm; at exactly 60:00 of the rest → rest check runs; rest stale but movements recent → rest check then confirmation; movement stale → re-checked plus everyday check, others not; skipped times carried forward (later restore after the real hour re-checks); "re-check" button always full; future time stale; back to start refused when storage blocked; R16 assisted tests kept; main's quick-continue tests kept (adjusted only where they assumed no time limit).
+
+### R17 revision 2 changes (resolving review)
+- B1: any failed restore (rest-fit mismatch, failed re-check, failed or unfinished everyday check, baseline failure, or cancel during the restore) forgets that profile's check times: the profile is rewritten without `checks` (same name, `replace`). If the rewrite fails (storage blocked/full), an in-memory `noReuse` set holds the name and Continue treats every time as stale for it until a later successful restore stores fresh times. The next Continue therefore records a fresh rest check and re-checks every movement.
+- B2: disclosures updated: `saveProfile` announcement, the automatic-save helper text, SavedProfiles text, the profiles.ts header comment and plan.md (R14/R15 rule now: check times are stored with the profile; frames/evidence never).
+- `approvedBaselineAt` copies the carried `restAt` on a reused-rest restore (never now). `returnToStart()` clears `checkedAt`. Partial-restore evidence names how many movements were not repeated (R15 wording). The quick decision is "nothing due", not the button alone.
+- Documented risks accepted by the user's decision: a system clock set backwards can make an old check look recent; with a full skip no live check runs before the controls confirmation, so the helper text says only the same person should Continue within the hour.
+- Added tests: old Last setup without `checks` → full rest and re-checks; recent `restAt` without a saved baseline → rest check; scan-speed autosave keeps original times; a failed restore (mismatch and failed re-check) clears the times so the next Continue runs everything; blocked storage uses the in-memory `noReuse`.
+
+### R17 review record
+- Reasoning: revision 1 NOT APPROVED (B1 failed restore left reusable times; B2 disclosures) → revision 2 APPROVED.
+- Testing: PASS with one requested test (saveProfile disclosure), added. tsc clean; vitest 31 files/393 PASS; build PASS. Mutations caught: forgetChecks removed, noReuse ignored, `<=` hour, carried restAt replaced, whole-set stamping, checks not loaded, future times, returnToStart without autosave check, approvedBaselineAt not copied, unknown id accepted. Equivalent/untestable: quick flag in the due filter (checkedAt only loaded when reusing), `checkedAt.clear()` in returnToStart.

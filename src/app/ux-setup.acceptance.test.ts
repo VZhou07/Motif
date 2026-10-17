@@ -132,7 +132,8 @@ describe('1.3 saved setup', () => {
     const h = withSavedSetup();
     mount(h);
     fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
-    await waitFor(() => expect(h.snap.stage).toBe('mapping-confirm'));
+    // Since main's R17, Continue repeats the rest check unless it ran within the last hour.
+    await waitFor(() => expect(['baseline', 'mapping-confirm']).toContain(h.snap.stage));
     expect(h.snap.restoring).toBe('Last setup');
   });
 });

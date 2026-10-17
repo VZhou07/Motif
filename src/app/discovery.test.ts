@@ -97,6 +97,7 @@ describe('free movement discovery (R9)', () => {
     expect(labels(every(3_000, 300, MOUTH))).toEqual([]);
     expect(labels(every(3_300, 350, { eyeBlinkLeft: 0.8, eyeBlinkRight: 0.8 }))).toEqual([]);
     expect(labels(every(3_300, 150, { eyeBlinkLeft: 0.8 }))).toEqual([]);
+    expect(labels(every(3_300, 350, { eyeBlinkLeft: 0.8 }))).toEqual([]);
   });
 
   it('rejects a sustained shift as posture, not a movement', () => {
@@ -131,9 +132,15 @@ describe('free movement discovery (R9)', () => {
   });
 
   it('skips a channel that cannot reach its threshold from this rest', () => {
-    const nearlyClosed = restBaseline({ eyeBlinkLeft: 0.997 });
-    const at = every(4_000, 1_000, { eyeBlinkLeft: 1 });
-    expect(discoverCandidates(nearlyClosed, [segment(0, 20_000, (t) => ({ eyeBlinkLeft: 0.997, ...at(t) }))]).candidates).toEqual([]);
+    const nearlyClosed = restBaseline({ eyeBlinkLeft: 0.997, eyeBlinkRight: 0 });
+    const at = every(4_000, 1_000, { eyeBlinkLeft: 1, eyeBlinkRight: 0 });
+    expect(discoverCandidates(nearlyClosed, [segment(0, 20_000, (t) => ({ eyeBlinkLeft: 0.997, eyeBlinkRight: 0, ...at(t) }))]).candidates).toEqual([]);
+  });
+
+  it('never offers raw blink channels as a selectable movement', () => {
+    expect(MOVEMENT_OPTIONS.map((option) => option.feature)).toContain('winkLeft');
+    expect(MOVEMENT_OPTIONS.map((option) => option.feature)).not.toContain('eyeBlinkLeft');
+    expect(MOVEMENT_OPTIONS.map((option) => option.feature)).not.toContain('eyeBlinkRight');
   });
 
   it('uses only plain movement labels', () => {

@@ -1,4 +1,4 @@
-import type { FeatureFrame, FeatureId } from '../domain/types'
+import { deriveWinks, type FeatureFrame, type FeatureId } from '../domain/types'
 
 /** Structural subset of MediaPipe results; this module has no browser dependency. */
 export interface FaceResult {
@@ -68,7 +68,8 @@ export function extractFeatureFrame(result: FaceResult, timestampMs: number): Fe
     values[category.categoryName as FeatureId] = category.score
   }
   if (BLENDSHAPE_FEATURES.some((feature) => values[feature] === undefined)) return invalid('invalid')
+  const winks = deriveWinks(values.eyeBlinkLeft!, values.eyeBlinkRight!)
   const angles = extractHeadAngles(matrices[0])
   if (!angles) return invalid('invalid')
-  return { timestampMs, tracking: 'tracked', values: { ...values, ...angles } }
+  return { timestampMs, tracking: 'tracked', values: { ...values, ...winks, ...angles } }
 }

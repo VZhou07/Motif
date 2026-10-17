@@ -1,14 +1,13 @@
 # Motif build update
 
-**Branch `ux-setup-flow` is ready for you to try (software done).** Setup is now: **Get started**, click a movement, **Approve and practice**. That is 3 clicks plus Finish practice, down from 8. You can rename the movement on the approve screen.
+**Branch `ux-landing` (includes the latest `main`):**
+- A simpler start screen: one **Get started** button, or **Continue with your last setup** if one is saved.
+- Setup is **Get started**, click a movement, **Approve and practice**. You can rename the movement on the approve screen.
+- With one movement, **Choose another movement** on the confirm screen goes back to picking a movement.
+- From `main`: **Close left/right eye** means one eye (a two-eye blink should not fire it); movements learn from a clear hold of about 0.6 s; **Done, back to start screen**; Continue reuses only checks from the last hour.
 
-**Checked (automated + browser, camera covered):** typecheck, build and 431 tests pass. QA broke key protections on purpose and the tests caught them.
+**Checked (automated):** see `progress.md` for the latest test, typecheck and build results.
 
-**Needs you (3 checks, real camera):**
-1. Click **Get started**. It should ask for camera permission, then start the rest check by itself.
-2. Click a movement tile. Recording should start right away (no Record button).
-3. On the approve screen, type a name and approve. Is it clear what Approve turns on?
+**Needs you (real camera):** Get started starts the rest check by itself; clicking a movement starts recording; the approve screen is clear; blink vs one-eye; Continue within and after an hour.
 
-**Not checked:** a 1280-wide window.
-
-**Next:** `ux-comm-screen` (message bar, Undo, Repeat, Helper panel). Nothing is pushed.
+Camera processing stays on this computer. Nothing is pushed.

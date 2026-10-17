@@ -2,7 +2,29 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
-## Latest focused task — camera diagnostics and Rest / Action cues (R13)
+## Latest focused task — merge of main into cat-features (R17)
+
+- User asked to resolve the merge of `main` (a0be7f0: wink channels, automatic Last setup, quick Continue) into `cat-features` (R15 one-hour reuse, R16 back to start). User decision: keep main's automatic saving and Continue, keep both back-to-start buttons, apply the one-hour rule to Continue (check times stored with the profile).
+- State: **software verified; human acceptance pending.** R17 revision 1 NOT APPROVED (B1 failed restore kept reusable times; B2 disclosures) → revision 2 APPROVED before code. Independent testing review PASS after one added disclosure test (tsc, vitest 31 files/393, build; 10 mutations caught; untestable equivalents noted). Merge committed locally; nothing pushed; no processes running.
+- Files: `src/app/session.ts`, `src/app/profiles.ts` (`checks`), `src/app/session.test-support.ts` (wallClock), `src/components/CommunicationView.tsx`, `ProfileViews.tsx`, `ReviewViews.tsx`, `src/App.test.tsx`, `src/app/session.profiles.test.ts`, docs. Pending person check: Continue within and after an hour with a real camera.
+
+## Branch cat-features — Back to start from assisted input (R16, numbered R15 on that branch)
+
+- Same "Done, back to start screen" button inside assisted input started from the start screen. Software verified (374 tests then); human check pending.
+
+## Branch cat-features — save panel, Back to start, one-hour reuse (R15, numbered R14 on that branch)
+
+- Back to start after saving; one-hour in-memory check reuse. Superseded in the merge by R17 (main's automatic Last setup with stored check times). Independent reviews passed on that branch (370 tests).
+
+## Latest focused task — wink channels and peak hold (R14)
+
+User: blink affects close-one-eye; only Open mouth works well. **Software verified; real-user wink/hold pending.** R14 revision 2 independently APPROVED (wink_rereview) before code. Independent r14_testing BLOCKING (4× skip and density untested) → tests added → recheck PASS (tsc, vitest 364, build). Worker ownership released. No real webcam. Overall Goal paused.
+
+- Wink: `winkLeft/Right = clamp(ipsi blink − contra blink)` from raw blendshapes; chooser/discovery Close-eye uses wink only; wink `activationMs` 500, others 250. A two-eye blink is near 0 wink.
+- Peak hold: Action strength is the best dense ≥600 ms timestamp slice (q25), skipping internally spiky windows (q75 > 4× q25). Rest / R12 tails stay time-fixed. Old profiles refuse restore on the changed feature schema.
+- Next person step: refresh `npm run dev`, try Close one eye without blinking both, and try eyebrow/head/lips with a short hold. Overlay still explains Rest vs Action. Commit locally without a Co-authored-by trailer if you want this saved (`Add wink peak holds`, `Test wink peak holds`, `Record wink hold checks`). No real camera was opened here. Nothing pushed.
+
+## Previous focused task — camera diagnostics and Rest / Action cues (R13)
 
 - User reported calibration still fails; requested camera overlay, Rest↔Action beeps, Rest/Action only at five seconds each. Base `2ee25cf`. Focused task; overall Goal stays paused.
 - State: **software verified; real-user calibration/comfort/beep audibility pending.** R13 revision 1 and 2 independently APPROVED by overlay_review before the matching code. Independent r13_testing BLOCKING (pending-at-boundary fixture) → fixture fix → recheck PASS. Coordinator: tsc PASS; vitest 31 files/353 PASS; `npm run build` PASS; tester also ran browser-check 67/67 with a synthetic camera.
@@ -24,14 +46,14 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 
 ## Resume first (next agent)
 
-1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R13 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R14 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
 2. Run `git status` and `git log --oneline -n 10`. Expected: compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last passing code/test commits: `4b15c3b Add rest action diagnostics`, `ba253df Test rest action diagnostics`. Coordinator: typecheck PASS; vitest 31 files/353 PASS; build PASS. Independent r13_testing: tsc, 353 tests, build, browser 67/67, pending-at-boundary recheck PASS. Prior baseline `2ee25cf`.
+- Last passing **committed** code: `ba15850` (merge of debug-overlay) / `0a3a004 Move camera diagnostics aside`. R14 wink/peak-hold software is in the **working tree, not committed**: the environment's git wrapper injects `Co-authored-by: Cursor`, which this repo forbids. Coordinator: typecheck PASS; vitest 32 files/364 PASS; build PASS. Independent r14_testing recheck PASS. Prior R13 software: tsc, 353 tests, build, browser 67/67. Nothing pushed.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)

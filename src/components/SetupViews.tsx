@@ -152,7 +152,7 @@ export function ChooseView({ snapshot, session }: ViewProps) {
           </div>
         </fieldset>
       ))}
-      <div className="button-row">
+      <div className="button-row discovery-row">
         <button type="button" className="button" disabled={snapshot.camera !== 'running'} onClick={() => session.startDiscovery()}>Not sure? Find my movements</button>
       </div>
       <div className="button-row">

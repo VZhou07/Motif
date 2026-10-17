@@ -25,7 +25,7 @@ export function SavedProfiles({ snapshot, session, onStartCamera, children }: Vi
       {rejected > 0 && <p className="status-notice">{rejected} saved item{rejected === 1 ? '' : 's'} could not be read and {rejected === 1 ? 'was' : 'were'} ignored.</p>}
       {saved && <>
         <button type="button" className="button button-primary button-large" disabled={!canContinue} onClick={() => void resume(true)}>Continue with your last setup<Icon name="arrow" /></button>
-        <p className="helper-copy">{hasBaseline ? 'Goes straight to approving your saved controls.' : 'Starts with a 10-second rest check, then you approve your saved controls.'}{canContinue ? '' : ' Start the camera first.'}</p>
+        <p className="helper-copy">{hasBaseline ? 'Reuses checks from the last hour (older ones run again), then you approve your saved controls.' : 'Starts with a 10-second rest check, then you approve your saved controls.'}{canContinue ? '' : ' Start the camera first.'}</p>
       </>}
       <div className="start-secondary">
         {saved && <button type="button" className="button button-quiet" disabled={!canContinue} onClick={() => void resume(false)}>Re-check my movement first</button>}

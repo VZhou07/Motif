@@ -95,4 +95,20 @@ describe('independent held-out evidence', () => {
       ? makeFrame(4_000, { browOuterUpLeft: 0.3, jawOpen: 0.3 }) : frame)
     expect(evaluateNegativeWindow([testModel, { ...testModel, id: 'mouth', feature: 'jawOpen' }], conflicting).passed).toBe(false)
   })
+
+  it('a wink model emits nothing during 350 ms two-eye blinks', () => {
+    const wink: typeof testModel = {
+      ...testModel, id: 'wink-left', feature: 'winkLeft', baselineCenter: 0,
+      activationThreshold: 0.25, releaseThreshold: 0.08, activationMs: 500,
+    }
+    const everyday = stream(0, 11_000).map((frame) => {
+      const phase = frame.timestampMs % 1_000
+      return phase >= 400 && phase < 750
+        ? makeFrame(frame.timestampMs, { eyeBlinkLeft: 0.85, eyeBlinkRight: 0.85 })
+        : frame
+    })
+    const result = evaluateNegativeWindow(wink, everyday)
+    expect(result.passed).toBe(true)
+    expect(result.eventCount).toBe(0)
+  })
 })
