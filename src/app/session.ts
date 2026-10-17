@@ -729,11 +729,13 @@ export class MotifSession {
   }
 
   private pauseScan(nowMs: number): void {
+    this.idleValidMs = 0;
     this.scanner?.setPaused(true, nowMs);
     this.announce(this.inputMode === 'assisted' ? 'Paused. Press Space to resume.' : 'Paused. Rest, then use your select or pause movement to resume.');
   }
 
   private resumeScan(nowMs: number): void {
+    this.idleValidMs = 0;
     this.scanner?.setPaused(false, nowMs);
     this.announce('Resumed.');
   }

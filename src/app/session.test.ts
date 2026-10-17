@@ -873,4 +873,15 @@ describe('multiple gestures (R6)', () => {
     expect(g.snap.stepFallback).toBe(false);
     expect(g.snap.scanMode).toBe('step');
   });
+
+  it('a helper\'s Pause and Resume clicks restart the step idle timer', () => {
+    const h = twoGestureStep();
+    h.run(50_000);
+    h.session.selectTarget('pause');
+    expect(h.snap.scan!.paused).toBe(true);
+    h.run(5_000);
+    h.session.resume();
+    h.run(50_000);
+    expect(h.snap.stepFallback).toBe(false);
+  });
 });
