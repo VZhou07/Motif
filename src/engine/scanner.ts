@@ -14,6 +14,8 @@ export class ScanController {
   private intervalMs: number
   private deadlineMs: number
   private latchedTarget: string | undefined
+  /** Time left on the highlighted target when the current latch began. */
+  private latchRemainingMs: number | undefined
   private suspended = false
   private paused = false
 
@@ -43,13 +45,27 @@ export class ScanController {
     return this.snapshot
   }
 
-  beginSelection(_nowMs: number): void {
-    if (!this.suspended && !this.paused) this.latchedTarget = this.targets[this.index]
+  beginSelection(nowMs: number): void {
+    if (this.suspended || this.paused) return
+    this.latchedTarget = this.targets[this.index]
+    this.latchRemainingMs = Number.isFinite(nowMs) ? Math.max(0, this.deadlineMs - nowMs) : undefined
   }
 
   cancelSelection(nowMs: number): void {
     this.latchedTarget = undefined
+    this.latchRemainingMs = undefined
     this.resetDeadline(nowMs)
+  }
+
+  /**
+   * The person let go before the hold completed (for example an ordinary blink): continue the
+   * highlighted target with the time it had left, at least 0.5 s. Every other cancel restarts.
+   */
+  abandonSelection(nowMs: number): void {
+    const remaining = this.latchRemainingMs
+    const latched = this.latchedTarget !== undefined
+    this.cancelSelection(nowMs)
+    if (latched && remaining !== undefined && Number.isFinite(nowMs)) this.deadlineMs = nowMs + Math.max(remaining, 500)
   }
 
   commitSelection(nowMs: number): string | undefined {
