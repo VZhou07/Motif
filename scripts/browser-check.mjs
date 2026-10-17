@@ -25,9 +25,13 @@ async function launch(extraArgs) {
 /** A page that records external requests, console errors (MediaPipe's "INFO:" logs excepted), page errors and HTTP errors. */
 async function openPage(browser, { width = 1280, init, origin = ORIGIN } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
-  const log = { external: [], errors: [] };
-  // Counts Content-Security-Policy refusals: the in-app guard should block first, so this stays 0.
-  await page.addInitScript(() => { window.cspViolations = 0; document.addEventListener('securitypolicyviolation', () => { window.cspViolations += 1; }); });
+  const log = { external: [], errors: [], csp: 0 };
+  // Counts Content-Security-Policy refusals across every load of this page: the in-app guard should block first, so this stays 0.
+  await page.exposeFunction('reportCspViolation', () => { log.csp += 1; });
+  await page.addInitScript(() => {
+    window.cspViolations = 0;
+    document.addEventListener('securitypolicyviolation', () => { window.cspViolations += 1; window.reportCspViolation?.(); });
+  });
   if (init) await page.addInitScript(init);
   page.on('request', (request) => { const url = request.url(); if (!url.startsWith(origin) && !url.startsWith('data:') && !url.startsWith('blob:')) log.external.push(url); });
   page.on('console', (message) => { if (message.type() === 'error' && !/^INFO: /.test(message.text())) log.errors.push(message.text()); });
@@ -221,7 +225,7 @@ try {
     && await page.evaluate(() => localStorage.length) === 0);
   await auditScreen(page, 'welcome 900 px');
   check('no requests leave this device', log.external.length === 0, log.external.slice(0, LIMIT).join(', '));
-  check('no Content-Security-Policy refusals were needed', await page.evaluate(() => window.cspViolations) === 0);
+  check('no Content-Security-Policy refusals were needed on any load', log.csp === 0, `${log.csp}`);
   check('no console or page errors', log.errors.length === 0, log.errors.slice(0, 2).join(' | '));
   await page.screenshot({ path: 'test-results/browser-assisted.png', fullPage: true });
 
