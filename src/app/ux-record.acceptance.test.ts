@@ -129,6 +129,29 @@ describe('3.3 rename on the comfort screen', () => {
   });
 });
 
+describe('3.3 typing keeps the same input', () => {
+  it('3.3 several keystrokes keep the same input element, its focus and its value while the session publishes', () => {
+    const h = atChoose();
+    toComfort(h);
+    mount(h);
+    const input = nameField();
+    input.focus();
+    expect(document.activeElement).toBe(input);
+    let published = 0;
+    const unsubscribe = h.session.subscribe(() => { published += 1; });
+    for (const value of ['M', 'My', 'My ', 'My b', 'My brow']) {
+      fireEvent.change(input, { target: { value } });
+      expect(nameField()).toBe(input);
+      expect(input.isConnected).toBe(true);
+      expect(document.activeElement).toBe(input);
+      expect(input.value).toBe(value);
+    }
+    unsubscribe();
+    expect(published).toBeGreaterThan(0);
+    expect(h.snap.candidate?.label).toBe('My brow');
+  });
+});
+
 describe('3.4 rename refusals', () => {
   it('3.4 blank and over-60-character (after trimming) names are refused, trimmed names accepted, last valid name kept', () => {
     const h = atChoose();
