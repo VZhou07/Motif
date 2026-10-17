@@ -1,4 +1,5 @@
 import { FEATURE_IDS, type FeatureFrame, type FeatureId } from '../domain/types';
+import type { ProfileStore } from './profiles';
 import { MotifSession } from './session';
 import type { MovementChoice, SessionSnapshot, SpeechPort } from './types';
 
@@ -27,8 +28,12 @@ export class Harness {
     speak: (text) => { if (!this.speechAvailable) return false; this.spoken.push(text); return true; },
     cancel: () => {},
   };
-  readonly session = new MotifSession({ speech: this.speech, clock: () => this.now });
+  readonly session: MotifSession;
   stepMs = 50;
+
+  constructor(options: { profiles?: ProfileStore } = {}) {
+    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, profiles: options.profiles });
+  }
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }
 

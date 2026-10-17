@@ -29,7 +29,7 @@ export interface CaptureStatus {
 export interface AttemptEvidence {
   attempt: number; passed: boolean; eventCount: number; validDurationMs: number; reasons: string[];
   /** Movement expected in this attempt; cross-checks confirm an existing movement still works with the new one. */
-  expected: string; kind: 'held-out' | 'cross-check';
+  expected: string; kind: 'held-out' | 'cross-check' | 'recheck';
 }
 export interface NegativeEvidence { passed: boolean; eventCount: number; validDurationMs: number; restarts: number; reasons: string[] }
 export interface CycleEvidence {
@@ -39,9 +39,14 @@ export interface CycleEvidence {
   heldOut: AttemptEvidence[];
   negative: NegativeEvidence | null;
   outcome: 'in-progress' | 'verified' | 'failed' | 'approved' | 'rejected' | 'cancelled';
+  /** `restored`: frozen models from a saved profile, re-checked without any fitting (R7). */
+  source: 'trained' | 'restored';
+  /** Ids of every model the held-out/re-check attempts and negative window were run on, once verified. */
+  verifiedIds: string[];
+  profile?: string;
 }
 
-export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled';
+export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch';
 export interface Failure { kind: FailureKind; title: string; reasons: string[] }
 
 export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' }
@@ -99,6 +104,20 @@ export interface SessionSnapshot {
   practice: { selections: number; last: string | null };
   /** Text for the polite live region: prompts, notices, and selections only. */
   announcement: string;
+  profiles: ProfilesView;
+  /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
+  restoring: string | null;
+}
+
+export interface ProfilesView {
+  names: string[];
+  rejected: number;
+  available: boolean;
+  readable: boolean;
+  /** The saved profile the approved setup came from or was last saved as. */
+  active: string | null;
+  /** True when the approved setup differs from what was last saved (or was never saved). */
+  unsaved: boolean;
 }
 
 export interface SpeechPort {
