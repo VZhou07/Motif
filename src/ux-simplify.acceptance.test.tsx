@@ -307,14 +307,24 @@ describe('U3 plain words', () => {
 // ═══ U4: Choose ════════════════════════════════════════════════════════════
 describe('U4 choose', () => {
   const tileOf = (label: string) => screen.getByRole('button', { name: new RegExp(`^${label}`) });
-  /** A live mouth-open reading at exactly `k` times the resting noise above the resting centre. */
+  /**
+   * A mouth-open reading that has settled at `k` times the resting noise above the resting centre. The snapshot frame is
+   * smoothed, so hold the value until the smoothed reading converges, nudging up by a hair until it is at least `k`.
+   */
   function withDeviation(k: number | null): Harness {
     const h = atChoose();
     if (k === null) { h.step(REST, 'missing'); return h; }
     const stats = h.snap.baseline!.statistics.jawOpen;
     let value = stats.center + k * stats.noise;
-    for (let guard = 0; guard < 50 && liveDeviation(h.snap.baseline, { timestampMs: 0, tracking: 'tracked', values: { jawOpen: value } } as never, 'jawOpen', 1)! < k; guard += 1) value += stats.noise * 1e-9;
-    h.step({ jawOpen: value });
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      h.run(10_000, { jawOpen: value });
+      const reading = liveDeviation(h.snap.baseline, h.snap.frame, 'jawOpen', 1)!;
+      if (reading >= k) break;
+      value += stats.noise * Math.max(k - reading, 1e-12);
+    }
+    const reading = liveDeviation(h.snap.baseline, h.snap.frame, 'jawOpen', 1)!;
+    expect(reading).toBeGreaterThanOrEqual(k);
+    expect(reading).toBeLessThan(k + 1e-6);
     return h;
   }
   const meterOf = (h: Harness) => { mount(h); return within(tileOf('Open mouth')).getByLabelText(/^Signal: /).getAttribute('aria-label')!; };
@@ -420,8 +430,9 @@ describe('U6 mapping cards', () => {
   });
 
   it('U6 card ids and scan order equal the decision order, and Keep current setup is not primary', () => {
-    const h = changeControls();
+    const h = adding('mapping'); // two movements: several cards, so a reordering would show
     mount(h);
+    expect(proposalsOf(h).length).toBeGreaterThanOrEqual(2);
     const decisionIds = h.snap.decisions.map((decision) => decision.id);
     expect(h.snap.scan!.targets.map((target) => target.id)).toEqual(decisionIds);
     const cardIds = [...document.querySelectorAll('[data-scan-id^="map:"]')].map((el) => el.getAttribute('data-scan-id'));

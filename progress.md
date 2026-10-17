@@ -5,7 +5,7 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software sc
 ## Current task — branch ux-simplify (fewer pages)
 
 - User: "so many pages … simple and intuitive … fix it". Branch `ux-simplify` off `ux-comm-screen` at `b2adf7c` (513 tests). Practice stays required (plan.md decision kept; shown on the Talk screen).
-- Slice A (views, copy, progress bar, mapping cards; no stage-machine change): reasoning.md "UX simplify, slice A" revision 1; criteria U1-U12, UH. State: implementing (design revision 2 APPROVED).
+- Slice A (views, copy, progress bar, mapping cards; no stage-machine change): reasoning.md "UX simplify, slice A" revision 1; criteria U1-U12, UH. State: **software verified; human acceptance pending (UH)** — commits f8b36ee..e70b1c0 plus QA tests; vitest 38 files/595, tsc clean, build OK.
 - Slice B (planned, session): one approve screen for restore/add/recalibrate, recalibrate confirm inside Helper, tiring inside Change controls.
 - Agents: reviewer ae8ac905 (design), developer a7a8cb8d, QA ae97aab9 (owns `src/ux-simplify.acceptance.test.tsx`).
 

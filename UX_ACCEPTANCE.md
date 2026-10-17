@@ -109,3 +109,6 @@ Design: reasoning.md "UX simplify, slice A". Baseline 513 tests. QA owns `src/ux
 | U11 | TEST | tsc, full vitest and build pass; existing tests change only for removed copy, the removed stepper, or renamed labels ("Start talking"). |
 | U12 | TEST | Accessible names on every control; new text ≥ 14px (stylesheet checks). |
 | UH | HUMAN | With the camera: setup feels like one flow, the progress bar matches what you are doing, the signal meter and "Seen now" help pick a movement. |
+
+### Slice A result (round 1 of 3)
+Software verified: U1-U12 PASS (57 acceptance tests plus 24 `progress.ts` unit tests). Coordinator rerun: vitest 38 files/595 PASS, tsc clean. QA: build OK; out-of-list edits (capture.ts, CameraDiagnostics.tsx, session.ts strings) are wording plus the additive `proposals` field; edits to existing tests follow removed or renamed copy only. Mutations caught: Rest current on quick restore, two primaries on failure, "armed" in evidence, diagnostics always shown, cards out of scan order (after QA strengthened that test). Accepted deviation: `record-again` is never primary, so Approve is primary on the comfort screen; scan order unchanged. **Human acceptance pending:** UH.
