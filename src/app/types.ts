@@ -1,9 +1,10 @@
 import type { Baseline, FeatureFrame, FeatureId, GestureModel, RuntimePhase, TrackingState } from '../domain/types';
 import type { Mapping, MappingProposal, ScanMode } from './mapping';
+import type { MovementEvidence } from './scoring';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
-  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm';
+  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm' | 'tiring';
 
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
 /** `assisted` is the clearly labeled Space/mouse path; it never produces calibration evidence. */
@@ -107,6 +108,10 @@ export interface SessionSnapshot {
   /** Text for the polite live region: prompts, notices, and selections only. */
   announcement: string;
   profiles: ProfilesView;
+  /** Per-movement observations (counts with denominators) for approved movements and any in setup (R8). */
+  evidence: MovementEvidence[];
+  /** The recommended proposal in `mapping`, with plain reasons. */
+  recommendation: { id: string; reasons: string[] } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
 }

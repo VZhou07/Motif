@@ -709,7 +709,7 @@ describe('multiple gestures (R6)', () => {
     h.stepTo('finish-practice');
     const ids = h.snap.scan!.targets.map((target) => target.id);
     expect(ids).toEqual(['phrase:0', 'phrase:1', 'phrase:2', 'phrase:3', 'phrase:4', 'phrase:5',
-      'speak', 'clear', 'pause', 'practice', 'change-controls', 'recalibrate']);
+      'speak', 'clear', 'pause', 'practice', 'change-controls', 'tiring', 'recalibrate']);
     const seen = new Set<string>();
     h.run(600);
     for (let i = 0; i < ids.length; i += 1) { seen.add(h.highlightedId()!); h.run(600, MOUTH); h.run(600); }

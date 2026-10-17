@@ -87,7 +87,7 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('2 / 2')).toBeTruthy();
     const current = document.querySelector('[aria-current="true"]');
-    expect(current?.textContent).toBe('Yes, this movement is comfortable');
+    expect(current?.textContent).toBe('Yes, comfortable and easy');
     act(() => h.selectByGesture('comfortable'));
     expect(document.querySelector('.mapping-explainer')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
     act(() => h.selectByGesture('map:0'));
