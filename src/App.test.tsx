@@ -319,4 +319,29 @@ describe('Motif app', () => {
     }
     view.unmount();
   });
+
+  it('names every control on the discovery, tiring, failure and saved-profile screens', () => {
+    const unnamed = () => ['button', 'textbox', 'combobox', 'checkbox', 'progressbar'].flatMap((role) =>
+      screen.queryAllByRole(role, { name: (name) => name.trim() === '' }).map((element) => `${role}: ${element.outerHTML.slice(0, 80)}`));
+    const storage = createMemoryStorage();
+    const saver = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    saver.setUpToCommunication();
+    saver.session.saveProfile('Alex');
+    const h = twoMovements();
+    const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    act(() => h.stepTo('tiring'));
+    expect([h.snap.stage, unnamed()]).toEqual(['tiring', []]);
+    view.unmount();
+
+    const d = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    const second = render(<App runtime={{ session: d.session, speech: localSpeech(d), tracker: fakeTracker() }} />);
+    expect([d.snap.profiles.names, unnamed()]).toEqual([['Alex'], []]);
+    act(() => { d.session.setCamera('running'); d.session.startBaseline(); d.run(10_500); d.session.startDiscovery(); });
+    expect([d.snap.stage, unnamed()]).toEqual(['discover', []]);
+    act(() => d.run(20_500));
+    expect([d.snap.stage, unnamed()]).toEqual(['discover-results', []]);
+    act(() => { d.session.decide('discover-again'); d.session.cancel(); });
+    expect([d.snap.stage, unnamed()]).toEqual(['setup-failed', []]);
+    second.unmount();
+  });
 });
