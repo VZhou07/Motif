@@ -3,7 +3,7 @@ import { useMotif, type MotifRuntime } from './app/useMotif';
 import { CameraPanel } from './components/CameraPanel';
 import { CommunicationView } from './components/CommunicationView';
 import { BrandMark, Icon } from './components/Icon';
-import { ComfortView, DiscoveryResultsView, FailedView, MappingConfirmView, MappingView, RecalibrateView, TiringView } from './components/ReviewViews';
+import { ComfortView, DiscoveryResultsView, FailedView, MappingConfirmView, MappingView, TiringView } from './components/ReviewViews';
 import { CaptureView, ChooseView, SetupProgressBar, WelcomeView } from './components/SetupViews';
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
@@ -24,7 +24,6 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
     case 'comfort': content = <ComfortView {...view} />; break;
     case 'mapping': content = <MappingView {...view} />; break;
     case 'mapping-confirm': content = <MappingConfirmView {...view} />; break;
-    case 'recalibrate-confirm': content = <RecalibrateView {...view} />; break;
     case 'tiring': content = <TiringView {...view} />; break;
     case 'practice':
     case 'communication': content = <CommunicationView {...view} />; break;

@@ -6,7 +6,7 @@ import { GestureRuntime } from '../engine/recognition';
 import { ScanController } from '../engine/scanner';
 import { evaluatePositiveAttempt, type ActionWindow } from '../engine/verification';
 import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from './capture';
-import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
+import { describeMapping, MAX_GESTURES, type ControlAction, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
 import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
@@ -35,6 +35,9 @@ export const DECISION_LABELS = {
   'comfortable-effort': 'Comfortable, but it takes effort',
   'approve-comfortable': 'Approve and practice',
   'approve-effort': 'Approve, but it takes effort',
+  'effort-choose': 'It takes effort: choose controls',
+  'approve-saved': 'Turn on saved controls',
+  'report-tiring': 'A movement is tiring',
   'record-again': 'Record this movement again',
   'another-movement': 'Choose another movement',
   'keep-current': 'Keep current setup',
@@ -55,7 +58,7 @@ export type DecisionId = keyof typeof DECISION_LABELS;
 
 const CONTROL_LABELS: Record<string, string> = {
   speak: 'Speak', undo: 'Undo', repeat: 'Say it again', helper: 'Helper', 'close-helper': 'Close helper',
-  'clear-yes': 'Yes, clear it', 'clear-no': 'Keep it',
+  'clear-yes': 'Yes, clear it', 'clear-no': 'Keep it', 'recalibrate-no': 'Keep current setup', 'recalibrate-yes': 'Start recalibration',
   clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
   practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Start talking',
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
@@ -64,6 +67,8 @@ const CONTROL_LABELS: Record<string, string> = {
 
 /** R14: a check that passed less than this long ago on this page is not repeated when the same profile is restored. */
 export const RECENT_CHECK_MS = 60 * 60 * 1000;
+
+const CANNOT_APPROVE = 'These controls can\'t be turned on yet: the checks did not finish.';
 
 const silentSpeech: SpeechPort = { status: () => ({ available: false, voiceName: null }), speak: () => false, cancel: () => {} };
 const CAPTURE_STAGES: readonly Stage[] = ['baseline', 'training', 'verify', 'negative', 'discover'];
@@ -151,6 +156,7 @@ export class MotifSession {
   private lastSpoken: string | null = null;
   private helperOpen = false;
   private confirmingClear = false;
+  private confirmingRecalibrate = false;
   private lastMovementAt: number | null = null;
   private movementSeenShown = false;
   private spokenPrompts = false;
@@ -441,6 +447,7 @@ export class MotifSession {
     this.stage = stage;
     this.helperOpen = false;
     this.confirmingClear = false;
+    this.confirmingRecalibrate = false;
     this.processor.reset();
     this.runtime = null;
     this.scanner = null;
@@ -480,16 +487,22 @@ export class MotifSession {
   private allowedDecisions(): DecisionId[] {
     const keep = (this.recalibrating || this.adding) && this.hasApproved;
     switch (this.stage) {
-      case 'comfort':
-        if (!this.restoring && this.singleMovementProposal()) return ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement'];
-        return this.restoring ? ['comfortable', 'another-movement', 'reject-profile']
-        : ['comfortable', 'comfortable-effort', 'record-again', 'another-movement', ...(keep ? ['keep-current' as const] : [])];
+      case 'comfort': {
+        if (this.restoring) return ['choose-different', 'approve-saved', 'another-movement'];
+        const proposal = this.comfortProposal();
+        if (proposal) {
+          const several = this.mappingSet().length > 1;
+          return [...(several ? ['record-again', 'approve-comfortable', 'effort-choose', 'choose-different', 'another-movement'] as const
+            : ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement'] as const), ...(keep ? ['keep-current' as const] : [])];
+        }
+        return ['comfortable', 'comfortable-effort', 'record-again', 'another-movement', ...(keep ? ['keep-current' as const] : [])];
+      }
       case 'tiring': return ['never-mind'];
-      case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []), ...(this.candidate ? ['reject' as const] : []),
+      case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []),
+        ...(this.changingControls() && this.approvedModels.length > 1 ? ['report-tiring' as const] : []), ...(this.candidate ? ['reject' as const] : []),
         ...(this.restoring ? ['reject-profile' as const] : [])];
       // With one movement there is only one possible set of controls: offer a different movement instead.
       case 'mapping-confirm': return [this.mappingSet().length === 1 ? 'another-movement' as const : 'choose-different' as const, 'approve-mapping'];
-      case 'recalibrate-confirm': return ['start-recalibration', 'keep-current'];
       case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
       case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'discover', 'keep-current'] : [];
       case 'discover-results': return ['discover-again', 'full-list', ...(keep ? ['keep-current' as const] : [])];
@@ -536,26 +549,50 @@ export class MotifSession {
     if (this.recalibrating || this.adding) this.restrictedScanner(this.approvedModels);
   }
 
+  /** Change controls: the approved set is being edited (no candidate, restore, add or recalibration in progress). */
+  private changingControls(): boolean {
+    return this.hasApproved && !this.candidate && !this.restoring && !this.adding && !this.recalibrating;
+  }
+
   /**
-   * A new setup with exactly one fresh movement and a verified cycle can be approved from the comfort
-   * screen. Pure: the only valid mapping for one movement is select-only, so no effort or
-   * recommendation is consulted and no state changes while the screen is showing.
+   * The controls Approve turns on from the comfort screen: a fresh verified movement (first, added or recalibrated).
+   * Pure, so the preview equals what is approved. One movement can only select; with several, the recommendation is
+   * computed as if the new movement was comfortable and easy (exactly what Approve records). Nothing is stored.
    */
-  private singleMovementProposal(): MappingProposal | null {
-    if (this.stage !== 'comfort' || this.restoring || this.adding || this.recalibrating || this.approvedModels.length || !this.candidate) return null;
+  private comfortProposal(): MappingProposal | null {
+    const candidate = this.candidate;
+    if (this.stage !== 'comfort' || this.restoring || !candidate) return null;
     if (this.cycles[this.cycles.length - 1]?.outcome !== 'verified') return null;
     const set = this.mappingSet();
-    const first = proposeMappings(set)[0];
+    const base = proposeMappings(set);
+    const first = base[0];
     if (!first) return null;
+    if (set.length > 1) {
+      const notes = { ...this.notes, [candidate.id]: { ...this.notes[candidate.id], effort: 'easy' as const } };
+      const recommended = recommendMapping(set, movementEvidence(set, this.cycles, notes, this.use));
+      const valid = recommended ? validateMapping(set, recommended.assignments) : null;
+      if (valid?.ok) return { ...valid.value, id: 'recommended', label: describeMapping(set, valid.value) };
+    }
     const valid = validateMapping(set, first.assignments);
     return valid.ok ? { ...valid.value, id: first.id, label: first.label } : null;
   }
 
   private approveFromComfort(effort: Effort): void {
-    const proposal = this.singleMovementProposal();
+    const proposal = this.comfortProposal();
     if (!proposal) return;
     this.noteEffort(effort);
     this.pendingMapping = proposal;
+    this.approveMapping();
+    this.pendingMapping = null;
+  }
+
+  /** Continue (full re-check): turn on the saved controls from the comfort screen, through the same guards as any approval. */
+  private approveSaved(): void {
+    const restoring = this.restoring;
+    if (!restoring) return;
+    const valid = validateMapping(restoring.models, restoring.profile.mapping.assignments);
+    if (!valid.ok) { this.enterMapping(); this.announce('The saved controls no longer fit these movements. Choose controls again.'); return; }
+    this.pendingMapping = { ...valid.value, id: 'saved', label: `Saved controls: ${describeMapping(restoring.models, valid.value)}` };
     this.approveMapping();
     this.pendingMapping = null;
   }
@@ -581,9 +618,11 @@ export class MotifSession {
     this.announce(`Review: ${proposal.label}.`);
   }
 
-  private enterRecalibrateConfirm(): void {
-    this.setStage('recalibrate-confirm');
+  private enterTiring(): void {
+    if (this.stage !== 'mapping' || !this.changingControls() || this.approvedModels.length < 2) return;
+    this.setStage('tiring');
     this.restrictedScanner(this.approvedModels);
+    this.announce('Which movement is tiring? Nothing changes until you approve new controls.');
   }
 
   private fail(kind: FailureKind, title: string, reasons: string[]): void {
@@ -642,15 +681,16 @@ export class MotifSession {
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
-      if (!cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified') return;
-      if (!cycle.quick && (cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index]))) return;
+      const incomplete = !cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified'
+        || (!cycle.quick && (cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index])));
+      if (incomplete) { this.announce(CANNOT_APPROVE); return; }
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
       this.phrases = [...restored.profile.phrases];
       this.intervalMs = restored.profile.scanIntervalMs;
     } else if (this.candidate) {
-      if (!cycle || cycle.outcome !== 'verified') return;
+      if (!cycle || cycle.outcome !== 'verified') { this.announce(CANNOT_APPROVE); return; }
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
@@ -722,7 +762,10 @@ export class MotifSession {
       case 'comfortable-effort': this.noteEffort('effort'); this.enterMapping(); break;
       case 'approve-comfortable': this.approveFromComfort('easy'); break;
       case 'approve-effort': this.approveFromComfort('effort'); break;
-      case 'never-mind': this.enterCommunication(); this.announce('Nothing changed. Return to rest before selecting.'); break;
+      case 'effort-choose': this.noteEffort('effort'); this.enterMapping(); break;
+      case 'approve-saved': this.approveSaved(); break;
+      case 'report-tiring': this.enterTiring(); break;
+      case 'never-mind': this.enterMapping(); this.announce('Nothing changed. Choose controls, or keep your current setup.'); break;
       case 'discover': case 'discover-again': this.beginDiscovery(); break;
       case 'full-list': this.enterChoose(); break;
       case 'record-again': if (this.choice) this.startTraining(this.choice); break;
@@ -742,7 +785,6 @@ export class MotifSession {
         this.fail('rejected', 'Profile not used', ['You chose not to use this saved setup. Nothing was changed.']);
         break;
       }
-      case 'start-recalibration': this.recalibrating = true; this.adding = false; this.beginBaseline(); break;
       case 'restart-recalibration': this.beginBaseline(); break;
       case 'keep-current': this.keepCurrent(); break;
       case 'same-movement': {
@@ -949,9 +991,19 @@ export class MotifSession {
     this.recommendation = { id: proposal.id, reasons: recommended.reasons };
   }
 
-  private comfortPreview(): { label: string; mode: ScanMode } | null {
-    const proposal = this.singleMovementProposal();
-    return proposal ? { label: describeMapping(this.mappingSet(), proposal), mode: proposal.mode } : null;
+  private comfortPreview(): { label: string; mode: ScanMode; parts: Array<{ label: string; action: ControlAction }> } | null {
+    const restoring = this.restoring;
+    if (this.stage === 'comfort' && restoring) {
+      const valid = validateMapping(restoring.models, restoring.profile.mapping.assignments);
+      return valid.ok ? { label: describeMapping(restoring.models, valid.value), mode: valid.value.mode, parts: this.partsOf(restoring.models, valid.value) } : null;
+    }
+    const proposal = this.comfortProposal();
+    const set = this.mappingSet();
+    return proposal ? { label: describeMapping(set, proposal), mode: proposal.mode, parts: this.partsOf(set, proposal) } : null;
+  }
+
+  private partsOf(models: readonly GestureModel[], mapping: Mapping): Array<{ label: string; action: ControlAction }> {
+    return models.flatMap((model) => { const action = mapping.assignments[model.id]; return action ? [{ label: model.label, action }] : []; });
   }
 
   /** Caregiver form: any valid assignment for the movements in play; still needs approval. */
@@ -1252,13 +1304,13 @@ export class MotifSession {
   /** The communication scan list, rebuilt from state so the panel and the Clear confirmation can replace it. */
   private communicationTargets(): ScanTarget[] {
     const control = (id: string): ScanTarget => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' });
+    if (this.confirmingRecalibrate) return ['recalibrate-no', 'recalibrate-yes'].map(control);
     if (this.confirmingClear) return ['clear-no', 'clear-yes'].map(control);
     const phrases: ScanTarget[] = this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const }));
     if (this.helperOpen) {
       const assisted = this.inputMode === 'assisted';
       const yours = assisted ? [this.hasApproved ? 'use-gesture' : 'setup-gesture']
-        : ['change-controls', ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate',
-          ...(this.approvedModels.length > 1 ? ['tiring'] : [])];
+        : ['change-controls', ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
       const speed = assisted || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
       return ['close-helper', ...yours, ...speed, ...(this.message.length ? ['clear'] : []), 'practice', 'pause'].map(control);
     }
@@ -1268,9 +1320,9 @@ export class MotifSession {
   }
 
   private enterCommunication(options: { keepPanel?: boolean } = {}): void {
-    const { helperOpen, confirmingClear } = this;
+    const { helperOpen, confirmingClear, confirmingRecalibrate } = this;
     this.setStage('communication');
-    if (options.keepPanel) { this.helperOpen = helperOpen; this.confirmingClear = confirmingClear; }
+    if (options.keepPanel) { this.helperOpen = helperOpen; this.confirmingClear = confirmingClear; this.confirmingRecalibrate = confirmingRecalibrate; }
     this.startScanner(this.communicationTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
@@ -1370,7 +1422,7 @@ export class MotifSession {
       case 'undo': if (this.message.length) { this.message = this.message.slice(0, -1); this.announce('Removed the last phrase.'); } break;
       case 'repeat': if (this.lastSpoken) { this.speech.speak(this.lastSpoken); this.announce(`Saying again: ${this.lastSpoken}`); } break;
       case 'helper': this.helperOpen = true; this.announce('Helper options.'); break;
-      case 'close-helper': this.helperOpen = false; this.announce('Helper closed.'); break;
+      case 'close-helper': this.helperOpen = false; this.confirmingRecalibrate = false; this.announce('Helper closed.'); break;
       case 'clear': if (this.message.length) { this.confirmingClear = true; this.helperOpen = false; this.announce('Clear the whole message? Keep it is first.'); } break;
       case 'clear-no': this.confirmingClear = false; this.announce('Message kept.'); break;
       case 'clear-yes': this.message = []; this.confirmingClear = false; this.announce('Message cleared.'); break;
@@ -1379,13 +1431,6 @@ export class MotifSession {
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'practice': this.enterPractice(); this.announce('Practice: selections are not spoken.'); break;
       case 'change-controls': if (this.hasApproved && this.inputMode === 'gesture') this.enterMapping(); break;
-      case 'tiring':
-        if (this.hasApproved && this.inputMode === 'gesture' && this.approvedModels.length > 1) {
-          this.setStage('tiring');
-          this.restrictedScanner(this.approvedModels);
-          this.announce('Which movement is tiring? Nothing changes until you approve new controls.');
-        }
-        break;
       case 'add-movement':
         if (this.hasApproved && this.inputMode === 'gesture' && this.approvedModels.length < MAX_GESTURES) {
           this.adding = true;
@@ -1393,7 +1438,21 @@ export class MotifSession {
           this.announce('Add a movement: a helper chooses it on screen, or keep your current setup.');
         }
         break;
-      case 'recalibrate': if (this.hasApproved && this.inputMode === 'gesture') this.enterRecalibrateConfirm(); break;
+      case 'recalibrate':
+        if (this.hasApproved && this.inputMode === 'gesture') {
+          this.confirmingRecalibrate = true;
+          this.announce('Recalibrating turns communication off until the new movement is approved. Keep current setup is first.');
+        }
+        break;
+      case 'recalibrate-no': this.confirmingRecalibrate = false; this.announce('Nothing changed.'); break;
+      case 'recalibrate-yes':
+        this.confirmingRecalibrate = false;
+        if (this.camera !== 'running') { this.announce('Start the camera first. Nothing was changed.'); break; }
+        this.helperOpen = false;
+        this.recalibrating = true;
+        this.adding = false;
+        this.beginBaseline();
+        break;
       case 'use-gesture': this.useGesture(); break;
       case 'setup-gesture': this.setStage('welcome'); this.announce('Set up a movement: start the camera, then the rest check.'); break;
     }
@@ -1519,7 +1578,7 @@ export class MotifSession {
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
       proposals: this.stage === 'mapping' ? this.proposalCards() : [],
-      helperOpen: this.helperOpen, confirmingClear: this.confirmingClear, movementSeen: this.movementSeen(),
+      helperOpen: this.helperOpen, confirmingClear: this.confirmingClear, confirmingRecalibrate: this.confirmingRecalibrate, movementSeen: this.movementSeen(),
       comfortPreview: this.comfortPreview(),
     };
     for (const listener of this.listeners) listener();

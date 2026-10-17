@@ -111,12 +111,15 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         <p>Observations from this short session, not a guarantee of future accuracy.</p>
       </div>
       <h2 className="question-heading">{preview ? 'Comfortable enough to use?' : 'Comfortable enough to repeat?'}</h2>
-      {preview && snapshot.candidate && <MovementName initial={snapshot.candidate.label} session={session} />}
+      {preview && snapshot.candidate && snapshot.approvedModels.length === 0 && <MovementName initial={snapshot.candidate.label} session={session} />}
       {preview && (
-        <div id="comfort-preview" className="mapping-explainer comfort-preview"><Icon name="check" />
+        <div id="comfort-preview" className="mapping-explainer comfort-preview proposal-card-static">
+          <h2>{MODE_HEADINGS[preview.mode]}</h2>
+          <ControlChips parts={preview.parts} />
           <p>Approving turns on: <strong>{preview.label}</strong>. {preview.mode === 'auto'
             ? 'Choices highlight one at a time on their own, and your held movement selects the highlighted choice. Nothing is spoken until you choose it.'
-            : 'The highlight moves only when you make your movement.'} Nothing is on until you approve.</p>
+            : 'The highlight moves only when you make your movement.'} Nothing is on until you approve.
+            {snapshot.recalibrating && snapshot.approvedModels.length > 1 ? ' Your other movements will be turned off.' : ''}</p>
         </div>
       )}
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} describedBy={preview ? 'comfort-preview' : undefined} />
@@ -185,16 +188,6 @@ export function MappingConfirmView({ snapshot, session }: ViewProps) {
         <ControlChips parts={parts} />
         <p>{pending?.mode === 'step' ? 'If no movement is seen for a minute, scanning becomes automatic again.' : 'Your select movement picks the highlighted choice.'}</p>
       </div>
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
-    </>
-  );
-}
-
-export function RecalibrateView({ snapshot, session }: ViewProps) {
-  return (
-    <>
-      <Heading eyebrow="RECALIBRATE" title={<>Fresh start,<br /><em>same you.</em></>}
-        lead="Recording again turns communication off until the new movement is approved. You can keep your current setup." />
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
     </>
   );

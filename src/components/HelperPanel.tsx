@@ -10,17 +10,19 @@ const TILES: Record<string, { label: string; text: string }> = {
   'change-controls': { label: 'Change controls', text: 'Choose what each movement does' },
   'add-movement': { label: 'Add a movement', text: 'Use another movement too' },
   recalibrate: { label: 'Recalibrate', text: 'Check your movement again' },
-  tiring: { label: 'A movement is tiring', text: 'Use it less' },
   'setup-gesture': { label: 'Set up a movement', text: 'Choose and check a movement' },
   'use-gesture': { label: 'Use my movement', text: 'Go back to your movement' },
 };
-const TILE_ORDER = ['change-controls', 'add-movement', 'recalibrate', 'tiring', 'setup-gesture', 'use-gesture'];
+const TILE_ORDER = ['change-controls', 'add-movement', 'recalibrate', 'setup-gesture', 'use-gesture'];
 
 /** Everything a helper or the settings need, one level below the communication board. */
 export function HelperPanel({ snapshot, session }: ViewProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   const [diagnostics, setDiagnostics] = useState(false);
-  useEffect(() => { heading.current?.focus(); }, []);
+  const question = useRef<HTMLParagraphElement>(null);
+  const confirming = snapshot.confirmingRecalibrate;
+  // Focus: the question while confirming recalibration, the panel heading otherwise (opening, and after No).
+  useEffect(() => { (confirming ? question.current : heading.current)?.focus(); }, [confirming]);
   const activate = (id: string) => session.selectTarget(id);
   const offered = new Set(snapshot.scan?.targets.map((target) => target.id) ?? []);
   const tiles = TILE_ORDER.filter((id) => offered.has(id));
@@ -34,8 +36,19 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
           <h2 ref={heading} tabIndex={-1}>Helper options</h2>
           <p>For a helper or for settings. Your message is kept. Scan speed: {seconds} s.</p>
         </div>
-        <ScanButton id="close-helper" snapshot={snapshot} onActivate={activate} disabled={paused}>Close helper</ScanButton>
+        {!confirming && <ScanButton id="close-helper" snapshot={snapshot} onActivate={activate} disabled={paused}>Close helper</ScanButton>}
       </div>
+      {confirming && (
+        <div className="recalibrate-confirm">
+          <p className="message-ask" ref={question} tabIndex={-1}>Start recalibration?</p>
+          <p className="helper-note">Recalibrating turns communication off until the new movement is approved.</p>
+          <div className="helper-row">
+            <ScanButton id="recalibrate-no" snapshot={snapshot} onActivate={activate} disabled={paused}>Keep current setup</ScanButton>
+            <ScanButton id="recalibrate-yes" snapshot={snapshot} onActivate={activate} primary disabled={paused}>Start recalibration</ScanButton>
+          </div>
+        </div>
+      )}
+      {!confirming && <>
       {tiles.length > 0 && (
         <>
           <h3 className="helper-group">Your controls</h3>
@@ -89,6 +102,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
           </div>
         )}
       </details>
+      </>}
     </section>
   );
 }

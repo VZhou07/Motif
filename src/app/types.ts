@@ -6,7 +6,7 @@ import type { TrainingDiagnostics } from '../engine/calibration';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
-  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm' | 'tiring'
+  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'tiring'
   | 'discover' | 'discover-results';
 
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
@@ -137,10 +137,11 @@ export interface SessionSnapshot {
   /** Communication panel state; never stored in a profile. */
   helperOpen: boolean;
   confirmingClear: boolean;
+  confirmingRecalibrate: boolean;
   /** True for 1 s after a recognised movement in communication or practice (gesture mode only). */
   movementSeen: boolean;
   /** On the first-movement comfort screen: what Approve will turn on (null elsewhere). */
-  comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
+  comfortPreview: { label: string; mode: 'auto' | 'step'; parts: Array<{ label: string; action: 'select' | 'next' | 'previous' | 'pause' }> } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
 }

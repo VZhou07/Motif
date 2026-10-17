@@ -12,7 +12,7 @@ type ProgressInput = Pick<SessionSnapshot, 'stage' | 'restoring' | 'adding' | 'r
 export function setupProgress(snapshot: ProgressInput): SetupProgress | null {
   const { stage } = snapshot;
   const restoring = !!snapshot.restoring;
-  if (stage === 'tiring' || stage === 'recalibrate-confirm') return null;
+  if (stage === 'tiring') return null;
   if (stage === 'mapping' || stage === 'mapping-confirm') {
     if (snapshot.approvedModels.length > 0 && !snapshot.candidate && !restoring && !snapshot.adding && !snapshot.recalibrating) return null;
   }
