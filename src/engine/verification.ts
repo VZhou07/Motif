@@ -27,6 +27,11 @@ export function evaluatePositiveAttempt(
   const malformed = actionWindow !== undefined && windowInvalid(frames, actionWindow)
   const runtime = new GestureRuntime(modelList)
   const events: VerificationResult['events'] = []
+  const expectedModel = modelList.find((model) => model.id === expected)
+  const simultaneous = new Map<string, string>()
+  let peak = -Infinity
+  let soloSince: number | undefined
+  let longestSoloMs = 0
   let preAction: { phase: RuntimePhase; neutral: boolean } | undefined
   for (const frame of frames) {
     const update = runtime.step(frame)
@@ -34,8 +39,38 @@ export function evaluatePositiveAttempt(
     if (actionWindow && !malformed && frame.timestampMs < actionWindow.startMs) {
       preAction = { phase: update.phase, neutral: update.neutral }
     }
+    const inAction = !malformed && (!actionWindow || frame.timestampMs >= actionWindow.startMs && frame.timestampMs < actionWindow.endMs)
+    if (inAction) {
+      const active = modelList.filter((model) => model.direction * (frame.values[model.feature]! - model.baselineCenter) >= model.activationThreshold)
+      if (active.length > 1) active.forEach((model) => simultaneous.set(model.id, model.label))
+      if (expectedModel) peak = Math.max(peak, expectedModel.direction * (frame.values[expectedModel.feature]! - expectedModel.baselineCenter))
+      const observation = observeGestures(modelList, frame)
+      if (observation.kind === 'active' && observation.gestureId === expected) {
+        soloSince ??= frame.timestampMs
+        longestSoloMs = Math.max(longestSoloMs, frame.timestampMs - soloSince)
+      } else soloSince = undefined
+    }
   }
   const reasons: string[] = []
+  // A correct early event cannot make a later ambiguous gesture reliable.
+  // Labels are editable; distinctness is always based on model IDs.
+  if (simultaneous.size > 1) reasons.push(`Multiple movements reached their activation thresholds together: ${[...simultaneous.values()].join(', ')}. No ambiguous input is accepted.`)
+  const explainEvents = (observed: VerificationResult['events']): void => {
+    const label = expectedModel?.label ?? 'the requested movement'
+    if (!observed.length) {
+      reasons.push(`No recognition of “${label}” occurred during Action.`)
+      if (expectedModel && Number.isFinite(peak)) {
+        const unit = expectedModel.feature.startsWith('head') ? '°' : ''
+        reasons.push(`Observed peak ${peak.toFixed(3)}${unit}; activation needs ${expectedModel.activationThreshold.toFixed(3)}${unit}. Longest unambiguous hold ${Math.round(longestSoloMs)} ms; required ${expectedModel.activationMs} ms. This measurement does not establish that fresh rest armed the recognizer.`)
+      }
+    } else if (observed.length > 1) {
+      reasons.push(`Detected ${observed.length} recognitions during Action; one “${label}” recognition is required. Relax between holds.`)
+    } else {
+      const actual = modelList.find((model) => model.id === observed[0]!.gestureId)?.label ?? 'another movement'
+      reasons.push(`Recognized “${actual}” instead of “${label}”.`)
+    }
+    reasons.push('The attempt must produce exactly one recognition of the intended movement.')
+  }
   if (!expected || !modelList.some((model) => model.id === expected)) reasons.push('The requested movement is not in the frozen model set.')
   if (malformed) reasons.push('The Action window is invalid.')
   else if (actionWindow) {
@@ -45,12 +80,12 @@ export function evaluatePositiveAttempt(
       reasons.push('A recognition occurred outside Action.')
     }
     if (inside.length !== 1 || inside[0]?.gestureId !== expected) {
-      reasons.push('The attempt must produce exactly one recognition of the intended movement.')
+      explainEvents(inside)
     }
   } else {
     if (observeGestures(modelList, frames[0]!).kind !== 'neutral') reasons.push('Begin the attempt at rest.')
     if (events.length !== 1 || events[0]?.gestureId !== expected) {
-      reasons.push('The attempt must produce exactly one recognition of the intended movement.')
+      explainEvents(events)
     }
   }
   if (!runtime.snapshot.armed || !runtime.snapshot.neutral) reasons.push('Return to rest after the movement.')
