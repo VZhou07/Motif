@@ -54,7 +54,9 @@ export const DECISION_LABELS = {
 export type DecisionId = keyof typeof DECISION_LABELS;
 
 const CONTROL_LABELS: Record<string, string> = {
-  speak: 'Speak message', clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
+  speak: 'Speak', undo: 'Undo', repeat: 'Say it again', helper: 'Helper', 'close-helper': 'Close helper',
+  'clear-yes': 'Yes, clear it', 'clear-no': 'Keep it',
+  clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
   practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Finish practice',
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
@@ -147,6 +149,10 @@ export class MotifSession {
   private phrases = [...STARTER_PHRASES];
   private message: string[] = [];
   private lastSpoken: string | null = null;
+  private helperOpen = false;
+  private confirmingClear = false;
+  private lastMovementAt: number | null = null;
+  private movementSeenShown = false;
   private spokenPrompts = false;
   private practice = { selections: 0, last: null as string | null };
   private announcement = '';
@@ -251,6 +257,7 @@ export class MotifSession {
       this.scanner.tick(nowMs);
       changed ||= this.scanner.snapshot.index !== before;
     }
+    if (this.movementSeenShown && !this.movementSeen()) changed = true;
     if (changed) this.publish();
   }
 
@@ -432,6 +439,8 @@ export class MotifSession {
 
   private setStage(stage: Stage): void {
     this.stage = stage;
+    this.helperOpen = false;
+    this.confirmingClear = false;
     this.processor.reset();
     this.runtime = null;
     this.scanner = null;
@@ -1019,6 +1028,7 @@ export class MotifSession {
       this.cues?.stop();
       this.message = [];
       this.lastSpoken = null;
+      this.lastMovementAt = null;
       this.candidate = null;
       this.diagnosticModel = null;
       this.calibrationReport = null;
@@ -1070,6 +1080,7 @@ export class MotifSession {
     this.phrases = [...STARTER_PHRASES];
     this.message = [];
     this.lastSpoken = null;
+    this.lastMovementAt = null;
     this.practice = { selections: 0, last: null };
     this.trials = [];
     this.notice = null;
@@ -1238,18 +1249,36 @@ export class MotifSession {
     this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
-  private enterCommunication(): void {
+  /** The communication scan list, rebuilt from state so the panel and the Clear confirmation can replace it. */
+  private communicationTargets(): ScanTarget[] {
+    const control = (id: string): ScanTarget => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' });
+    if (this.confirmingClear) return ['clear-no', 'clear-yes'].map(control);
+    const phrases: ScanTarget[] = this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const }));
+    if (this.helperOpen) {
+      const assisted = this.inputMode === 'assisted';
+      const yours = assisted ? [this.hasApproved ? 'use-gesture' : 'setup-gesture']
+        : ['change-controls', ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate',
+          ...(this.approvedModels.length > 1 ? ['tiring'] : [])];
+      const speed = assisted || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
+      return ['close-helper', ...yours, ...speed, ...(this.message.length ? ['clear'] : []), 'practice', 'pause'].map(control);
+    }
+    return this.message.length
+      ? [control('speak'), control('undo'), ...phrases, control('pause'), control('helper')]
+      : [...phrases, ...(this.lastSpoken ? [control('repeat')] : []), control('pause'), control('helper')];
+  }
+
+  private enterCommunication(options: { keepPanel?: boolean } = {}): void {
+    const { helperOpen, confirmingClear } = this;
     this.setStage('communication');
-    const speed = this.inputMode === 'assisted' || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
-    const controls = this.inputMode === 'assisted'
-      ? ['speak', 'clear', 'pause', ...speed, 'practice', this.hasApproved ? 'use-gesture' : 'setup-gesture']
-      : ['speak', 'clear', 'pause', ...speed, 'practice', 'change-controls', ...(this.approvedModels.length > 1 ? ['tiring'] : []),
-        ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
-    const targets: ScanTarget[] = [
-      ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
-      ...controls.map((id) => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' as const })),
-    ];
-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+    if (options.keepPanel) { this.helperOpen = helperOpen; this.confirmingClear = confirmingClear; }
+    this.startScanner(this.communicationTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+  }
+
+  /** After a communication selection the list may change; the highlight restarts at the first item. */
+  private refreshCommunication(nowMs: number, before: ScanController | null): void {
+    if (this.stage !== 'communication' || !this.scanner || this.scanner !== before) return;
+    this.scanTargets = this.communicationTargets();
+    this.scanner.setTargets(this.scanTargets.map((target) => target.id), nowMs);
   }
 
   private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
@@ -1275,6 +1304,7 @@ export class MotifSession {
     if (this.isRoutedStage()) this.countUse(update.event?.gestureId, update.cancelCause === 'released' || update.cancelCause === 'band' ? update.cancelledId : undefined);
     // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
     const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
+    if (this.isRoutedStage() && (update.started || update.event)) this.lastMovementAt = nowMs;
     if (update.started) {
       this.idleValidMs = 0;
       if (actionOf(update.started) === 'select') scanner.beginSelection(nowMs);
@@ -1305,7 +1335,7 @@ export class MotifSession {
   /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
   private fallBackToAutomatic(): void {
     this.stepFallback = true;
-    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
+    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication({ keepPanel: true });
     this.announce('No movement for a minute, so scanning is now automatic. Your select movement still selects; helpers can use the buttons.');
   }
 
@@ -1333,10 +1363,17 @@ export class MotifSession {
       return;
     }
     if (this.stage !== 'communication') return;
-    if (phrase) { this.message = [...this.message, phrase]; this.announce(`Added "${phrase}".`); return; }
+    const before = this.scanner;
+    if (phrase) { this.message = [...this.message, phrase]; this.announce(`Added "${phrase}".`); this.refreshCommunication(nowMs, before); return; }
     switch (id) {
       case 'speak': this.speakMessage(); break;
-      case 'clear': this.message = []; this.announce('Message cleared.'); break;
+      case 'undo': if (this.message.length) { this.message = this.message.slice(0, -1); this.announce('Removed the last phrase.'); } break;
+      case 'repeat': if (this.lastSpoken) { this.speech.speak(this.lastSpoken); this.announce(`Saying again: ${this.lastSpoken}`); } break;
+      case 'helper': this.helperOpen = true; this.announce('Helper options.'); break;
+      case 'close-helper': this.helperOpen = false; this.announce('Helper closed.'); break;
+      case 'clear': if (this.message.length) { this.confirmingClear = true; this.helperOpen = false; this.announce('Clear the whole message? Keep it is first.'); } break;
+      case 'clear-no': this.confirmingClear = false; this.announce('Message kept.'); break;
+      case 'clear-yes': this.message = []; this.confirmingClear = false; this.announce('Message cleared.'); break;
       case 'pause': this.pauseScan(nowMs); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
@@ -1360,6 +1397,7 @@ export class MotifSession {
       case 'use-gesture': this.useGesture(); break;
       case 'setup-gesture': this.setStage('welcome'); this.announce('Set up a movement: start the camera, then the rest check.'); break;
     }
+    this.refreshCommunication(nowMs, before);
   }
 
   private changeInterval(delta: number, nowMs: number): void {
@@ -1374,6 +1412,7 @@ export class MotifSession {
     const text = this.message.join('. ');
     const spoken = this.speech.speak(text);
     this.lastSpoken = text;
+    this.message = [];
     this.announce(spoken ? `Speaking: ${text}` : `Local speech is not available on this device. Your message is shown on screen: ${text}`);
   }
 
@@ -1442,6 +1481,11 @@ export class MotifSession {
     return null;
   }
 
+  private movementSeen(): boolean {
+    this.movementSeenShown = this.scanDriver === 'gesture' && this.isRoutedStage() && this.lastMovementAt !== null && this.clock() - this.lastMovementAt < 1_000;
+    return this.movementSeenShown;
+  }
+
   private publish(): void {
     const scanner = this.scanner?.snapshot;
     const runtime = this.runtime?.snapshot;
@@ -1465,6 +1509,7 @@ export class MotifSession {
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
+      helperOpen: this.helperOpen, confirmingClear: this.confirmingClear, movementSeen: this.movementSeen(),
       comfortPreview: this.comfortPreview(),
     };
     for (const listener of this.listeners) listener();

@@ -132,6 +132,11 @@ export interface SessionSnapshot {
   setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */
   recommendation: { id: string; reasons: string[] } | null;
+  /** Communication panel state; never stored in a profile. */
+  helperOpen: boolean;
+  confirmingClear: boolean;
+  /** True for 1 s after a recognised movement in communication or practice (gesture mode only). */
+  movementSeen: boolean;
   /** On the first-movement comfort screen: what Approve will turn on (null elsewhere). */
   comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
