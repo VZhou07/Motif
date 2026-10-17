@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { StoreResult } from '../app/profiles';
+import { AUTO_PROFILE_NAME, type StoreResult } from '../app/profiles';
 import type { ViewProps } from './SetupViews';
 
 /** Helper-operated list of saved profiles: Restore (disarmed re-check) and Delete with confirmation (R7). */
@@ -12,6 +12,7 @@ export function SavedProfiles({ snapshot, session }: ViewProps) {
   return (
     <section className="settings-card" aria-labelledby="saved-profiles-heading">
       <h2 id="saved-profiles-heading" className="field-label">Saved on this device</h2>
+      <p>Your approved setup is kept here automatically, so refreshing the page does not lose it.</p>
       <p>Restoring a profile repeats the rest check and re-checks every saved movement. Nothing works until you approve its controls again.{running ? '' : ' Start the camera to restore.'}</p>
       {!available && <p className="status-notice">Saved profiles are not available in this browser (storage is blocked).</p>}
       {!readable && <p className="status-notice">Saved profiles on this device could not be read. Use Delete all to clear them.</p>}
@@ -26,7 +27,7 @@ export function SavedProfiles({ snapshot, session }: ViewProps) {
                   <button type="button" className="button button-quiet" onClick={() => setConfirming(null)}>Keep it</button>
                 </span>
               : <span className="button-row">
-                  <button type="button" className="button button-primary" disabled={!running} onClick={() => session.restoreProfile(name)}>Restore “{name}”</button>
+                  <button type="button" className="button button-primary" disabled={!running} onClick={() => session.restoreProfile(name)}>{name === AUTO_PROFILE_NAME ? 'Continue with your last setup' : `Restore “${name}”`}</button>
                   <button type="button" className="button button-quiet" onClick={() => setConfirming(name)}>Delete “{name}”</button>
                 </span>}
           </li>
