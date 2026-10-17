@@ -40,6 +40,10 @@ export interface FitGestureOptions {
   label?: string
 }
 
+/** Thresholds sit at these fractions of the rest-to-weakest-movement margin above the rest ceiling (R8 uses them too). */
+export const RELEASE_FRACTION = 0.25
+export const ACTIVATION_FRACTION = 0.65
+
 export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
   const { baseline, trials, feature, direction } = options
   if (trials.length !== 3) return { ok: false, reasons: ['Record three separate training attempts.'] }
@@ -91,7 +95,7 @@ export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
   if (!Number.isFinite(margin) || margin < Math.max(3 * statistics.noise, 3 * featureNoiseFloor(feature))) {
     return { ok: false, reasons: ['The movement overlaps resting variation. Try a different comfortable movement or record again.'] }
   }
-  const releaseThreshold = restCeiling + margin * 0.25
+  const releaseThreshold = restCeiling + margin * RELEASE_FRACTION
   // Every repetition must return to the original baseline, not just to a new held expression.
   if (stableRestPhases.some((phase) => quantile(phase, 0.9) > releaseThreshold)) {
     return { ok: false, reasons: ['An attempt did not return to a stable resting position.'] }
@@ -105,7 +109,7 @@ export function fitGesture(options: FitGestureOptions): Result<GestureModel> {
     value: {
       id: options.id ?? `${feature}:${direction}`, label: options.label ?? feature,
       feature, direction, baselineCenter: statistics.center,
-      activationThreshold: restCeiling + margin * 0.65, releaseThreshold,
+      activationThreshold: restCeiling + margin * ACTIVATION_FRACTION, releaseThreshold,
       activationMs: 250, releaseMs: 350,
     },
   }
