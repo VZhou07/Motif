@@ -2,14 +2,21 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
-## Latest focused task — camera diagnostics and Rest / Action cues (R13)
+## Latest focused task — communication navigation and saved phrases (C1 / R14)
+
+- User (awake, 2026-10-17) asked for easier message navigation and saved/favourite messages, then approved planning C1. Base `ba15850` on branch `ethan-features`, clean tree.
+- State: **planned.** R14 revision 1 reviewed by r14_review: BLOCKING (B1 confirm stage, B2 auto-return clock, B3 profile version). Revision 2 APPROVED on re-check; its non-blocking wording notes are folded in. No application code changed. Implementation waits for the user's build instruction.
+- Owner: Claude Code coordinator. Files planned: new `src/app/vocabulary.ts`, `src/app/navigation.ts` (+tests); `src/app/profiles.ts`, `session.ts`, `types.ts`, `CommunicationView.tsx`, `SetupViews.tsx`, `styles.css`, `scripts/browser-check.mjs`, README/ACCEPTANCE/STATUS.
+- Next action: when the user says build, start C1a (`vocabulary.ts` + tests), then C1b–C1g in the R14 order. Every commit passes tsc and the full vitest suite. Add the cross-build duplicate-name note to README in C1g.
+
+## Previous focused task — camera diagnostics and Rest / Action cues (R13)
 
 - User reported calibration still fails; requested camera overlay, Rest↔Action beeps, Rest/Action only at five seconds each. Base `2ee25cf`. Focused task; overall Goal stays paused.
 - State: **software verified; real-user calibration/comfort/beep audibility pending.** R13 revision 1 and 2 independently APPROVED by overlay_review before the matching code. Independent r13_testing BLOCKING (pending-at-boundary fixture) → fixture fix → recheck PASS. Coordinator: tsc PASS; vitest 31 files/353 PASS; `npm run build` PASS; tester also ran browser-check 67/67 with a synthetic camera.
 - Behavior: trials alternate 5 s Rest / 5 s Action and share only the trailing Rest. Overlay shows live smoothed values, rest baseline, thresholds when learned, and recorded failure numbers. Low/high beeps on Rest/Action; mute on the camera panel. Held-out checks use an explicit Action window so shared Rest may begin in relaxation; last pre-Action frame must be `armed` and neutral; exactly one intended event inside Action.
 - Next person step: refresh `npm run dev`, uncover the camera, run ACCEPTANCE.md 3.2 and 3.6, read the overlay if it still fails. No real camera was opened here. Nothing pushed.
 
-## Previous focused task — return-to-rest rejection (R12)
+## Earlier focused task — return-to-rest rejection (R12)
 
 - User reported all attempted movements fail "An attempt did not return to the personal resting baseline." Base `7914520`, clean tree at start. This authorized a focused fix; the earlier overall Goal stays paused.
 - State: **T2 software verified; real-user calibration/comfort pending.** R12 revisions 1 and 2 independently APPROVED by rest_review before implementation; independent rest_tests final verdict PASS. All agents read the canonical checkpoint skill and four project docs. Worker ownership released; no partial code or running processes remain.

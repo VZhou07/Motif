@@ -597,3 +597,128 @@ Test exact5s Rest↔Action cycles across all training/held-out/cross-check/profi
 | R13 revision 1 | overlay_review | Read actual written design and implementation boundaries; no blockers. Boundary frame is already filtered but excluded from completed training; no held-out movement enters fitting. Pin continuous phase timing, exact neutral-only overlap and factual failure reports. | APPROVED |
 | R13 revision 2 | overlay_review | Full-recording explicit Action-window verification and failed-model diagnostics; pin `phase === 'armed' && neutral` on the last pre-Action frame; diagnostic model copy overlay-only. | APPROVED |
 | R13 revision 2 implementation | r13_testing | Ran tsc, vitest 353, build, browser 67/67. BLOCKING: pending-at-boundary fixture completed the dwell in Rest. Fixture changed to 150 ms pre-Action hold so the last Rest frame is still pending, one event inside Action, then rest; must fail with `Fresh rest did not arm before Action.` Recheck PASS (8/8 verification tests, tsc). Coordinator: 353 tests, typecheck, build. | PASS — software verified; real-user calibration/comfort pending |
+
+## R14 — Communication navigation and saved phrases (revision 2)
+
+Status: revision 1 drafted 2026-10-17 for checkpoint **C1**; r14_review BLOCKING (B1–B3). Revision 2 below resolves them in place and lists the changes at the end; r14_review re-check APPROVED revision 2 (notes folded in as wording fixes). Implementation waits for the user's build instruction. Scope change approved by the user on 2026-10-17 ("okay sure create a plan to implement it") after the feature list in conversation: grouped scanning, save-as-favourite, add/remove phrases, undo last, say again. Spelling keyboard, prediction, P2 and gesture-driven phrase editing stay excluded. No code until this revision is APPROVED and the user says to build.
+
+### Problem (measured from the code)
+
+- `enterCommunication` (`src/app/session.ts:1007-1018`) builds ONE flat scan list: 6 phrases then 9–10 controls in gesture-auto (15–16 targets). At the default 2 s interval one pass takes 30–32 s; every added phrase adds 2 s to every pass. Recalibrate is last.
+- Phrases are a fixed array of exactly 6 (`STARTER_PHRASES`, `src/app/types.ts:155`; `parseProfile` requires exactly 6, `src/app/profiles.ts:77`). `setPhrase` only overwrites a slot during setup stages (`session.ts:756`). No add/remove.
+- The composer has only Speak and Clear (whole message). No undo, no repeat, no way to keep a useful message.
+- `plan.md` forbids saving message history/composer text but allows "deliberately saved phrase vocabulary". Therefore favourites are an explicit, confirmed copy of the current message into the vocabulary, never an automatic history.
+
+### Vocabulary model (pure, new `src/app/vocabulary.ts`)
+
+```ts
+interface PhraseGroup { id: string; name: string; phrases: string[] }   // id: 'favourites' | 'g1'…; stable within a vocabulary
+interface Vocabulary { groups: PhraseGroup[] }                          // groups[0] is always Favourites
+```
+
+- Limits: at most 6 groups including Favourites; at most 12 phrases per group; group name 1–24 chars; phrase 1–120 chars after trim; no duplicate phrase within a group (case-insensitive, trimmed). Favourites cannot be renamed, deleted or moved.
+- Default vocabulary: Favourites (empty); "Quick" = Yes, No, Thank you; "Needs" = I need water, Please help me, I am uncomfortable. Same six starter phrases as today, just grouped.
+- Pure operations returning `Result<Vocabulary>`: `addPhrase`, `removePhrase`, `editPhrase`, `movePhrase`, `addGroup`, `renameGroup`, `removeGroup` (non-empty group needs an explicit `force`), `addFavourite`. Each validates all limits and never mutates input. Rejections carry plain-language reasons the UI shows as-is.
+
+### Scan levels (pure, new `src/app/navigation.ts`)
+
+`buildLevel(stage, level, vocabulary, controls) → ScanTarget[]`. `ScanTarget.kind` gains `'group'` and `'nav'`.
+
+- **Top (communication):** `speak`, `undo`, one `group:<id>` per group (Favourites first), `pause`, `more`.
+- **Inside a group:** `phrase:<groupId>:<index>` for each phrase, then `back`, then `pause`.
+- **More:** `clear`, `save-favourite`, `say-again`, `slower`/`faster` (when auto scanning or assisted), `practice`, `change-controls`, `tiring` (2+ movements), `add-movement` (below MAX_GESTURES), `recalibrate`, `back`, `pause`. Assisted mode keeps its own `use-gesture`/`setup-gesture` here.
+- **Confirm favourite:** `confirm-favourite`, `cancel-favourite`, `pause` (a communication level, not a stage; see Composer actions).
+- **Practice:** same top/group levels with `finish-practice` in place of `speak`/`undo`, no `more`; `use-previous` stays a top-level decision when allowed. Phrase picks count but are never added or spoken.
+- Pause is in EVERY level so the one-gesture user never needs Back→Pause (plan.md: Pause reachable through scanning). Alternative considered: Pause top-level only — saves one step per group pass but strands Pause up to a full group pass away; rejected for safety.
+- Lists are stable: empty Favourites and Undo/Say again with nothing to act on stay in place and only announce ("No favourites yet…", "Nothing to undo"). Selecting empty Favourites does NOT enter a level; the scan stays at top. Shifting targets would move what the user has learned to time.
+- Rough cost: top level 7 targets (14 s pass) vs 15–16 today; reaching Recalibrate becomes More (7th) + 8–10 inside, comparable to today and no longer taxing every phrase pass.
+
+### Session integration (`session.ts`)
+
+- New private state `level: 'top' | 'more' | { group: string } | { confirm: string }`. Entering communication/practice, stage changes, step fallback (announced) and profile restore reset to `top`. Every level change sets the scan index to 0 explicitly.
+- Level changes use `ScanController.setTargets` (existing; resets index to 0 and cancels any latch), plus `scanTargets` replacement. No new scanner is constructed, so `GestureRuntime` arming state is untouched: one action per hold and neutral rearming still apply exactly as today. Scanning-driven level changes happen only after a commit or on a counted wrap, and a latched scanner cannot wrap, so they never cancel a dwell. The one exception is a helper `openGroup`, which cancels an in-progress gesture latch (no action results) — stated honestly, tested.
+- Selecting `group:<id>` enters it (announce "Needs: 3 phrases"). Selecting a phrase appends it, announces, and returns to **top with the highlight on Speak** (index 0) — the next likely action. Routine choice; alternative "stay in group" is easy to switch later.
+- `back` returns to top. **Auto-return (counted wraps, not time):** a sub-level (group, More, confirm) returns to top after the scanner has wrapped from its last target to index 0 **twice via `tick`** with nothing in between. `move` and `setTargets` never count as a wrap. A latched scanner does not advance (`scanner.ts` tick guard), so this can never fire mid-dwell. The count resets on dwell start (`update.started`), any selection, pause/resume, an actual suspension flip (compare the scanner snapshot before/after; `driveScanner` calls `setSuspended(false)` on every valid frame, which must NOT reset), interval change, `setTargets` and helper `openGroup`. Detection lives in one session helper `afterTick(before, after)` called by BOTH tick call sites (`session.tick` and `driveScanner`), so the assisted driver follows the same rule. Step mode has no auto-return (Previous/Back cover it). Practice auto-returns the same way. Auto-return from the confirm level means Cancel, announced as "Not saved." The same applies to helper `openGroup` from the confirm level and to a step-mode idle fallback while on it.
+- `selectTarget` (helper click) keeps its rule: only ids in the current level are clickable. Separately, the UI shows group tabs at all times; a tab calls new `session.openGroup(id | 'top')`, allowed for conventional input from any level while not paused (helpers are not bound by scanning). Gesture and Space input still act only on the highlighted target.
+- Phrase ids change from `phrase:<i>` to `phrase:<groupId>:<i>`; `phraseFor` resolves by group id and index against the CURRENT vocabulary and returns undefined for stale ids.
+
+### Composer actions
+
+- `undo`: remove the last message entry; announce "Removed “X”." or "Nothing to undo."
+- `say-again`: re-speak `lastSpoken` (memory only, never stored); same speech-unavailable text as Speak.
+- `save-favourite`: if the message is empty announce and stop. Otherwise switch to the communication **level** `{ confirm: text }` (targets `confirm-favourite` "Save “…” to Favourites", `cancel-favourite`, `pause`), built with `setTargets` like every other level. The stage stays `communication`, so routed mapping semantics hold: only the select-mapped movement commits; Next/Previous move; a Pause-mapped movement pauses; unmapped movements are discarded. Step mode, the fail-closed path, assisted Space and helper rules are unchanged. Text longer/duplicate/full is checked BEFORE entering the level so the user is not asked to confirm something that cannot be saved. On confirm, `addFavourite(text)` (re-validated); on any rejection announce the reason and change nothing. Never evict silently. Afterwards return to top. The message itself is left unchanged.
+- Announce honestly. With an approved setup: "Saved to Favourites for this session. Save your profile to keep it." Assisted-only (no approved setup, so no profile Save): "Saved to Favourites until this page is closed." Nothing is written to storage until the existing opt-in profile Save, whose announcement and `SaveProfile` panel state how many favourites are included. Restoring a profile replaces in-memory favourites; if that discards unsaved ones, announce it ("Favourites from this session were replaced by the saved profile's").
+- Clear (in More) has no undo; this is deliberate and documented in ACCEPTANCE.
+
+### Helper editing (conventional input only)
+
+- Setup (`SetupOptions`): replace the six fixed fields with a group editor: add/rename/remove groups, add/edit/remove/move phrases, edit or remove Favourites. All calls go through vocabulary operations; errors show inline.
+- Communication: a collapsed "Edit phrases" panel. It is only enabled while **paused**, so the scanner can never select something being edited. **Resume rule (one rule):** resume keeps the same level and resets the index to 0; if the vocabulary changed while paused, resume rebuilds at top instead. Practice has no editor.
+- Gesture users cannot delete or reorder phrases (excluded: risk of accidental loss, more design work).
+
+### Profiles (`profiles.ts`)
+
+- **Split the two versions.** New `CONTAINER_VERSION = 1` stays at 1 for the `{ version, profiles }` storage wrapper (read/write in `createLocalProfileStore`); `PROFILE_VERSION` becomes 2 for entries only. So existing stores stay readable, Save keeps working, and an older build on the same origin sees v2 entries as rejected-and-untouched instead of locking the whole store. Unknown container versions stay unreadable as today.
+- Entry v2: `phrases` replaced by `vocabulary` with exact-key validation of every group (`id`, `name`, `phrases`) and every limit above; Favourites first with id `favourites`; other ids match `^g[1-9][0-9]*$`, unique, no `:`. New group ids are max+1 so a removed id is never reused within a vocabulary; `phrase:<groupId>:<i>` stays unambiguous.
+- Entry v1 still loads: migrate on read to `{ version: 2, …, vocabulary: { groups: [Favourites [], { id: 'g1', name: 'Phrases', phrases: <the six stored phrases> }] } }` (keeps a helper's customized wording; does not guess groups), then validate as v2. `indexOf`/replace-by-name use the migrated parse. Stored bytes of v1 entries are not touched until that entry is explicitly saved again. Unknown entry versions (e.g. 3) are rejected and kept untouched (existing behaviour).
+- `signature()` uses the vocabulary, so the "unsaved changes" indicator covers new favourites and edits.
+
+### Failure modes and how they are handled
+
+| Risk | Handling |
+| --- | --- |
+| A dwell started on a group tile completes after the level changed | Scanning-driven level changes only follow a commit or a counted wrap, and a latched scanner cannot wrap. A helper `openGroup` during a dwell cancels the latch with no action (fails safe). Both tested. |
+| Tracking lost inside a group | Existing fail-closed path; level is kept (no surprise move); auto-return count resets (conservative). |
+| Pause pressed inside a sub-level | Works from every level; Resume keeps the level, index 0 (top if vocabulary changed while paused). |
+| User stranded in a group in auto mode | Back + Pause in every level; auto-return after 2 counted wraps (gesture-auto, assisted, practice). |
+| Step fallback rebuilds the scanner | Resets to top and announces (existing announce extended). |
+| Vocabulary edited during scanning | Only possible while paused; Resume rebuilds at top; stale phrase ids resolve to nothing. |
+| Favourite too long / duplicate / full | Rejected with reason; message unchanged; nothing evicted. |
+| Old v1 profile / older build | Container stays v1; v1 entries migrate on read, bytes untouched until re-saved; older builds reject v2 entries individually, not the whole store. |
+| Wrong movement on Save-to-Favourites | Confirm is a routed communication level: only the select-mapped movement commits. Tested with Next/Select and Pause mappings. |
+| Privacy | Message/lastSpoken never stored; favourites stored only via explicit profile Save, as deliberate vocabulary. |
+| Accessibility | Level shown as heading/breadcrumb ("Needs · 3 phrases"), group tiles named "Open Needs, 3 phrases", one polite announcement per level change (no per-tick chatter), same large targets and reduced-motion rules. |
+
+### Implementation order (small commits; each passes tsc + its tests)
+
+Every commit must pass `npx tsc --noEmit` and the FULL `npx vitest run`, not only its new tests; browser-check runs at C1b, C1d, C1f, C1g.
+
+1. C1a `vocabulary.ts` + tests (limits, every operation, immutability, duplicate/full/too-long, id pattern and max+1).
+2. C1b `profiles.ts` container/entry version split, v2 entry, v1 migration + tests; session, `SessionSnapshot` (`phrases` → `vocabulary`), `approveMapping` restore and `SetupViews` editor input switch to `Vocabulary`, with the flat scan list still built from it (no scanning change yet; existing tests updated only for the id format; `App.test.tsx:109-117` moves from `setPhrase` to the new editor call). Update `browser-check.mjs` seeding to a v1 entry so the browser exercises migration.
+3. C1c `navigation.ts` + tests (level contents for gesture auto/step, assisted, practice, confirm, 1–4 movements). `ScanTarget.kind` adds `'group' | 'nav'`.
+4. C1d session levels: enter/back/return-to-top, counted-wrap auto-return via `afterTick`, Pause in every level, practice routing (navigation and Pause handled before the practice branch of `activate`), step mode and assisted through levels, `openGroup`, snapshot `level` view (kind, group id/name, phrase count). Add `reach(id)` to `session.test-support.ts` (opens the right level first) and adapt existing session tests, `App.test.tsx` and the browser assisted-Space check by adding navigation only — no assertion weakened. Minimal `CommunicationView` update so the app stays usable in this commit.
+5. C1e composer actions: undo, say again, save-favourite confirm level. Session tests, including an edit while paused on confirm that makes the text a duplicate (re-validation rejects it).
+6. C1f UI: CommunicationView level rendering, group tabs, breadcrumb, composer buttons; setup group editor; paused edit panel. App tests + styles.
+7. C1g browser-check updates (communication navigation, no storage write before Save), README/ACCEPTANCE additions (a person times reaching a phrase and Recalibrate with one movement), STATUS.
+
+### Tests that must exist before C1 is called software verified
+
+- One-gesture auto: reach every phrase, Speak, Pause and Recalibrate using only select events; count scan steps; no target unreachable.
+- Two-gesture step: Next/Previous/Select through levels; Back; no auto-return in step mode.
+- Assisted Space through levels; helper `openGroup` and clicks only on current level; nothing clickable while paused.
+- Dwell spanning a scan boundary on a group tile selects that group; cancelled dwell on a group does nothing; a dwell spanning the would-be second wrap still selects its latched item and no auto-return happens.
+- Next/Select step mapping: Next never selects in a sub-level or on confirm; Back reachable by Next. Pause-mapped movement on confirm pauses and does not save.
+- Tracking loss inside a group: no action, level kept, auto-return clock frozen; recovery needs fresh neutral.
+- Auto-return after exactly 2 counted wraps in gesture-auto, assisted and practice, not before; reset by dwell start, selection, pause/resume, suspension, interval change inside More, `setTargets` and `openGroup`; hidden tab inside a group resets it in assisted mode; continuous valid frames still allow auto-return (no reset on non-flipping `setSuspended(false)`); confirm auto-return means Cancel.
+- Helper `openGroup` during a gesture dwell cancels the latch and produces no action.
+- Selecting a phrase emits one announcement (added + back to top), not two.
+- Undo/Say again/Save favourite incl. empty, duplicate, too long, full, cancel; storage spy proves no write during Undo, Say again, confirm or cancel — only on explicit profile Save.
+- Profile v2 round trip; v1 container with v1 entries lists them migrated; Save into a v1 container keeps other v1 entries unchanged (compare re-stringified raw entries); replace a v1 entry by name; mixed v1/v2 container lists both; unknown entry version rejected and untouched; unknown container version unreadable; malformed vocabulary/ids rejected per rule; unsaved indicator after a new favourite; Save announcement counts favourites.
+- Practice through levels speaks/adds nothing.
+- Full suite, typecheck, production build, browser-check pass.
+
+Human acceptance (pending, needs a person): whether grouped scanning is actually faster and less tiring with a real movement; whether the default groups make sense; whether auto-return timing feels right.
+
+### Revision 2 changes (resolving r14_review)
+
+- B1: Save-to-Favourites confirmation is a communication level `{ confirm }`, not a new stage, so the approved mapping still decides which movement selects; validation happens before entering it; tests with Next/Select and Pause mappings.
+- B2: auto-return counts scanner wraps through `tick` in one `afterTick` helper used by both tick sites (assisted included), with explicit reset causes; a latched scanner cannot wrap, so it never fires mid-dwell. Helper `openGroup` cancelling a latch is stated and tested; the failure table is corrected.
+- B3: `CONTAINER_VERSION` (1) split from entry `PROFILE_VERSION` (2); per-entry migration, byte-preservation and mixed-container tests; older builds reject only v2 entries.
+- M1 full-suite rule, `reach(id)` helper and per-commit test/browser updates; M2 practice routing; M3 one Resume rule; M4 empty Favourites does not open; M5 snapshot/type changes named in the order; M6 id pattern and max+1; M7 privacy wording, favourites count on Save, restore announcement; M8 tests added; M9 Clear has no undo (documented), Speak-after-pick left for human check; M10 corrected counts, plan.md Communication row pointer.
+
+### R14 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| R14 revision 2 | r14_review (re-check) | B1–B3 resolved; no new blockers. Notes: suspension reset vs freeze, reset only on a real flip, leftover stage wording, function name, byte-identical wording, confirm-level cancels, `setPhrase` test, pass count, cross-build duplicate names (README line in C1g). All wording fixed in place. | APPROVED |
+| R14 revision 1 | r14_review | B1 confirm stage loses routed mapping (any movement would save); B2 time-based auto-return can cancel a latched dwell and skips assisted; B3 shared container/entry version makes all saved profiles unreadable. M1–M10 non-blocking. All resolved in revision 2. | BLOCKING |
