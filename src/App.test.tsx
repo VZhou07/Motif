@@ -272,4 +272,21 @@ describe('Motif app', () => {
     expect(h.snap.stage).toBe('training');
     expect(h.snap.choice?.feature).toBe('jawOpen');
   });
+
+  it('explains an empty discovery and offers to look again after a discovery failure', () => {
+    const h = new Harness();
+    h.session.setCamera('running');
+    h.session.startBaseline();
+    h.run(10_500);
+    h.session.startDiscovery();
+    h.run(20_500);
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Nothing clear/);
+    expect(screen.getByText(/No repeated movement was clear enough/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Look again' }));
+    act(() => { for (let i = 0; i < 5; i += 1) { h.run(500); h.step(REST, 'missing'); } });
+    expect(h.snap.failure?.kind).toBe('discovery');
+    fireEvent.click(screen.getByRole('button', { name: 'Look for movements again' }));
+    expect(h.snap.stage).toBe('discover');
+  });
 });
