@@ -747,3 +747,44 @@ Merge of `main` (a0be7f0: automatic "Last setup", Continue skips the rest check 
 ### R17 review record
 - Reasoning: revision 1 NOT APPROVED (B1 failed restore left reusable times; B2 disclosures) → revision 2 APPROVED.
 - Testing: PASS with one requested test (saveProfile disclosure), added. tsc clean; vitest 31 files/393 PASS; build PASS. Mutations caught: forgetChecks removed, noReuse ignored, `<=` hour, carried restAt replaced, whole-set stamping, checks not loaded, future times, returnToStart without autosave check, approvedBaselineAt not copied, unknown id accepted. Equivalent/untestable: quick flag in the due filter (checkedAt only loaded when reusing), `checkedAt.clear()` in returnToStart.
+
+
+## UX comm screen: message bar, Undo, Repeat, Helper panel (branch ux-comm-screen, revision 1)
+User-approved mockup: https://claude.ai/artifact/W8t4tg1TKfoiHHrk9SZ4Cr (private). User asked that Change controls, Add a movement and the other important helper options be prominent. Base `1e17e06` (ux-landing), baseline tsc clean, vitest 34 files/461, build OK.
+
+### Session (src/app/session.ts, types.ts)
+- New private state: `helperOpen = false`, `confirmingClear = false`, `lastMovementAt: number | null = null`.
+- `communicationTargets(): ScanTarget[]` builds the scan list from state; `enterCommunication()` uses it and `refreshCommunication(nowMs)` swaps it in with `scanner.setTargets` (index back to 0, latch cancelled) after EVERY communication activation, so the highlight always restarts at the first item:
+  - confirmingClear: `clear-no` ("Keep it"), `clear-yes` ("Yes, clear it"). The safe choice is first.
+  - helperOpen: `close-helper`, then "Your controls" (gesture: `change-controls`, `add-movement` if < MAX_GESTURES, `recalibrate`, `tiring` if > 1 movement; assisted: `use-gesture` or `setup-gesture`), then `slower`, `faster` (when auto or assisted, as today), `clear` (only with a message), `practice`, then `pause`.
+  - message not empty: `speak`, `undo`, the 6 phrases, `pause`, `helper`.
+  - message empty: the 6 phrases, `repeat` (only once something was spoken), `pause`, `helper`.
+- `activate()` in communication: phrase appends; `undo` removes the last phrase only; `repeat` calls `speech.speak(lastSpoken)` and changes nothing else; `helper` opens, `close-helper` closes; `clear` sets confirmingClear and closes the panel; `clear-no` returns to the board with the message; `clear-yes` empties the message. No timers: nothing in this state is time-limited. Existing actions (`change-controls`, `add-movement`, `recalibrate`, `tiring`, `practice`, `slower`, `faster`, `use-gesture`, `setup-gesture`) keep their current behaviour; they are now reachable only while the panel is open, because `selectTarget` already refuses ids that are not in the current scan list. After `slower`/`faster` the panel stays open.
+- `enterCommunication()` resets helperOpen and confirmingClear (entering from practice, mapping, etc.), except when called from the step-idle fallback, which keeps both (`enterCommunication({ keepPanel: true })`). The message is never cleared by these transitions (unchanged).
+- Movement seen: in the gesture frame handler, when `update.event` fires in a routed stage (communication or practice), set `lastMovementAt = nowMs`. Snapshot `movementSeen` = gesture mode and `clock() - lastMovementAt < 1000`. Paused or not, any recognised event counts.
+- Labels: `speak` "Speak", `undo` "Undo", `repeat` "Say it again", `helper` "Helper", `close-helper` "Close helper", `clear-yes` "Yes, clear it", `clear-no` "Keep it". Step-fallback hint text says "open Helper, then Change controls".
+- Snapshot adds `helperOpen`, `confirmingClear`, `movementSeen`. Profiles never store the message, lastSpoken or these flags (unchanged privacy rule).
+
+### UI
+- `CommunicationView`: message bar first (region "Message"): count, message text ≥ 24px, Speak (primary) + Undo when there is a message; "Last spoken" + "Say it again" when empty and something was spoken; the Clear confirmation replaces the bar contents. Then the 3×2 phrase grid (no "+" icon; aria-label "Add “X” to message" kept), or the Helper panel in its place. Bottom row: Pause, Helper, one hint line. The paused state overlays the board with a Resume card. No "session-state" pill, no save paragraph, no evidence or Done row on the board (moved into the panel).
+- Practice: same layout; the bar shows "Practice · nothing is spoken", the count/last and Finish practice; no Helper.
+- New `HelperPanel.tsx`: header + Close; "Your controls" as large tiles with a one-line description (Change controls: Choose what each movement does; Add a movement: Use another movement too; Recalibrate: Check your movement again; A movement is tiring: Use it less; assisted: Set up a movement / Use my movement); "Scanning and message" as normal buttons with the current speed; then click-only `<details>`: Camera diagnostics (CameraDiagnostics + the signal dashboard), Setup evidence (EvidencePanel), and the saving note with "Done, back to start screen" (existing returnToStart rules). Phrase editing is NOT added (setPhrase is limited to setup stages; out of scope).
+- `CameraPanel` on communication/practice: compact (no diagnostics, dashboard or beeps checkbox); shows the tracking status line and a "Movement seen" status (role=status) that lights when `movementSeen`. The signal dashboard moves into an exported `SignalDashboard` component used by both.
+- Styles: new text ≥ 14px, message text ≥ 24px; scan highlight unchanged.
+
+### Failure modes
+- Accidental selections: Clear needs a second selection with Keep it first; Undo fixes one wrong phrase; settings are one level down.
+- Scan list changing under a latched selection: `setTargets` cancels the latch, so a hold that began on the old list selects nothing.
+- Tracking loss, Pause, hidden tab: unchanged scanner rules; message and panel state survive.
+- A helper click on an id from a stale render (panel closed meanwhile) is refused by the existing guard.
+- Assisted mode has no movement-seen light (false).
+
+### Tests (QA owns `src/app/ux-comm.acceptance.test.ts` and `src/ux-comm-ui.acceptance.test.tsx`)
+Rows C1-C14 in UX_ACCEPTANCE.md. Existing tests that select a moved control directly change only to open Helper first.
+
+### Revision 2 (review of revision 1: CHANGES REQUIRED, 3 blockers; fixed)
+- B1 Speak empties the message (as in the approved mockup): `speakMessage` sets `lastSpoken` to the text and clears `message`, whether or not a local voice exists; the bar then shows "Last spoken: …" (or "Shown on screen: …" when no voice is available) with "Say it again". A new message therefore costs no extra selections, and Clear (Helper, two steps) is only for abandoning an unspoken message. Existing tests that assumed Speak keeps the message change for this reason (C13 reworded); new row C15.
+- B2 `refreshCommunication(nowMs, scannerBefore)` runs only if `this.stage === 'communication'` and `this.scanner === scannerBefore` after the activation, so actions that change stage (practice, change-controls, tiring, add-movement, recalibrate, setup-gesture, use-gesture) keep their own scanner and decisions. It assigns `this.scanTargets` and calls `scanner.setTargets` with the same ids together. Test: Change controls from the panel leaves the mapping decisions in the scan list.
+- B3 Focus: opening the panel moves focus to its heading (`tabIndex=-1`); Close helper returns focus to the Helper button; the Clear confirmation moves focus to its question, and Keep it / Yes return focus to the Helper button. jsdom test in C10.
+- Notes adopted: `returnToStart` also resets helperOpen, confirmingClear, lastMovementAt. `lastMovementAt` is set on `update.started` (hold begins) and on `update.event`, so the light follows the movement, not only its release. The light is visual with a static accessible label ("Movement seen" indicator, `aria-live="off"`), not a repeating live region. Fake-clock tests call `session.refresh()` after advancing time. "Yes, clear it" sits in the message bar, away from the panel's Clear button. Deliberate trade-off: the highlight restarts at the first item after each selection, so with a message the phrases sit at positions 3-8 (Speak is first).
+- **Review verdict:** independent reviewer (sonnet subagent ae8ac905) revision 1 CHANGES REQUIRED (B1-B3) → revision 2 APPROVED. Implementation note: Speak with an empty message changes nothing.

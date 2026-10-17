@@ -62,3 +62,27 @@ Software verified: 2.1-2.7, 2.9-2.12 PASS (25 acceptance tests), 2.8 PASS (tsc, 
 
 ### Slice 3 result (round 1 of 3)
 Software verified: 3.1-3.7 PASS (19 acceptance tests), 3.8 PASS (tsc, 431 tests, build). Mutations: partial rename, blur-only apply, no-trim and input remount are all caught; allowing rename while restoring survives as an equivalent mutant (`candidate` is null then). **Human acceptance pending:** 3.H.
+
+# Branch ux-comm-screen: communication screen
+
+Design: reasoning.md "UX comm screen". Mockup the user approved: https://claude.ai/artifact/W8t4tg1TKfoiHHrk9SZ4Cr. Baseline: 461 tests. QA owns `src/app/ux-comm.acceptance.test.ts` and `src/ux-comm-ui.acceptance.test.tsx`; the developer may not edit them.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| C1 | TEST | Scan order in communication (gesture and assisted). Empty message: the 6 phrases, `repeat` only after something was spoken, `pause`, `helper`. With a message: `speak`, `undo`, the 6 phrases, `pause`, `helper`. No other control is in the top-level list. |
+| C2 | TEST | With a synthetic gesture stream in automatic scanning: "Please help me" spoken in 2 selections (phrase, Speak); a 5-phrase message spoken in 6. After every communication selection the highlight is back on the first item. |
+| C3 | TEST | Undo removes only the last phrase; it is not offered with an empty message; it never changes lastSpoken, scan speed, mapping or phrases. |
+| C4 | TEST | "Say it again" is absent until something is spoken; it speaks exactly the last spoken text through the speech port, also after Clear, and leaves the message unchanged. |
+| C5 | TEST | Clear is only in the Helper panel and only with a message. Selecting it shows `clear-no`, `clear-yes` in that order; Keep it leaves the message; Yes empties it. With the confirmation open, 5 minutes of scanner ticks discard nothing. |
+| C6 | TEST | Selecting Helper opens the panel: `close-helper`, the controls (gesture: change-controls, add-movement below the limit, recalibrate, tiring with 2+ movements; assisted: use-gesture or setup-gesture), slower/faster when they apply today, clear (with a message), practice, pause. Opening and closing changes no setting (speed, mapping, phrases, message). Close returns to the C1 list. Slower/Faster keep the panel open. |
+| C7 | TEST | A helper id selected while the panel is closed does nothing. From the panel, change-controls, add-movement, recalibrate, tiring and practice behave as before. |
+| C8 | TEST | Pause works from the board and the panel, stops the highlight, and resumes by movement, Space or the button; message and panel state are kept through Pause, tracking loss and the step-idle fallback. A hold that started before the list changed selects nothing. |
+| C9 | TEST | `movementSeen` is true within 1 s of a recognised movement in communication or practice and false after 1 s with none; always false in assisted mode. |
+| C10 | TEST | UI: the message region comes before the phrase grid; Speak and Undo render only with a message; "Say it again" only after speaking; the Helper panel shows the "Your controls" group (Change controls, Add a movement, Recalibrate as tiles with descriptions) before "Scanning and message"; camera diagnostics and the signal dashboard are not rendered on the communication screen unless "Camera diagnostics" is opened in the panel; no beeps checkbox there; a "Movement seen" status exists. Practice shows Finish practice and no Helper. |
+| C11 | TEST | Message text ≥ 24px and new text ≥ 14px (stylesheet checks); every control has an accessible name. |
+| C12 | CHROME | Assisted mode at 1470×762 and 1280×720: message bar, Speak (with a message), all 6 tiles, Pause and Helper visible without scrolling; at 390×844 the message bar and Speak are visible without scrolling. |
+| C13 | TEST | tsc, full vitest and build pass; existing tests change only to open Helper before a moved control, or because Speak now empties the message (C15). |
+| C15 | TEST | Speak moves the message to lastSpoken and empties it, with or without a local voice (the text stays visible as last spoken). Choosing Change controls from the panel leaves the mapping decisions in the scan list (no communication list overwrites another stage). |
+| C16 | TEST | Focus: opening Helper focuses the panel heading; Close helper returns focus to the Helper button; the Clear confirmation focuses its question; Keep it and Yes return focus to the Helper button. |
+| C14 | TEST | The saved profile never contains the message, lastSpoken or panel state. |
+| CH | HUMAN | With a real camera: the screen is easy to follow, the Movement seen light matches the movement, and a helper finds the options. |
