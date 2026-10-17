@@ -1,17 +1,17 @@
 # Motif technical handoff
 
-Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, then P1 in order, then hardening; P2 excluded). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
+Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
 ## Resume first (next agent)
 
 1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R4–R6 matter most) and `.agents/skills/motif-checkpoint/SKILL.md`.
 2. Run `git status` and `git log --oneline -n 10`. Expected: clean tree; compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
-4. Continue with "Exact next work", step 1. Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
+4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last code commit: `505546b Check blocked logging, camera errors and dev server` (Linux, session 3); docs after it. At `8f22174`: tsc PASS; vitest 276 PASS; build PASS; browser-check 67/67 PASS. Earlier: `e266183` verified on the original Windows machine (110 tests).
+- Last code commit: `5303081 Test security policy meta` (Linux, session 3); docs after it. At `e40adc9`: tsc PASS; vitest 22 files/277 PASS; build PASS; browser-check 67/67 PASS. Earlier: `e266183` verified on the original Windows machine (110 tests).
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)
@@ -36,7 +36,7 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 | W7a profiles/recalibration | Software verified; human acceptance pending (`w7a_test_review` re-check PASS at `fa56d76`). |
 | W7b scoring/recommendations | Software verified; human acceptance pending (`w7b_test_review` re-check PASS at `5464487`). |
 | W7c discovery | Software verified; human acceptance pending (`w7c_test_review` re-check PASS at `fefa186`). |
-| W8 hardening | IMPLEMENTING. R10 revision 2 APPROVED. Owner: session 3 coordinator; files `scripts/browser-check.mjs`, `src/styles.css`, `src/components/**`, `src/app/hardening.test.ts`, `README.md`, `ACCEPTANCE.md`. |
+| W8 hardening | Software verified; human acceptance pending (`w8_test_review` re-check PASS at `8f22174`). |
 
 ## Exact next work (ordered)
 
@@ -46,7 +46,9 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 4. DONE: W7a software verified; human acceptance pending. Code `793068b`…`5e92fcc`; review BLOCKING (tests only) → `589654f`, `264baa2`, `fa56d76` → re-check PASS; order test strengthened after.
 5. W7b IN PROGRESS: R8 revision 2 APPROVED (`d6a8e48`). Done: `8afc20c` runtime `cancelledId`/`cancelCause` (+`8a8bfd2` tests), `90bbb43` threshold fractions exported, `45fec4e` `expectedId` on attempts, `5e2ba20` `src/app/scoring.ts` (+tests), `b551628` session wiring (effort decision `comfortable-effort`, use counts, `tiring` stage + `never-mind`, proposals computed once with recommendation first, `proposeCustom`, snapshot `evidence`/`recommendation`), session tests `src/app/session.scoring.test.ts`. UI `df49a02` (TiringView, recommendation reasons, helper custom-controls form, per-movement evidence) + `7b3cd3d` App tests. Checks at `7b3cd3d`: tsc PASS, vitest 16 files/223 PASS, build PASS, browser 12/12 PASS. `w7b_test_review` BLOCKING (tests only) → `5464487` → re-check PASS. DONE: W7b software verified; human acceptance pending. Then W7c (R9) and W8 per `plan.md`.
 6. W7c IN PROGRESS: R9 revision 2 APPROVED (`8cf414f`). Done: `3a66045` `src/app/discovery.ts` (+`6b23931` 15 tests), `4b63378` session stages `discover`/`discover-results` (`startDiscovery`, `discover`/`discover-again`/`full-list` decisions, `discovered:<i>[:<companion>]` targets), `src/app/session.discovery.test.ts` (7), `08a4a22` UI (ChooseView button, capture text, DiscoveryResultsView) + `d549617` App test. Checks at `d549617`: tsc PASS, vitest 18 files/251 PASS, build PASS, browser 12/12 PASS. `w7c_test_review` BLOCKING (tests only: chaining fixture, ranking/cap pinning, choice clearing, frame dropping) → `3529bad`, `4183a28`, `5588e48`, `8adc098`, `fefa186`; re-check PASS. DONE: W7c software verified; human acceptance pending.
-7. W8 IN PROGRESS: R10 revision 2 APPROVED (`d71d532`); revision 3 addendum (usage-logging block) APPROVED. Code: `e1a3a4c`, `35f22ac` hardening tests; `9f5afab`, `b5ce9bf`, `e38d4d6`, `ff3184f` styles; `ed56bd8` stylesheet test; `eb16f34`, `505546b` browser check (67 checks); `203110f`, `45f84c7` accessible names; `78c31be` camera-in-use message; `b070ba2` offline guard + CSP (`src/tracker/offline.ts`, `index.html`); docs `75d68df`, `babff48`, `25050d6`. `w8_test_review` first pass BLOCKING (placeholder contrast missed, 11 px rule, denial check not testing denial, unreachable-screen tokens) → all fixed; re-check running at `8f22174`. Checks at `8f22174`: tsc PASS, vitest 276 PASS, build PASS, browser 67/67 PASS. NEXT: on PASS record W8 "software verified; human acceptance pending" in reasoning/plan/progress, update STATUS.md; then the approved software scope is complete (all human checks pending, see ACCEPTANCE.md).
+7. DONE: W8 software verified; human acceptance pending (`w8_test_review` re-check PASS at `8f22174`; follow-ups `b46b63c`, `5303081`, `e40adc9`).
+8. **Approved software scope complete (full P0 + P1 + hardening).** Every checkpoint W2–W8 is "software verified; human acceptance pending"; all plan.md boxes stay open until a person runs ACCEPTANCE.md with a real webcam. P2 remains excluded. Nothing was pushed (the user pushes).
+9. If more time is available (optional, non-blocking leftovers from reviews): noisy-baseline pinning of the discovery `on`/`off` formulas (R9); defensive tests for counting a runtime `invalid` cause as unfinished (R8 M6/M8c); wording that a restored movement's practice strength dates from when it was trained (R8); browser check of target sizes on post-calibration screens is manual-only.
 
 ## Known notes and risks
 
