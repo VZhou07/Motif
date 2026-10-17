@@ -48,11 +48,12 @@ export function SaveProfile({ snapshot, session }: ViewProps) {
   const [name, setName] = useState(active ?? '');
   const [result, setResult] = useState<StoreResult | null>(null);
   if (!snapshot.approvedModels.length) return null;
+  const favouriteCount = snapshot.vocabulary.groups[0]?.phrases.length ?? 0;
   const save = (replace: boolean) => setResult(session.saveProfile(name, replace));
   return (
     <details className="settings-card">
       <summary className="field-label">Save this setup on this device{active ? ` · “${active}”${unsaved ? ' (changed since saving)' : ''}` : ''}</summary>
-      <p>Saved: your movement settings, controls, phrases and scan speed. Never saved: video, camera images, your messages or anything you said. It stays in this browser until you delete it.</p>
+      <p>Saved: your movement settings, controls, phrase groups (including {favouriteCount} favourite{favouriteCount === 1 ? '' : 's'}) and scan speed. Never saved: video, camera images, your messages or anything you said. It stays in this browser until you delete it.</p>
       {!available && <p className="status-notice">Saving is not available in this browser (storage is blocked).</p>}
       <label className="text-field">Profile name
         <input value={name} maxLength={40} placeholder="For example: Alex, evenings" onChange={(event) => { setName(event.target.value); setResult(null); }} />

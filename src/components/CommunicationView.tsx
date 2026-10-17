@@ -1,4 +1,5 @@
 import { Icon } from './Icon';
+import { PhraseEditor } from './PhraseEditor';
 import { SaveProfile } from './ProfileViews';
 import { EvidencePanel } from './ReviewViews';
 import { ScanButton, ScanHint } from './ScanBoard';
@@ -31,6 +32,15 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           </div>
         : <ScanHint snapshot={snapshot} />}
       <h2 className="level-heading">{where}</h2>
+      <nav className="group-tabs" aria-label="Helper shortcuts to phrase groups">
+        {[{ id: 'top', label: 'Main list' }, ...snapshot.vocabulary.groups.map((group) => ({ id: group.id, label: group.name }))].map((tab) => {
+          const current = tab.id === 'top' ? level?.kind === 'top' : level?.kind === 'group' && level.group?.id === tab.id;
+          return (
+            <button key={tab.id} type="button" className="button button-quiet" aria-pressed={current} disabled={paused}
+              onClick={() => session.openGroup(tab.id)}>{tab.label}</button>
+          );
+        })}
+      </nav>
       {tiles.length > 0 && (
         <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : 'Phrase groups'}>
           {tiles.map((target, index) => (
@@ -66,6 +76,14 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
         ))}
       </nav>
       <p className="helper-copy">Scanning every {((scan?.intervalMs ?? 2_000) / 1_000).toFixed(1)} seconds. {snapshot.inputMode === 'assisted' ? 'Assisted mode does not use or verify a facial movement.' : 'If tracking is lost, scanning waits and nothing is selected.'}</p>
+      {!practice && (
+        <details className="settings-card">
+          <summary className="field-label">Edit phrases (helper)</summary>
+          {paused
+            ? <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
+            : <p>Pause scanning first, so nothing can be selected while phrases change. Resume then starts from the main list if anything changed.</p>}
+        </details>
+      )}
       {!practice && <SaveProfile snapshot={snapshot} session={session} />}
       {!practice && <EvidencePanel snapshot={snapshot} />}
     </>
