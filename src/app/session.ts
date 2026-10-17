@@ -463,7 +463,7 @@ export class MotifSession {
       case 'tiring': return ['never-mind'];
       case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []), ...(this.candidate ? ['reject' as const] : []),
         ...(this.restoring ? ['reject-profile' as const] : [])];
-      case 'mapping-confirm': return ['choose-different', 'approve-mapping', ...(this.restoring ? ['reject-profile' as const] : [])];
+      case 'mapping-confirm': return ['choose-different', 'approve-mapping'];
       case 'recalibrate-confirm': return ['start-recalibration', 'keep-current'];
       case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
       case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'discover', 'keep-current'] : [];

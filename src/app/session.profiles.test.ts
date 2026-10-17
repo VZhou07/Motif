@@ -231,7 +231,8 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.pendingMapping?.id).toBe('saved');
     expect(h.snap.pendingMapping?.label).toMatch(/^Saved controls: Raise left outer eyebrow selects · Open mouth moves next/);
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping', 'reject-profile']);
+    // "Do not use this profile" is not offered on the confirm screen; it stays on comfort and mapping.
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping']);
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.runtime?.armed).toBe(false);
@@ -266,13 +267,16 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.profiles.unsaved).toBe(true);
   });
 
-  it.each(['mapping', 'mapping-confirm'] as const)('“Do not use this profile” works by gesture in %s and applies nothing', (stage) => {
+  it('“Do not use this profile” works by gesture in mapping and applies nothing', () => {
     const { storage } = savedPersonA();
     const h = restoreOn(storage);
     recheck(h);
     h.selectByGesture('comfortable');
-    if (stage === 'mapping') h.selectByGesture('choose-different');
-    expect(h.snap.stage).toBe(stage);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    h.session.decide('reject-profile'); // not offered on the confirm screen: ignored
+    expect(h.snap.stage).toBe('mapping-confirm');
+    h.selectByGesture('choose-different');
+    expect(h.snap.stage).toBe('mapping');
     h.selectByGesture('reject-profile');
     expect(h.snap.stage).toBe('setup-failed');
     expect(h.snap.failure?.title).toBe('Profile not used');
