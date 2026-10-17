@@ -43,3 +43,51 @@ Execute migration/RLS/RPC as authenticated roles in actual PGlite, not superuser
 Client tests cover SDK mapping, malformed responses/errors, serialized auth's persisted SDK state and late-response/callback isolation, revocation, polling reconnect/disposal and missing-config failure. Full existing regression/typecheck/build/privacy tests pass; independent tester executes checks. Hosted migrations/Auth/polling and physical two-device/camera acceptance remain pending until observed. Provide clear setup SQL, anonymous-sign-in enablement, caregiver demo-account setup and actual smoke-test instructions. Never print env secrets. Small local commits only, no push or active-main merge.
 
 Sources: https://supabase.com/pricing ; https://supabase.com/docs/guides/database/postgres/row-level-security ; https://supabase.com/docs/guides/auth/auth-anonymous ; https://supabase.com/docs/guides/realtime/postgres-changes ; https://pglite.dev/docs/ .
+
+# R18 — Role-aware routing and caregiver mount, revision 3
+
+Status: revision 3 explicitly APPROVED by independent reviewer a3e2c68504a8cc4e3 before implementation (non-blocking: setHidden before cue close; assert no scan jump, speech.cancel, separate visible/hidden mount tests). Revision 2 BLOCKED (B3 StrictMode cue detachment); revision 3 resolves B3 and adopts N9–N12. Revision 1 BLOCKED by independent reviewer a3e2c68504a8cc4e3 (B1 route switch discarded participant session; B2 test seams unspecified). Revision 2 below resolves them and adopts N1–N7. Originally written 2026-10-17 by the Agent 3 coordinator (Claude Code session, worktree `/Users/golbargghazinour/Desktop/Motif/.cache/worktrees/request-relay`, branch `feature/request-relay`, base `03c606f` = origin relay `1e94ede` + reviewed caregiver dashboard `4c84180` (fast-forward) + R15 test fix). Awaiting independent reasoning review before code.
+
+## Scope
+
+In: one shared care client per page, hash routes for the participant surface (`#/`, existing app) and caregiver surface (`#/caregiver`), mounting Agent 2's `CaregiverDashboard` with that real client, an honest not-configured/invalid-config state, header navigation between surfaces, tests. Out (no owner work yet, recorded as pending): Agent 1's participant pairing/request view (`src/features/participant-requests/**` does not exist on any branch), gesture-to-request wiring, Agent 4's browser companion, hosted Supabase acceptance, real two-device delivery.
+
+## Design
+
+- `src/app/care.ts` (Agent 3 shared session): `sharedCareClient(env = import.meta.env)` parses with `parseCareConfig`; returns `{ status: 'ready', client }` with ONE lazily created `createSupabaseCareClient` per page (module cache keyed by the validated URL, never disposed by React unmounts, so StrictMode double-mount and route switches reuse it and never hit `client_exists`), else `{ status: 'not-configured' }` or `{ status: 'invalid', message }`. Never logs/echoes key values.
+- `src/app/route.ts`: `parseRoute(hash)` → `'caregiver'` only for exactly `#/caregiver` (optionally trailing `/`); everything else → `'participant'`. `useRoute()` subscribes to `hashchange`.
+- `src/Root.tsx`: renders `<App />` for participant, `<CaregiverRoute />` for caregiver. The caregiver route does NOT call `useMotif`, so no camera/tracker/speech/model starts there; switching back remounts the participant shell with the SAME long-lived session (see revision 2/3), camera off. `main.tsx` renders `Root`.
+- `CaregiverRoute`: shell with brand, "Back to Motif" link, privacy note "Only account, pairing and request updates are sent; no camera is used on this page". Ready → `<CaregiverDashboard client={client} />`. Not configured → explains that `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` go in `.env.local` (see `docs/supabase-setup.md`) and the app must be restarted; no network attempt. Invalid → same with the config parser's safe message.
+- Participant header gains a plain "Caregiver dashboard" link. It sits outside the scanner targets, so gesture navigation is unchanged.
+
+## Authorization
+
+The route chooses which screen renders; it grants nothing. All data comes from the shared client, whose identity/role/group derive from the Supabase session and DB RLS/RPCs (R16). A participant/anonymous session on `#/caregiver` gets role `unpaired`/`participant` from `motif_access`, and the dashboard renders no caregiver data (its existing role handling); `pair()` refuses a caregiver session (`wrong_role`). One client means one identity per page; switching routes never creates a second identity. Network policy is unchanged: CSP/offline guard already permit only the validated project origin.
+
+## Failure modes
+
+Missing/invalid env → clear message, zero fetches. Second client creation → avoided by cache. Unmount during dashboard requests → dashboard's own unsubscribe; client stays for the page. Malformed hashes (`#/caregiver/x`, `#caregiver`, `#/CAREGIVER?x`) → participant. Camera running on participant route then navigating to caregiver → App unmount stops camera via existing useMotif cleanup (verify in tests).
+
+## Tests
+
+`route.test.ts`: exact/trailing/malformed hashes. `care.test.ts`: not-configured/invalid → no client and no key echo; ready → same instance on repeated calls. `Root.test.tsx`: default renders participant welcome and caregiver link; `#/caregiver` with injected client renders dashboard sign-in (via the real CareService over a test transport) and never constructs the Motif runtime; not-configured caregiver page shows setup text and performs no fetch; hashchange switches both ways; participant session on caregiver route shows no caregiver data. Then full suite, typecheck, build, independent testing review.
+
+## Revision 2 changes (resolve B1, B2; adopt N1–N7)
+
+- B1 participant continuity: `Root` creates ONE participant runtime per page with `useState`: `speech = createLocalSpeech()`, `session = new MotifSession({ speech, profiles: createLocalProfileStore(() => window.localStorage) })`, and passes `runtime={{ session, speech }}` to `App`. `useMotif` keeps creating a fresh `FaceTracker` and cue audio per mount, and its existing unmount cleanup stops the tracker, closes cues and calls `session.setCamera('off')`, which fails closed (no armed input). Returning to `#/` keeps the same session stage/mapping/phrases; the camera must be started again and the recognizer needs fresh neutral before any action. Update the `useMotif` "injectable for tests only" comment to state that Root supplies the long-lived session. No profile/schema change.
+- B2 seams: `Root({ runtime?, care? })`. `runtime?: Partial<MotifRuntime>` is used instead of Root's own session when supplied (tests pass fake tracker/speech). `care?: CareState` overrides `sharedCareClient()` (tests pass `{ status: 'ready', client: new CareService(testTransport) }` or not-configured/invalid). `src/app/care.ts` exports `sharedCareClient(env?)` plus `resetSharedCareClientForTests()` that awaits dispose and clears the cache. Tests: `vi.mock('./tracker')` (or a constructor spy) proves FaceTracker is never constructed and `navigator.mediaDevices.getUserMedia` never called on `#/caregiver`; injected tracker `stop` is called on participant→caregiver; a mid-setup/communication session stage survives the round trip, camera is `off` afterwards and a gesture frame without restart produces no action.
+- N1: the caregiver shell has no hash skip link (dashboard `<main>` is the first content); in-page links never use `#…` other than the two routes. Test that the brand link on the participant shell (`#main-content`) does not leave the participant route (parseRoute maps it to participant, unchanged behavior).
+- N2: shell renders header + dashboard without wrapping `<main>`; not-configured/invalid states render their own `<main>` and `<h1>` with static (non-alert) text.
+- N3: `sharedCareClient` catches factory errors (`client_exists`, `not_configured`) into `{ status: 'invalid', message }` with a safe fixed message; `import.meta.hot?.dispose` awaits client dispose.
+- N4: documented: signing out an anonymous participant on the caregiver page drops that pairing; a re-invite is needed. Dashboard's existing confirm step remains.
+- N5: the client is created lazily on first caregiver-route render, never at import; test that importing care.ts/Root creates none. After first creation, Supabase Auth token refresh may continue while on the participant route; dashboard polling stops on unmount. Caregiver note: "Only sign-in, pairing and request updates are sent. No camera is used on this page."
+- N7: test that Space on the focused "Caregiver dashboard" link in non-assisted mode does not navigate or select.
+- N8: STATUS/progress will state that invitations cannot yet be redeemed in-app (Agent 1 pairing view absent), so C2 stays pending.
+
+## Revision 3 changes (resolve B3; adopt N9–N12)
+
+- B3: `useMotif` attaches cues in its mount effect (`session.setCueAudio(cues)` before registering listeners) instead of only in the `useState` initializer, for injected and default sessions alike. Cleanup keeps `cues.close()` + `session.setCueAudio(null)`; `close()` is recoverable because `unlock()` recreates a closed AudioContext (audio.ts unlock). Test: under StrictMode via Root with an injected session, the session's cue port is attached after mount and again after participant→caregiver→participant.
+- N9: cleanup also calls `session.setHidden(true, performance.now())` before `setCamera('off')`, so an assisted scanner is suspended while away; the mount effect's existing `visibility()` resumes it with fresh timing. Test: assisted scanning after the round trip makes no selection without a new Space press.
+- N10: cleanup calls `speech.cancel()` so speech stops when leaving the participant surface.
+- N11: stale Design bullet corrected above.
+- N12: existing StrictMode listener test is also exercised through Root.
