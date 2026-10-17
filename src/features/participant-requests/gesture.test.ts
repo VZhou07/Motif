@@ -5,7 +5,7 @@ import { makeFrame, stream, testModel } from '../../engine/fixtures.test-support
 import { GestureRuntime } from '../../engine/recognition';
 import { ScanController } from '../../engine/scanner';
 import { ParticipantRequestController } from './controller';
-import { createCareWorld } from './test-support';
+import { createCareWorld } from './requests.test-support';
 
 /**
  * Feature-level evidence: the real recognizer and real scanner select the controller's request

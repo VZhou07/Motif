@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CareError } from '../../care';
 import { ParticipantRequestController, reasonFor, statusText } from './controller';
-import { createCareWorld, deferred } from './test-support';
+import { createCareWorld, deferred } from './requests.test-support';
 
 let close: (() => Promise<void>) | undefined;
 // Polling is driven explicitly with refresh(); only the client's 2-second interval is faked.
@@ -76,6 +76,35 @@ describe('sending (deliberate selection only)', () => {
     expect(rpc).not.toHaveBeenCalled();
     expect(said).toEqual([]);
     expect(controller.view.cards).toEqual([]);
+  });
+
+  it('helper Retry and Cancel do nothing outside communication', async () => {
+    const { device, controller } = await setup();
+    device.faults.failRpc = 'motif_send_request';
+    controller.activate('request:help');
+    await until(() => card(controller, 'help')?.status === 'failed');
+    device.faults.failRpc = null;
+    await device.client.refresh();
+    const id = card(controller, 'help')!.id;
+    const rpc = vi.spyOn(device.transport, 'rpc');
+    controller.setActive(false);
+    controller.retry(id);
+    controller.cancel(id);
+    expect(rpc).not.toHaveBeenCalled();
+    expect(card(controller, 'help')?.status).toBe('failed');
+  });
+
+  it('Cancel waits while the chosen request is still sending', async () => {
+    const { device, controller, said } = await setup();
+    const gate = deferred();
+    device.faults.hold = { name: 'motif_send_request', gate: gate.promise };
+    const rpc = vi.spyOn(device.transport, 'rpc');
+    controller.activate('request:water');
+    controller.activate('request:cancel');
+    expect(said.at(-1)).toBe('Wait until the water request finishes sending.');
+    gate.resolve();
+    await until(() => card(controller, 'water')?.status === 'sent');
+    expect(rpc.mock.calls.filter(([name]) => name === 'motif_transition_request')).toHaveLength(0);
   });
 
   it('fails closed without a request id generator', async () => {
@@ -353,6 +382,42 @@ describe('identity and isolation', () => {
     expect(controller.view.identity.state).toBe('revoked');
     expect(controller.view.targets).toEqual([]);
     expect(controller.view.cards).toEqual([]);
+  });
+
+  it('re-pairs a revoked device with a new invitation', async () => {
+    const { world, owner, invite, controller, sync } = await setup();
+    await world.revoke(owner, invite.participantId);
+    await sync();
+    expect(controller.view.identity.state).toBe('revoked');
+    const fresh = await world.invite(owner, 'Alex again');
+    expect(await controller.pair(fresh.token)).toBe(true);
+    expect(controller.view.pairing.error).toBeNull();
+    expect(controller.view.identity).toMatchObject({ state: 'participant', alias: 'Alex again', receiver: 'Ward A' });
+    expect(controller.view.targets).toHaveLength(5);
+    controller.activate('request:water');
+    await until(() => card(controller, 'water')?.status === 'sent');
+    expect((await world.rows()).map((row) => row.participant_id)).toEqual([fresh.participantId]);
+  });
+
+  it('a held send from a signed-out person never comes back after another person pairs', async () => {
+    const { world, owner, device, controller, said } = await setup();
+    const gate = deferred();
+    device.faults.hold = { name: 'motif_send_request', gate: gate.promise };
+    const rpc = vi.spyOn(device.transport, 'rpc');
+    controller.activate('request:water');
+    await until(() => rpc.mock.calls.some(([name]) => name === 'motif_send_request'));
+    const signingOut = controller.signOut(); // clears now; the client signs out after the held send
+    expect(controller.view.cards).toEqual([]);
+    const before = said.length;
+    gate.resolve(); // the old send is rejected only after this person was already cleared
+    await signingOut;
+    expect(controller.view.cards).toEqual([]);
+    const next = await world.invite(owner, 'Blake');
+    expect(await controller.pair(next.token)).toBe(true);
+    await device.client.refresh();
+    expect(controller.view.identity.alias).toBe('Blake');
+    expect(controller.view.cards).toEqual([]);
+    expect(said.slice(before).some((text) => /water/i.test(text))).toBe(false);
   });
 
   it('shows caregiver, not-configured and pairing states without request targets', async () => {
