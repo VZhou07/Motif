@@ -53,9 +53,7 @@ describe('free movement discovery in the session (R9)', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModels).toEqual([]);
-    h.selectByGesture('comfortable', MOUTH);
-    h.selectByGesture('map:0', MOUTH);
-    h.selectByGesture('approve-mapping', MOUTH);
+    h.selectByGesture('approve-comfortable', MOUTH);
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual(['Open mouth']);
   });
 
