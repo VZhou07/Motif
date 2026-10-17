@@ -48,9 +48,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     b.session.chooseMovement(PUFF_CHEEKS);
     b.followPrompts((snap) => snap.stage === 'negative', (snap) => perform(snap.capture?.movement ?? null));
     b.run(11_000, HEAD_WOBBLE);
-    b.selectByGesture('comfortable', MOUTH);
-    b.selectByGesture('map:0', MOUTH);
-    b.selectByGesture('approve-mapping', MOUTH);
+    b.selectByGesture('approve-comfortable', MOUTH);
     expect(b.snap.mappingLabel).toBe('Open mouth selects · Puff cheeks moves next (step by step, no timer)');
     expect(b.session.saveProfile('Person B')).toEqual({ ok: true });
 
@@ -62,8 +60,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     expect(laterA.snap.approvedModels).toEqual([]);
     laterA.followPrompts((snap) => snap.stage === 'negative', BROW);
     laterA.run(11_000, HEAD_WOBBLE);
-    laterA.selectByGesture('comfortable');
-    laterA.selectByGesture('approve-mapping');
+    laterA.selectByGesture('approve-saved');
     laterA.selectByGesture('finish-practice');
     laterA.run(1_000);
     laterA.run(800, MOUTH); laterA.run(800);
@@ -81,8 +78,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterB.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
     laterB.run(11_000, HEAD_WOBBLE);
     expect(laterB.snap.stage).toBe('comfort');
-    laterB.selectByGesture('comfortable', MOUTH);
-    laterB.selectByGesture('approve-mapping', MOUTH);
+    laterB.selectByGesture('approve-saved', MOUTH);
     laterB.stepTo('finish-practice', CHEEK, MOUTH);
     laterB.run(600, BROW); laterB.run(600);
     expect(laterB.snap.message).toEqual([]);

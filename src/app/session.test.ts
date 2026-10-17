@@ -259,8 +259,10 @@ describe('communication safety', () => {
     const h = ready();
     const model = h.snap.approvedModel;
     h.selectByGesture('recalibrate');
-    expect(h.snap.stage).toBe('recalibrate-confirm');
-    h.selectByGesture('keep-current', BROW, 60_000, 3_000, 0);
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.scan?.targets.map((target) => target.id)).toEqual(['recalibrate-no', 'recalibrate-yes']);
+    h.selectByGesture('recalibrate-no', BROW, 60_000, 3_000, 0);
+    expect(h.snap.confirmingRecalibrate).toBe(false);
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModel).toEqual(model);
     expect(h.snap.runtime?.armed).toBe(false);
@@ -273,7 +275,7 @@ describe('communication safety', () => {
     const h = ready();
     const model = h.snap.approvedModel;
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.recalibrating).toBe(true);
     h.run(3_000, BROW);
@@ -292,7 +294,7 @@ describe('communication safety', () => {
     const h = ready();
     const old = h.snap.approvedModel!;
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     h.run(10_500);
     expect(h.snap.stage).toBe('choose');
     h.selectByGesture('same-movement');
@@ -300,9 +302,7 @@ describe('communication safety', () => {
     h.run(11_000);
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModel).toEqual(old);
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable');
     expect(h.snap.approvedModel?.id).not.toBe(old.id);
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.cycles.at(-1)?.outcome).toBe('approved');
@@ -312,7 +312,7 @@ describe('communication safety', () => {
     const h = ready();
     h.session.decide('approve-mapping');
     h.session.chooseSetupTarget('map:0');
-    h.session.decide('start-recalibration');
+    h.session.decide('approve-saved');
     expect(h.snap.stage).toBe('communication');
   });
 
@@ -434,9 +434,8 @@ const perform = (label: string | null): Values => MOVES[label ?? ''] ?? REST;
 function addAndApprove(h: Harness, choice: MovementChoice, proposal = 'map:0'): void {
   h.addMovement(choice, perform);
   expect(h.snap.stage).toBe('comfort');
-  h.selectByGesture('comfortable');
-  h.selectByGesture(proposal);
-  h.selectByGesture('approve-mapping');
+  if (proposal === 'map:0') h.selectByGesture('approve-comfortable');
+  else { h.selectByGesture('choose-different'); h.selectByGesture(proposal); h.selectByGesture('approve-mapping'); }
   expect(h.snap.stage).toBe('practice');
 }
 
@@ -470,7 +469,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.mapping?.mode).toBe('auto');
 
-    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different');
     expect(h.snap.stage).toBe('mapping');
     expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current', 'map:0', 'map:1', 'map:2', 'map:3', 'reject']);
     h.selectByGesture('map:0');
@@ -530,9 +529,7 @@ describe('multiple gestures (R6)', () => {
     h.run(800, { ...BROW, ...MOUTH });
     h.run(800);
     expect(h.snap.stage).toBe('comfort');
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable');
     h.stepTo('finish-practice');
     expect(h.snap.stage).toBe('communication');
     const index = h.snap.scan!.index;
@@ -714,7 +711,7 @@ describe('multiple gestures (R6)', () => {
     };
     reach(['phrase:0', 'phrase:1', 'phrase:2', 'phrase:3', 'phrase:4', 'phrase:5', 'pause', 'helper']);
     h.stepTo('helper');
-    reach(['close-helper', 'change-controls', 'recalibrate', 'tiring', 'practice', 'pause']);
+    reach(['close-helper', 'change-controls', 'recalibrate', 'practice', 'pause']);
     h.stepTo('close-helper');
     h.stepTo('phrase:5');
     h.stepTo('speak');
@@ -731,8 +728,8 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.stage).toBe('practice');
     h.stepTo('finish-practice');
     h.stepTo('recalibrate');
-    expect(h.snap.stage).toBe('recalibrate-confirm');
-    h.selectByGesture('keep-current');
+    expect(h.snap.confirmingRecalibrate).toBe(true);
+    h.stepTo('recalibrate-no');
     expect(h.snap.approvedModels).toHaveLength(4);
     h.stepTo('change-controls');
     expect(h.snap.stage).toBe('mapping');
@@ -772,7 +769,7 @@ describe('multiple gestures (R6)', () => {
     const h = twoGestureStep();
     const before = { models: h.snap.approvedModels, mapping: h.snap.mapping };
     h.stepTo('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.stepTo('recalibrate-yes');
     expect(h.snap.stage).toBe('baseline');
     h.run(10_500);
     expect(h.snap.stage).toBe('choose');
@@ -785,7 +782,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.scanMode).toBe('step');
 
     h.stepTo('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.stepTo('recalibrate-yes');
     h.run(10_500);
     h.selectByGesture('same-movement');
     expect(h.snap.stage).toBe('training');
@@ -794,10 +791,8 @@ describe('multiple gestures (R6)', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModels).toEqual(before.models);
-    h.selectByGesture('comfortable');
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current', 'map:0', 'reject']);
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['record-again', 'approve-comfortable', 'approve-effort', 'another-movement', 'keep-current']);
+    h.selectByGesture('approve-comfortable');
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.scanMode).toBe('auto');
     // The old two-movement controls refer to movements that no longer exist.

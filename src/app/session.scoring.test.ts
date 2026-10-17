@@ -9,7 +9,7 @@ const MOVES: Record<string, Values> = { [BROW_LABEL]: BROW, 'Open mouth': MOUTH,
 const perform = (label: string | null): Values => MOVES[label ?? ''] ?? REST;
 
 /** From communication: add, verify and rate a movement, then approve `proposal`. */
-function add(h: Harness, choice: MovementChoice, comfort: 'comfortable' | 'comfortable-effort' = 'comfortable', proposal = 'map:0'): void {
+function add(h: Harness, choice: MovementChoice, comfort: 'choose-different' | 'effort-choose' = 'choose-different', proposal = 'map:0'): void {
   h.addMovement(choice, perform);
   expect(h.snap.stage).toBe('comfort');
   h.selectByGesture(comfort);
@@ -77,7 +77,7 @@ describe('recommendations (R8)', () => {
     const h = new Harness();
     h.setUpToCommunication();
     h.addMovement(OPEN_MOUTH, perform);
-    h.selectByGesture('comfortable-effort');
+    h.selectByGesture('effort-choose');
     expect(h.snap.stage).toBe('mapping');
     expect(decisionIds(h)).toEqual(['keep-current', 'map:2', 'map:0', 'map:1', 'map:3', 'reject']);
     expect(h.snap.decisions[1]!.label).toBe('Recommended: Raise left outer eyebrow selects (automatic scanning)');
@@ -116,26 +116,30 @@ describe('reporting a tiring movement (R8)', () => {
   it('is offered only with two or more movements', () => {
     const one = new Harness();
     one.setUpToCommunication();
-    one.session.selectTarget('helper'); // controls live in the Helper panel
-    expect(one.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring');
+    one.session.selectTarget('helper');
+    expect(one.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring'); // no longer a Helper item
+    one.session.selectTarget('change-controls');
+    expect(decisionIds(one)).not.toContain('report-tiring');
     const two = twoStep();
     two.session.selectTarget('helper');
-    expect(two.snap.scan?.targets.map((target) => target.id)).toContain('tiring');
+    expect(two.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring');
+    two.session.selectTarget('change-controls');
+    expect(decisionIds(two)).toContain('report-tiring');
   });
 
   it('lets the person name the movement, then recommends controls that leave it unused', () => {
     const h = twoStep();
     h.stepTo('phrase:2');
     const [brow, mouth] = h.snap.approvedModels;
-    h.stepTo('tiring');
+    h.stepTo('change-controls');
+    h.selectByGesture('report-tiring');
     expect(h.snap.stage).toBe('tiring');
     expect(decisionIds(h)).toEqual([`tiring:${brow!.id}`, `tiring:${mouth!.id}`, 'never-mind']);
     h.selectByGesture('never-mind');
-    expect(h.snap.stage).toBe('communication');
-    expect(h.snap.message).toEqual(['I need water']);
+    expect(h.snap.stage).toBe('mapping'); // back to Change controls, not communication
     expect(evidenceOf(h, 'Open mouth').tiringReports).toBe(0);
 
-    h.stepTo('tiring');
+    h.selectByGesture('report-tiring');
     h.selectByGesture(`tiring:${mouth!.id}`, MOUTH);
     expect(h.snap.stage).toBe('mapping');
     expect(evidenceOf(h, 'Open mouth').tiringReports).toBe(1);
@@ -177,7 +181,7 @@ describe('evidence edge cases (R8)', () => {
     const h = new Harness();
     h.setUpToCommunication();
     h.addMovement(OPEN_MOUTH, perform);
-    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different');
     const [mouth] = h.snap.setupModels.filter((model) => model.label === 'Open mouth');
     const brow = h.snap.approvedModels[0]!;
     expect(h.session.proposeCustom({ [mouth!.id]: 'select', [brow.id]: 'next' })).toBe(true);
@@ -188,7 +192,7 @@ describe('evidence edge cases (R8)', () => {
   it('counts holds that are consumed while paused or unmapped as completed', () => {
     const h = new Harness();
     h.setUpToCommunication();
-    add(h, OPEN_MOUTH, 'comfortable', 'map:2'); // brow alone selects; mouth unmapped
+    add(h, OPEN_MOUTH, 'choose-different', 'map:2'); // brow alone selects; mouth unmapped
     h.selectByGesture('finish-practice');
     const before = evidenceOf(h, 'Open mouth').use.completed;
     h.run(600); h.run(600, MOUTH); h.run(600);
