@@ -52,9 +52,13 @@ export interface FitGestureOptions {
   direction: 1 | -1
   id?: string
   label?: string
+  /** How long the movement must be held to count (ms); default 250. */
+  activationMs?: number
 }
 
 /** Thresholds sit at these fractions of the rest-to-weakest-movement margin above the rest ceiling (R8 uses them too). */
+/** Default hold before a movement counts. */
+export const DEFAULT_ACTIVATION_MS = 250
 export const RELEASE_FRACTION = 0.25
 export const ACTIVATION_FRACTION = 0.65
 
@@ -77,6 +81,10 @@ export type GestureFitResult = Result<GestureModel> & { diagnostics?: TrainingDi
 export function fitGesture(options: FitGestureOptions): GestureFitResult {
   const { baseline, trials, feature, direction } = options
   if (trials.length !== 3) return { ok: false, reasons: ['Record three separate training attempts.'] }
+  const activationMs = options.activationMs ?? DEFAULT_ACTIVATION_MS
+  if (!Number.isFinite(activationMs) || activationMs < 100 || activationMs > 5_000) {
+    return { ok: false, reasons: ['The hold length must be between 0.1 and 5 seconds.'] }
+  }
   const statistics = baseline.statistics[feature]
   if (!statistics || !Number.isFinite(statistics.center) || !Number.isFinite(statistics.noise) || statistics.noise <= 0
     || (direction !== 1 && direction !== -1)) {
@@ -163,7 +171,7 @@ export function fitGesture(options: FitGestureOptions): GestureFitResult {
       id: options.id ?? `${feature}:${direction}`, label: options.label ?? feature,
       feature, direction, baselineCenter: statistics.center,
       activationThreshold: restCeiling + margin * ACTIVATION_FRACTION, releaseThreshold,
-      activationMs: 250, releaseMs: 350,
+      activationMs, releaseMs: 350,
     },
   }
 }
