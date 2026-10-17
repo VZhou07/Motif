@@ -228,6 +228,24 @@ try {
   const level = await addYesBySpace(page);
   const message = await page.getByRole('region', { name: 'Message' }).textContent();
   check('assisted Space opens a group and adds its highlighted phrase', /Quick · 3 phrases/.test(level ?? '') && /Yes/.test(message ?? ''), `${level} / ${message}`);
+  // R14: a helper saves the message to Favourites through More; nothing reaches storage before a profile Save.
+  await page.getByRole('button', { name: 'More options' }).click();
+  await auditScreen(page, 'assisted communication, More options');
+  await page.getByRole('button', { name: 'Save message to Favourites' }).click();
+  await auditScreen(page, 'assisted communication, confirm favourite');
+  await page.getByRole('button', { name: 'Save “Yes” to Favourites' }).click();
+  const favouriteTile = await page.getByRole('button', { name: 'Open Favourites, 1 phrase' }).count();
+  const afterFavourite = await page.evaluate(() => localStorage.length);
+  check('a confirmed favourite appears on the main list and is not written to browser storage', favouriteTile === 1 && afterFavourite === 0,
+    `tile=${favouriteTile} localStorage=${afterFavourite}`);
+  await page.getByRole('button', { name: 'Needs', exact: true }).click();
+  await auditScreen(page, 'assisted communication, Needs group');
+  await page.getByRole('button', { name: 'Main list' }).click();
+  await page.getByRole('button', { name: 'Pause', exact: true }).click();
+  await page.getByText('Edit phrases (helper)').click();
+  await auditScreen(page, 'paused, phrase editor open');
+  await page.getByText('Edit phrases (helper)').click();
+  await page.getByRole('button', { name: 'Resume' }).click();
   await auditScreen(page, 'assisted communication 1280 px');
   await focusWalk(page, 'assisted communication');
   const storage = await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length,
