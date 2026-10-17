@@ -118,6 +118,46 @@ describe('automatic last setup', () => {
   });
 });
 
+describe('quick continue', () => {
+  function quickOn(storage: ReturnType<typeof createMemoryStorage>, rest: Values = REST): Harness {
+    const h = new Harness({ profiles: storeFor(storage).store });
+    h.session.setCamera('running');
+    expect(h.session.restoreProfile('Person A', true)).toBe(true);
+    h.run(10_500, rest);
+    return h;
+  }
+
+  it('skips the movement re-checks: rest, then straight to approving the saved controls, still unarmed until approved', () => {
+    const { storage } = savedPersonA();
+    const h = quickOn(storage);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.cycles.at(-1)).toMatchObject({ source: 'restored', quick: true, heldOut: [], negative: null, outcome: 'verified' });
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.approvedModels).toHaveLength(2);
+    expect(h.snap.cycles.at(-1)!.outcome).toBe('approved');
+  });
+
+  it('claims no checks: the evidence shows nothing passed or measured for a quick restore', () => {
+    const { storage } = savedPersonA();
+    const h = quickOn(storage);
+    h.selectByGesture('approve-mapping');
+    h.stepTo('finish-practice');
+    for (const item of h.snap.evidence) {
+      expect(item.checks).toEqual({ passed: 0, total: 0 });
+      expect(item.everyday.windows).toBe(0);
+    }
+  });
+
+  it('still refuses when today\'s rest does not fit the saved thresholds', () => {
+    const { storage } = savedPersonA();
+    const h = quickOn(storage, BROW);
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.approvedModels).toEqual([]);
+  });
+});
+
 describe('saving a profile: guards (R7)', () => {
   it('refuses to save during recalibration capture', () => {
     const { original } = savedPersonA();
