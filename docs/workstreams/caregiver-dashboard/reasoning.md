@@ -76,7 +76,7 @@ Model unit tests (merge/stale revision/dedupe/scope/disambiguation/ordering/age/
 | --- | --- | --- |
 | 1 | design reviewer (independent) | NOT APPROVED — 8 blockers: failed sign-in lands in `unreachable`; error codes do not exist; expired session looks like an outage; sound baseline per epoch; wrong-role/unreachable dead ends; weak alias disambiguation; stylesheet not covered by project CSS tests; cold-start `ready` spec |
 | 2 | design reviewer (independent) | NOT APPROVED — 1 blocker: `CaregiverSession` discard rules ambiguous; an outage (offline, signed-out, same or new epoch) must not wipe the chime memory |
-| 3 | pending | — |
+| 3 | design reviewer (independent) | APPROVED. Non-blocking: test (a) asserts no chime while offline; test (c) asserts the sound-on flag survives the bump | APPROVED |
 
 ## Revision 2 — changes resolving the revision-1 review (supersedes conflicting revision-1 text)
 
