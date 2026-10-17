@@ -195,7 +195,7 @@ describe('Motif app', () => {
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Alex' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
     expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
-    expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles[0].name).toBe('Alex');
+    expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles.map((profile: { name: string }) => profile.name)).toContain('Alex');
     fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
     expect(screen.getByRole('status').textContent).toMatch(/already exists/);
     fireEvent.click(screen.getByRole('button', { name: 'Replace “Alex”' }));
@@ -335,7 +335,7 @@ describe('Motif app', () => {
 
     const d = new Harness({ profiles: createLocalProfileStore(() => storage) });
     const second = render(<App runtime={{ session: d.session, speech: localSpeech(d), tracker: fakeTracker() }} />);
-    expect([d.snap.profiles.names, unnamed()]).toEqual([['Alex'], []]);
+    expect([d.snap.profiles.names, unnamed()]).toEqual([['Last setup', 'Alex'], []]);
     act(() => { d.session.setCamera('running'); d.session.startBaseline(); d.run(10_500); d.session.startDiscovery(); });
     expect([d.snap.stage, unnamed()]).toEqual(['discover', []]);
     act(() => d.run(20_500));

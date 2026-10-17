@@ -51,12 +51,12 @@ describe('saving a profile (R7)', () => {
     expect(store.list().profiles).toEqual([]);
 
     const { storage, original } = savedPersonA();
-    expect(original.snap.profiles).toMatchObject({ names: ['Person A'], active: 'Person A', unsaved: false });
+    expect(original.snap.profiles).toMatchObject({ names: ['Last setup', 'Person A'], active: 'Person A', unsaved: false });
     const raw = storage.data.get(PROFILE_KEY)!;
     expect(original.snap.message).toEqual(['I need water']);
     expect(raw).not.toMatch(/"message"|lastSpoken/);
     expect(raw).not.toMatch(/statistics|heldOut|negative|frame/);
-    const saved = JSON.parse(raw).profiles[0];
+    const saved = JSON.parse(raw).profiles.find((profile: { name: string }) => profile.name === 'Person A');
     expect(saved.phrases[0]).toBe('Hello');
     expect(saved.scanIntervalMs).toBe(2_500);
     expect(saved.models).toHaveLength(2);
@@ -76,12 +76,45 @@ describe('saving a profile (R7)', () => {
   it('delete and delete all leave the approved setup in memory and clear the active name', () => {
     const { original } = savedPersonA();
     expect(original.session.deleteProfile('Person A')).toEqual({ ok: true });
-    expect(original.snap.profiles).toMatchObject({ names: [], active: null, unsaved: true });
+    expect(original.snap.profiles).toMatchObject({ names: ['Last setup'], active: null, unsaved: true });
     expect(original.snap.approvedModels).toHaveLength(2);
     original.session.saveProfile('Person A');
     original.session.saveProfile('Spare');
+    expect(original.snap.profiles.names).toEqual(['Last setup', 'Person A', 'Spare']);
     expect(original.session.deleteAllProfiles()).toEqual({ ok: true });
     expect(original.snap.profiles.names).toEqual([]);
+  });
+});
+
+describe('automatic last setup', () => {
+  it('keeps the approved setup across a page refresh without pressing Save, and it still needs a re-check', () => {
+    const { storage, store } = storeFor();
+    const h = new Harness({ profiles: store });
+    h.setUpToCommunication();
+    expect(store.list().profiles.map((profile) => profile.name)).toEqual(['Last setup']);
+    expect(h.snap.profiles.active).toBeNull();
+    const refreshed = new Harness({ profiles: storeFor(storage).store });
+    expect(refreshed.snap.approvedModels).toEqual([]);
+    refreshed.session.setCamera('running');
+    expect(refreshed.session.restoreProfile('Last setup')).toBe(true);
+    refreshed.run(10_500);
+    expect(refreshed.snap.approvedModels).toEqual([]);
+  });
+
+  it('follows scan speed changes and never stores the message', () => {
+    const { storage, store } = storeFor();
+    const h = new Harness({ profiles: store });
+    h.setUpToCommunication();
+    h.selectByGesture('slower');
+    const saved = store.get('Last setup')!;
+    expect(saved.scanIntervalMs).toBe(h.snap.scan!.intervalMs);
+    expect(storage.data.get(PROFILE_KEY)).not.toMatch(/"message"|lastSpoken|statistics/);
+  });
+
+  it('does not disturb input when storage is blocked', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => null) });
+    h.setUpToCommunication();
+    expect(h.snap.approvedModels.length).toBeGreaterThan(0);
   });
 });
 
@@ -270,13 +303,13 @@ describe('restoring a profile (R7)', () => {
     h.selectByGesture('comfortable');
     h.selectByGesture('approve-mapping');
     expect(h.snap.approvedModels).toHaveLength(2);
-    expect(h.snap.profiles.names).toEqual([]);
+    expect(h.snap.profiles.names).toEqual(['Last setup']);
   });
 
   it('re-checks an unmapped saved movement exactly once', () => {
     const { storage } = savedPersonA();
     const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
-    const profile = raw.profiles[0];
+    const profile = raw.profiles.find((entry: { name: string }) => entry.name === 'Person A');
     const browId = profile.models.find((model: { label: string }) => model.label === BROW_LABEL).id;
     profile.mapping.assignments = { [browId]: 'select' };
     expect(parseProfile(profile).ok).toBe(true);
