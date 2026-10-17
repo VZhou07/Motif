@@ -6,7 +6,8 @@ import type { ViewProps } from './SetupViews';
 export function SavedProfiles({ snapshot, session }: ViewProps) {
   const [confirming, setConfirming] = useState<string | null>(null);
   const { names, rejected, available, readable } = snapshot.profiles;
-  if (!names.length && !rejected && available && readable) return null;
+  // Nothing saved here: say nothing, even if storage is blocked (the Save form explains that when it matters).
+  if (!names.length && !rejected && readable) return null;
   const running = snapshot.camera === 'running';
   return (
     <section className="settings-card" aria-labelledby="saved-profiles-heading">
