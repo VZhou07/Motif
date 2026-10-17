@@ -12,7 +12,7 @@ import { movementEvidence, recommendMapping, type Effort, type MovementNotes, ty
 import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
-  type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
+  type InputMode, type MovementChoice, type ProfilesView, type ProposalCard, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
 } from './types';
 
 export const SESSION_LIMITS = {
@@ -57,7 +57,7 @@ const CONTROL_LABELS: Record<string, string> = {
   speak: 'Speak', undo: 'Undo', repeat: 'Say it again', helper: 'Helper', 'close-helper': 'Close helper',
   'clear-yes': 'Yes, clear it', 'clear-no': 'Keep it',
   clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
-  practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Finish practice',
+  practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Start talking',
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
 };
@@ -1481,6 +1481,15 @@ export class MotifSession {
     return null;
   }
 
+  private proposalCards(): ProposalCard[] {
+    const set = this.mappingSet();
+    return this.proposals.map((proposal) => ({
+      id: proposal.id, mode: proposal.mode, recommended: this.recommendation?.id === proposal.id,
+      inUse: !!this.mapping && sameMapping(proposal, this.mapping),
+      parts: set.flatMap((model) => { const action = proposal.assignments[model.id]; return action ? [{ label: model.label, action }] : []; }),
+    }));
+  }
+
   private movementSeen(): boolean {
     this.movementSeenShown = this.scanDriver === 'gesture' && this.isRoutedStage() && this.lastMovementAt !== null && this.clock() - this.lastMovementAt < 1_000;
     return this.movementSeenShown;
@@ -1509,6 +1518,7 @@ export class MotifSession {
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
+      proposals: this.stage === 'mapping' ? this.proposalCards() : [],
       helperOpen: this.helperOpen, confirmingClear: this.confirmingClear, movementSeen: this.movementSeen(),
       comfortPreview: this.comfortPreview(),
     };

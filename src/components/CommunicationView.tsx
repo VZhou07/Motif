@@ -63,7 +63,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           {!confirmingClear && !practice && has(offered, 'repeat') && (
             <ScanButton id="repeat" snapshot={snapshot} onActivate={activate} disabled={paused}>Say it again</ScanButton>
           )}
-          {practice && <ScanButton id="finish-practice" snapshot={snapshot} onActivate={activate} primary disabled={paused}>Finish practice</ScanButton>}
+          {practice && <ScanButton id="finish-practice" snapshot={snapshot} onActivate={activate} primary disabled={paused}>Start talking</ScanButton>}
         </div>
       </section>
       <div className="board">

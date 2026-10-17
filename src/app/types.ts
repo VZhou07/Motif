@@ -132,6 +132,8 @@ export interface SessionSnapshot {
   setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */
   recommendation: { id: string; reasons: string[] } | null;
+  /** The controls offered on the mapping screen, as cards (empty elsewhere). Same ids and order as the scan targets. */
+  proposals: ProposalCard[];
   /** Communication panel state; never stored in a profile. */
   helperOpen: boolean;
   confirmingClear: boolean;
@@ -141,6 +143,14 @@ export interface SessionSnapshot {
   comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
+}
+
+export interface ProposalCard {
+  id: string;
+  mode: 'auto' | 'step';
+  recommended: boolean;
+  inUse: boolean;
+  parts: Array<{ label: string; action: 'select' | 'next' | 'previous' | 'pause' }>;
 }
 
 export interface ProfilesView {

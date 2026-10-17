@@ -95,7 +95,7 @@ describe('C10 communication layout', () => {
     fireEvent.click(button('Helper'));
     fireEvent.click(button(/^Practice/));
     expect(h.snap.stage).toBe('practice');
-    expect(button(/Finish practice/)).toBeTruthy();
+    expect(button(/Start talking/)).toBeTruthy();
     expect(maybeButton('Helper')).toBeNull();
     expect(screen.getByRole('status', { name: /Movement seen/ })).toBeTruthy();
   });
