@@ -76,12 +76,17 @@ export type Observation =
   | { kind: 'invalid' }
 
 export type RuntimePhase = 'unarmed' | 'neutral' | 'armed' | 'pending' | 'held'
+/** Why a pending dwell ended without an event (R8 B2). */
+export type CancelCause = 'released' | 'band' | 'conflict' | 'invalid'
 export interface RuntimeUpdate {
   phase: RuntimePhase
   armed: boolean
   neutral: boolean
   started?: string
   cancelled?: boolean
+  /** Set with `cancelled: true`: the movement whose dwell ended, and why. */
+  cancelledId?: string
+  cancelCause?: CancelCause
   event?: ControlEvent
 }
 

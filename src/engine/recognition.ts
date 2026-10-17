@@ -1,5 +1,5 @@
 import {
-  FEATURE_IDS, type FeatureFrame, type GestureModel, type Observation, type RuntimePhase, type RuntimeUpdate,
+  FEATURE_IDS, type CancelCause, type FeatureFrame, type GestureModel, type Observation, type RuntimePhase, type RuntimeUpdate,
 } from '../domain/types'
 import { isValidFrame, MAX_FRAME_GAP_MS } from './features'
 
@@ -27,10 +27,11 @@ export function observeGestures(models: readonly GestureModel[], frame: FeatureF
   return { kind: 'active', gestureId: winner.model.id }
 }
 
-function isSingleTransitionBand(models: readonly GestureModel[], frame: FeatureFrame): boolean {
+/** The one model in its transition band (above release, nothing at activation), if exactly one is. */
+function transitionBandModel(models: readonly GestureModel[], frame: FeatureFrame): GestureModel | undefined {
   const distances = models.map((model) => ({ model, distance: model.direction * (frame.values[model.feature]! - model.baselineCenter) }))
-  return distances.filter(({ model, distance }) => distance > model.releaseThreshold).length === 1
-    && distances.every(({ model, distance }) => distance < model.activationThreshold)
+  const above = distances.filter(({ model, distance }) => distance > model.releaseThreshold)
+  return above.length === 1 && distances.every(({ model, distance }) => distance < model.activationThreshold) ? above[0]!.model : undefined
 }
 
 /** Emits at most once per hold. Only a fresh global neutral dwell can rearm. */
@@ -55,15 +56,23 @@ export class GestureRuntime {
     return { phase: this.phase, armed: this.phase === 'armed' || this.phase === 'pending', neutral: this.lastNeutral }
   }
 
-  invalidate(): RuntimeUpdate {
+  invalidate(cause: CancelCause = 'invalid'): RuntimeUpdate {
     const cancelled = this.phase === 'pending'
+    const cancelledId = this.pendingId
     this.phase = 'unarmed'
     this.neutralSince = undefined
     this.pendingSince = undefined
     this.pendingId = undefined
     this.lastTimestamp = undefined
     this.lastNeutral = false
-    return { ...this.snapshot, cancelled }
+    return cancelled ? { ...this.snapshot, cancelled, cancelledId, cancelCause: cause } : { ...this.snapshot, cancelled }
+  }
+
+  /** Disarms like `invalidate`, keeping time-continuity validation, and names why a pending dwell ended. */
+  private disarm(frame: FeatureFrame, cause: CancelCause): RuntimeUpdate {
+    const result = this.invalidate(cause)
+    this.lastTimestamp = frame.timestampMs
+    return result
   }
 
   step(frame: FeatureFrame, nowMs = frame.timestampMs): RuntimeUpdate {
@@ -76,18 +85,17 @@ export class GestureRuntime {
     this.lastNeutral = observation.kind === 'neutral'
     // Smoothing makes genuine motion traverse this band. It cannot start a dwell or arm
     // control, but it must not erase an already established neutral arming state.
-    if (observation.kind === 'uncertain' && this.phase === 'armed' && isSingleTransitionBand(this.models, frame)) {
+    const band = observation.kind === 'uncertain' ? transitionBandModel(this.models, frame) : undefined
+    if (observation.kind === 'uncertain' && this.phase === 'armed' && band) {
       this.neutralSince = undefined
       return this.snapshot
     }
-    if (observation.kind === 'invalid' || observation.kind === 'uncertain') {
-      const result = this.invalidate()
-      // Preserve time continuity validation even while intentionally disarmed.
-      this.lastTimestamp = frame.timestampMs
-      return result
-    }
+    // Preserve time continuity validation even while intentionally disarmed.
+    if (observation.kind === 'invalid') return this.disarm(frame, 'invalid')
+    if (observation.kind === 'uncertain') return this.disarm(frame, band && band.id === this.pendingId ? 'band' : 'conflict')
     if (observation.kind === 'neutral') {
       const cancelled = this.phase === 'pending'
+      const cancelledId = this.pendingId
       this.pendingSince = undefined
       this.pendingId = undefined
       if (this.phase !== 'armed') {
@@ -96,7 +104,7 @@ export class GestureRuntime {
         const neutralMs = Math.max(...this.models.map((model) => model.releaseMs))
         if (frame.timestampMs - this.neutralSince >= neutralMs) this.phase = 'armed'
       }
-      return { ...this.snapshot, cancelled }
+      return cancelled ? { ...this.snapshot, cancelled, cancelledId, cancelCause: 'released' } : { ...this.snapshot, cancelled }
     }
     this.neutralSince = undefined
     if (this.phase === 'armed') {
@@ -106,11 +114,7 @@ export class GestureRuntime {
       return { ...this.snapshot, started: observation.gestureId }
     }
     if (this.phase === 'pending') {
-      if (this.pendingId !== observation.gestureId) {
-        const result = this.invalidate()
-        this.lastTimestamp = frame.timestampMs
-        return result
-      }
+      if (this.pendingId !== observation.gestureId) return this.disarm(frame, 'conflict')
       const model = this.models.find((candidate) => candidate.id === observation.gestureId)!
       if (frame.timestampMs - this.pendingSince! >= model.activationMs) {
         this.phase = 'held'
