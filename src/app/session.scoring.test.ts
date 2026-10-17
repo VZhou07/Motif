@@ -33,6 +33,10 @@ describe('effort and observed use (R8)', () => {
     const h = new Harness();
     h.calibrate();
     expect(decisionIds(h)).toEqual(['comfortable', 'comfortable-effort', 'record-again', 'another-movement']);
+    const easy = new Harness();
+    easy.calibrate();
+    easy.selectByGesture('comfortable');
+    expect(evidenceOf(easy, BROW_LABEL).effort).toBe('easy');
     h.selectByGesture('comfortable-effort');
     expect(h.snap.stage).toBe('mapping');
     expect(evidenceOf(h, BROW_LABEL).effort).toBe('effort');
@@ -163,5 +167,33 @@ describe('custom controls (R8, helper form)', () => {
     expect(h.snap.mapping?.assignments).toEqual({ [brow!.id]: 'select', [mouth!.id]: 'next' });
     h.selectByGesture('approve-mapping');
     expect(h.snap.mapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow!.id]: 'pause' });
+  });
+});
+
+describe('evidence edge cases (R8)', () => {
+  it('validates custom controls against the movements being set up while adding', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    h.addMovement(OPEN_MOUTH, perform);
+    h.selectByGesture('comfortable');
+    const [mouth] = h.snap.setupModels.filter((model) => model.label === 'Open mouth');
+    const brow = h.snap.approvedModels[0]!;
+    expect(h.session.proposeCustom({ [mouth!.id]: 'select', [brow.id]: 'next' })).toBe(true);
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.mapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow.id]: 'next' });
+  });
+
+  it('counts holds that are consumed while paused or unmapped as completed', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    add(h, OPEN_MOUTH, 'comfortable', 'map:2'); // brow alone selects; mouth unmapped
+    h.selectByGesture('finish-practice');
+    const before = evidenceOf(h, 'Open mouth').use.completed;
+    h.run(600); h.run(600, MOUTH); h.run(600);
+    expect(evidenceOf(h, 'Open mouth').use.completed).toBe(before + 1);
+    h.selectByGesture('pause');
+    const paused = evidenceOf(h, 'Open mouth').use.completed;
+    h.run(600, MOUTH); h.run(600);
+    expect(evidenceOf(h, 'Open mouth').use.completed).toBe(paused + 1);
   });
 });

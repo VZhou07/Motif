@@ -55,6 +55,13 @@ describe('observed evidence (R8)', () => {
     expect(a!.use).toEqual({ completed: 0, unfinished: 0 });
   });
 
+  it('attributes checks by movement id even when two movements share a name', () => {
+    const cycles = [cycle('approved', ['a', 'b'], [attempt('a'), attempt('a'), attempt('b')])];
+    const [a, b] = movementEvidence([model('a', 'Same name'), model('b', 'Same name')], cycles);
+    expect(a!.checks.total).toBe(2);
+    expect(b!.checks.total).toBe(1);
+  });
+
   it('describes counts with denominators and never a rate or accuracy claim', () => {
     const lines = describeEvidence(evidence('Open mouth', { effort: 'easy', tiringReports: 1, use: { completed: 12, unfinished: 2 } })).join(' ');
     expect(lines).toMatch(/2 of 2 required checks passed/);
@@ -74,6 +81,19 @@ describe('ranking and recommendation (R8)', () => {
     expect(order([evidence('a', { separation: null }), evidence('b', { separation: 2 }), evidence('c', { separation: 8 })])).toEqual(['c', 'b', 'a']);
     expect(order([evidence('a'), evidence('b')])).toEqual(['a', 'b']);
     expect(order([evidence('b'), evidence('a')])).toEqual(['b', 'a']);
+  });
+
+  it('applies the keys in precedence order when they disagree', () => {
+    // Effort outranks use: easy with unfinished holds beats unrated with none.
+    expect(order([evidence('a', { use: { completed: 5, unfinished: 0 } }), evidence('b', { effort: 'easy', use: { completed: 5, unfinished: 4 } })])).toEqual(['b', 'a']);
+    // Use outranks separation.
+    expect(order([evidence('a', { separation: 20, use: { completed: 5, unfinished: 3 } }), evidence('b', { separation: 2, use: { completed: 5, unfinished: 0 } })])).toEqual(['b', 'a']);
+    // Tiring outranks effort.
+    expect(order([evidence('a', { effort: 'easy', tiringReports: 1 }), evidence('b', { effort: 'effort' })])).toEqual(['b', 'a']);
+  });
+
+  it('compares unfinished holds relative to completed ones, not as raw counts', () => {
+    expect(order([evidence('a', { use: { completed: 0, unfinished: 1 } }), evidence('b', { use: { completed: 20, unfinished: 2 } })])).toEqual(['b', 'a']);
   });
 
   it('recommends the best movement to select and the rest to next, previous and pause', () => {

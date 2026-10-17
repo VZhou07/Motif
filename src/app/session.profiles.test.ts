@@ -140,6 +140,7 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.phrases[0]).toBe('Hello');
     expect(h.snap.scan?.intervalMs).toBe(2_500);
     expect(h.snap.profiles).toMatchObject({ active: 'Person A', unsaved: false });
+    expect(h.snap.evidence.map((item) => item.effort)).toEqual(['unknown', 'unknown']); // effort is not saved in v1 profiles
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
     h.run(600);
     h.stepTo('finish-practice');
