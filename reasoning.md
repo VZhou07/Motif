@@ -597,3 +597,39 @@ Test exact5s Rest↔Action cycles across all training/held-out/cross-check/profi
 | R13 revision 1 | overlay_review | Read actual written design and implementation boundaries; no blockers. Boundary frame is already filtered but excluded from completed training; no held-out movement enters fitting. Pin continuous phase timing, exact neutral-only overlap and factual failure reports. | APPROVED |
 | R13 revision 2 | overlay_review | Full-recording explicit Action-window verification and failed-model diagnostics; pin `phase === 'armed' && neutral` on the last pre-Action frame; diagnostic model copy overlay-only. | APPROVED |
 | R13 revision 2 implementation | r13_testing | Ran tsc, vitest 353, build, browser 67/67. BLOCKING: pending-at-boundary fixture completed the dwell in Rest. Fixture changed to 150 ms pre-Action hold so the last Rest frame is still pending, one event inside Action, then rest; must fail with `Fresh rest did not arm before Action.` Recheck PASS (8/8 verification tests, tsc). Coordinator: 353 tests, typecheck, build. | PASS — software verified; real-user calibration/comfort pending |
+
+## R14 — Wink channels and a 600 ms peak hold (revision 1)
+
+Status: superseded. Independent review: CHANGES REQUIRED (B1 — `strongestHold` window underspecified). See revision 2.
+
+## R14 — Wink channels and a 600 ms peak hold (revision 2)
+
+Status: independently APPROVED (wink_rereview). Implementing. User reports a blink fires “close one eye”, and only Open mouth calibrates/holds well. Focused fix; overall Goal remains paused. No real webcam in this change. Held-out attempts, the armed 10 s negative window, and frozen thresholds stay as they are: fit only on the three training trials; evaluate on a frozen model; do not retune at runtime.
+
+Diagnosis: MediaPipe `eyeBlinkLeft/Right` rise on a two-eye blink, so the one-eye chooser is a blink detector. Open mouth works because it is easy to hold for most of a 5 s Action; `fitGesture` currently takes q25 of the last two-thirds of Action, so a 1 s eyebrow or head hold looks like rest.
+
+Design:
+
+- Derive wink from **raw** blendshapes in `extractFeatures` after they validate, using one pure helper: `winkLeft = clamp(eyeBlinkLeft − eyeBlinkRight, 0, 1)` and `winkRight` symmetrically. Do not put wink in `BLENDSHAPE_FEATURES`. Keep raw blink on the frame for the dashboard only. Do not recompute wink from independently smoothed blinks. The same helper fills synthetic frames so a bilateral blink cannot sit next to a rest-level wink.
+- Chooser and discovery `MOVEMENT_OPTIONS` “Close left/right eye (hold)” use `winkLeft` / `winkRight` only. Do not keep raw blink as a selectable movement. Do not remap saved `eyeBlink*` models onto wink.
+- Fit wink models with `activationMs` 500 written onto the model at fit time (`releaseMs` 350). Other features stay 250. The recognizer does not special-case wink. Do not learn dwell from the training hold.
+- Feature schema string changes when `winkLeft` / `winkRight` join `FEATURE_IDS` (coefficient, `[0, 1]`, noise floor 0.001). Saved profiles from before this change refuse restore on the existing mismatch path. Do not bump `PROFILE_VERSION`. Keep the R12 rest envelope; do not lower floors.
+
+`strongestHold` (Action only):
+
+1. Candidates are **contiguous Action slices** whose **timestamp span** is at least `SETTLED_MOVEMENT_MS` (600), not N frames.
+2. Score q25 signed distance of the **selected feature only**, and only on slices that pass the same `validateStream(..., 600)` density / gap / finite checks as today’s settled movement.
+3. Skip a slice whose q75 is more than four times `max(q25, feature noise floor)` — the same 4× consistency gate already used across training attempts — so a spike plus decay is not scored as a hold.
+4. Keep the legal window with the highest q25. That measures the strongest valid hold; it is not a search for any interval that makes the fit pass.
+5. If no legal window exists, fail with the existing incomplete-hold reason (`Hold the movement a little longer after it starts.`).
+6. **Rest / R12 tails stay the fixed final-third (or 600 ms) timestamp rule.** Never choose a rest interval by maximizing or minimizing a score.
+
+Tests: bilateral blink → wink 0; unilateral close → matching wink; 500 ms wink dwell ignores 200–350 ms both-eye blinks and accepts a 500 ms+ one-eye hold; negative window full of 200–350 ms two-eye blinks emits no wink event; wink path still cannot approve before held-out and negative; 800 ms mid-Action brow hold fits where last-two-thirds q25 would fail; 300 ms early spike still rejected (replace the old 900 ms start-then-release case); discovery still ignores blink and short unilateral wink spikes. Full unit/typecheck/build; independent tests. Real-camera success remains pending.
+
+### R14 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
+| R14 revision 1 | wink_review | B1: `strongestHold` underspecified (frame-count / sparse / rest-hunt risk). Revision 2 locks contiguous Action timestamp spans ≥ 600 ms, `validateStream(..., 600)`, fail closed if none, rest tails time-fixed. Held-out/negative/frozen thresholds unchanged. | CHANGES REQUIRED |
+| R14 revision 2 | wink_rereview | B1 resolved: every valid Action subarray with timestamp span ≥ 600 ms and `validateStream(..., 600)`; highest q25; rest tails time-fixed; wink from raw blinks; dwell 500/250; schema fail-closed. Non-blocking: pin 350 ms vs 500 ms+ unilateral wink; do not grow a window from a peak sample. | APPROVED |
+| R14 revision 2 implementation | r14_testing | Ran tsc, vitest 361, build, browser 67/67. BLOCKING: 4× skip and density untested. Tests added (smoothed 150 ms spike; 4-frame 600 ms density). Mutants confirmed. Recheck PASS: tsc, vitest 364, build. Coordinator: 364 tests, typecheck, build. | PASS — software verified; real-user wink/hold pending |

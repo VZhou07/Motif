@@ -30,6 +30,7 @@ describe('profile validation', () => {
     if (!parsed.ok) return;
     expect(Object.keys(parsed.value).sort()).toEqual(['featureSchema', 'mapping', 'models', 'name', 'phrases', 'scanIntervalMs', 'version']);
     expect(parsed.value.featureSchema).toBe(FEATURE_SCHEMA);
+    expect(FEATURE_SCHEMA).toContain('winkLeft,winkRight');
     expect(parsed.value.models).toEqual([brow, mouth]);
   });
 
