@@ -22,7 +22,9 @@ type Snap = Harness['snap'] & { confirmingRecalibrate: boolean; helperOpen: bool
 const snap = (h: Harness) => h.snap as Snap;
 const ids = (h: Harness) => h.snap.scan!.targets.map((target) => target.id);
 const decisionIds = (h: Harness) => h.snap.decisions.map((decision) => decision.id);
-const say = (h: Harness, ...list: string[]) => { for (const id of list) h.session.selectTarget(id); };
+/** Helper clicks: open the level holding each id first. `raw` selects an id exactly as given (refused unless it is in the current list). */
+const say = (h: Harness, ...list: string[]) => { for (const id of list) h.click(id); };
+const raw = (h: Harness, ...list: string[]) => { for (const id of list) h.session.selectTarget(id); };
 const evidenceOf = (h: Harness, label: string) => h.snap.evidence.find((item) => item.label === label);
 const sorted = (parts: Part[]) => [...parts].sort((a, b) => a.label.localeCompare(b.label));
 /** The controls actually turned on, in the same shape as the preview. */
@@ -46,7 +48,7 @@ function ready2(): Harness {
 function addingComfort(): Harness { const h = ready(); h.addMovement(OPEN_MOUTH, perform); expect(h.snap.stage).toBe('comfort'); expect(h.snap.adding).toBe(true); return h; }
 /** Recalibrating (same movement) from Helper, at the comfort screen. */
 function recalibratingComfort(h = ready()): Harness {
-  say(h, 'helper', 'recalibrate', 'recalibrate-yes');
+  say(h, 'recalibrate', 'recalibrate-yes');
   expect(h.snap.recalibrating).toBe(true);
   h.run(10_500);
   expect(h.snap.stage).toBe('choose');
@@ -176,13 +178,12 @@ describe('V2 preview equals what is approved', () => {
 
   it('V2 approving after tiring was reported earlier in the session still matches the preview', () => {
     const h = ready2();
-    say(h, 'helper', 'change-controls');
+    say(h, 'change-controls');
     say(h, 'report-tiring');
     say(h, `tiring:${h.snap.approvedModels[1]!.id}`);
     expect(h.snap.stage).toBe('mapping');
     h.session.decide('keep-current');
-    h.session.selectTarget('helper');
-    h.session.selectTarget('add-movement');
+    say(h, 'add-movement');
     h.session.chooseMovement(PUCKER_LIPS);
     h.followPrompts((s) => s.stage === 'negative' || s.stage === 'setup-failed', (s) => perform(s.capture?.movement ?? null));
     h.run(11_000, HEAD_WOBBLE);
@@ -309,9 +310,10 @@ describe('V4 Continue with a full re-check', () => {
 describe('V5 Recalibrate inside Helper', () => {
   it('V5 Recalibrate shows recalibrate-no then recalibrate-yes with no stage change', () => {
     const h = ready();
-    say(h, 'helper', 'recalibrate');
+    say(h, 'recalibrate');
     expect(snap(h).confirmingRecalibrate).toBe(true);
-    expect(ids(h)).toEqual(['recalibrate-no', 'recalibrate-yes']);
+    expect(h.snap.level?.kind).toBe('recalibrate');
+    expect(ids(h)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.recalibrating).toBe(false);
   });
@@ -319,10 +321,11 @@ describe('V5 Recalibrate inside Helper', () => {
   it('V5 No returns to the panel with nothing changed', () => {
     const h = ready();
     const before = JSON.stringify({ ms: h.snap.scan!.intervalMs, mapping: h.snap.mapping, models: h.snap.approvedModels, message: h.snap.message });
-    say(h, 'helper', 'recalibrate', 'recalibrate-no');
+    say(h, 'recalibrate', 'recalibrate-no');
     expect(snap(h).confirmingRecalibrate).toBe(false);
     expect(snap(h).helperOpen).toBe(true);
-    expect(ids(h)[0]).toBe('close-helper');
+    expect(h.snap.level?.kind).toBe('more');
+    expect(ids(h)[0]).toBe('clear');
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.recalibrating).toBe(false);
     expect(JSON.stringify({ ms: h.snap.scan!.intervalMs, mapping: h.snap.mapping, models: h.snap.approvedModels, message: h.snap.message })).toBe(before);
@@ -330,7 +333,7 @@ describe('V5 Recalibrate inside Helper', () => {
 
   it('V5 Yes starts the rest check with recalibrating true and closes the panel', () => {
     const h = ready();
-    say(h, 'helper', 'recalibrate', 'recalibrate-yes');
+    say(h, 'recalibrate', 'recalibrate-yes');
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.recalibrating).toBe(true);
     expect(h.snap.adding).toBe(false);
@@ -340,13 +343,14 @@ describe('V5 Recalibrate inside Helper', () => {
 
   it('V5 with the camera off, Yes changes nothing, stays in the panel and says why', () => {
     const h = ready();
-    say(h, 'helper', 'recalibrate');
+    say(h, 'recalibrate');
     h.session.setCamera('off');
     h.session.selectTarget('recalibrate-yes');
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.recalibrating).toBe(false);
     expect(h.snap.adding).toBe(false);
     expect(snap(h).helperOpen).toBe(true);
+    expect(h.snap.level?.kind).toBe('more');
     expect(snap(h).confirmingRecalibrate).toBe(false);
     expect(h.snap.announcement).toMatch(/Start the camera first/i);
     expect(h.snap.approvedModels).toHaveLength(1);
@@ -354,45 +358,60 @@ describe('V5 Recalibrate inside Helper', () => {
 
   it('V5 the confirmation resets when communication is re-entered and when going back to the start screen', () => {
     const a = ready();
-    say(a, 'helper', 'recalibrate');
+    say(a, 'recalibrate');
     a.session.useAssisted();
     expect(snap(a).confirmingRecalibrate).toBe(false);
     const b = ready();
-    say(b, 'helper', 'recalibrate');
+    say(b, 'recalibrate');
     b.session.returnToStart();
     expect(snap(b).confirmingRecalibrate).toBe(false);
   });
 
   it('V5 the confirmation survives tracking loss', () => {
     const h = ready();
-    say(h, 'helper', 'recalibrate');
+    say(h, 'recalibrate');
     for (let i = 0; i < 20; i += 1) h.step(REST, 'missing');
     h.run(2_000, REST);
     expect(snap(h).confirmingRecalibrate).toBe(true);
-    expect(ids(h)).toEqual(['recalibrate-no', 'recalibrate-yes']);
+    expect(ids(h)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
   });
 
-  it('V5 the confirmation survives the step-idle fallback', () => {
+  it('V5 the step-idle fallback goes back to the main list and changes nothing', () => {
     const h = ready2();
-    say(h, 'helper', 'recalibrate');
+    say(h, 'recalibrate');
     h.run(61_000, REST);
     expect(h.snap.stepFallback).toBe(true);
-    expect(snap(h).confirmingRecalibrate).toBe(true);
+    expect(snap(h).confirmingRecalibrate).toBe(false);
+    expect(h.snap.level?.kind).toBe('top');
+    expect(h.snap.recalibrating).toBe(false);
+    expect(h.snap.approvedModels).toHaveLength(2);
+  });
+
+  it('V5 left alone, the confirmation returns to the main list after two idle wraps and changes nothing', () => {
+    const h = ready();
+    say(h, 'recalibrate');
+    h.run(30_000, REST);
+    expect(snap(h).confirmingRecalibrate).toBe(false);
+    expect(h.snap.level?.kind).toBe('top');
+    expect(h.snap.recalibrating).toBe(false);
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.approvedModels).toHaveLength(1);
   });
 
   it('V5 the recalibrate-confirm stage is never entered any more', () => {
     const h = ready();
     const seen = stagesSeen(h);
-    say(h, 'helper', 'recalibrate', 'recalibrate-no', 'recalibrate', 'recalibrate-yes');
+    say(h, 'recalibrate', 'recalibrate-no', 'recalibrate', 'recalibrate-yes');
     expect(seen.has('recalibrate-confirm')).toBe(false);
   });
 
   it('V5 recalibrate-yes and recalibrate-no ids do nothing unless the confirmation is open', () => {
     const h = ready();
-    say(h, 'recalibrate-yes', 'recalibrate-no', 'recalibrate');
+    raw(h, 'recalibrate-yes', 'recalibrate-no', 'recalibrate');
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.recalibrating).toBe(false);
-    say(h, 'helper', 'recalibrate-yes');
+    say(h, 'more');
+    raw(h, 'recalibrate-yes');
     expect(h.snap.recalibrating).toBe(false);
     expect(h.snap.stage).toBe('communication');
   });
@@ -402,13 +421,13 @@ describe('V5 Recalibrate inside Helper', () => {
 describe('V6 A movement is tiring inside Change controls', () => {
   it('V6 Helper no longer lists tiring', () => {
     const h = ready2();
-    say(h, 'helper');
+    say(h, 'more');
     expect(ids(h)).not.toContain('tiring');
   });
 
   it('V6 Change controls with 2+ movements lists report-tiring after the proposals, Keep current first', () => {
     const h = ready2();
-    say(h, 'helper', 'change-controls');
+    say(h, 'change-controls');
     expect(h.snap.stage).toBe('mapping');
     const list = decisionIds(h);
     expect(list[0]).toBe('keep-current');
@@ -420,7 +439,7 @@ describe('V6 A movement is tiring inside Change controls', () => {
 
   it('V6 report-tiring opens the tiring stage; choosing a movement returns to mapping with the recommendation updated', () => {
     const h = ready2();
-    say(h, 'helper', 'change-controls');
+    say(h, 'change-controls');
     const before = h.snap.recommendation;
     say(h, 'report-tiring');
     expect(h.snap.stage).toBe('tiring');
@@ -434,7 +453,7 @@ describe('V6 A movement is tiring inside Change controls', () => {
 
   it('V6 never-mind returns to mapping, not communication', () => {
     const h = ready2();
-    say(h, 'helper', 'change-controls', 'report-tiring');
+    say(h, 'change-controls', 'report-tiring');
     expect(h.snap.stage).toBe('tiring');
     h.session.decide('never-mind');
     expect(h.snap.stage).toBe('mapping');
@@ -443,7 +462,7 @@ describe('V6 A movement is tiring inside Change controls', () => {
 
   it('V6 with one movement there is no report-tiring', () => {
     const h = ready();
-    say(h, 'helper', 'change-controls');
+    say(h, 'change-controls');
     expect(h.snap.stage).toBe('mapping');
     expect(decisionIds(h)).not.toContain('report-tiring');
     h.session.decide('report-tiring' as never);
@@ -463,20 +482,20 @@ describe('V7 first accidental selection safety', () => {
 
   it('V7 recalibrate-no is first in the confirmation', () => {
     const h = ready();
-    say(h, 'helper', 'recalibrate');
+    say(h, 'recalibrate');
     expect(ids(h)[0]).toBe('recalibrate-no');
     expect(h.highlightedId()).toBe('recalibrate-no');
   });
 
   it('V7 keep-current is first on Change controls', () => {
     const h = ready2();
-    say(h, 'helper', 'change-controls');
+    say(h, 'change-controls');
     expect(ids(h)[0]).toBe('keep-current');
   });
 
   it('V7 a hold started on one list that swaps to the confirmation selects nothing', () => {
     const h = ready();
-    say(h, 'helper');
+    say(h, 'more');
     h.run(1_500, REST);
     h.run(150, BROW);
     say(h, 'recalibrate');
@@ -549,7 +568,7 @@ describe('V10 nothing new is stored', () => {
   it('V10 profiles never contain the new flags, notes or previews', () => {
     const storage = createMemoryStorage();
     const h = ready({ profiles: createLocalProfileStore(() => storage) });
-    say(h, 'helper', 'recalibrate', 'recalibrate-no', 'slower');
+    say(h, 'recalibrate', 'recalibrate-no', 'slower');
     h.addMovement(OPEN_MOUTH, perform);
     h.session.decide('effort-choose');
     h.session.decide('approve-comfortable' as never);

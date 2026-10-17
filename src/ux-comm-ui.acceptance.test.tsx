@@ -24,6 +24,8 @@ function ready(): Harness {
 const button = (name: string | RegExp) => screen.getByRole('button', { name });
 const maybeButton = (name: string | RegExp) => screen.queryByRole('button', { name });
 const phrase = (text: string) => button(`Add “${text}” to message`);
+/** Open a phrase group by its tile, then add a phrase (a phrase always sits inside a group now). */
+const add = (group: string, text: string) => { fireEvent.click(button(new RegExp(`^Open ${group}`))); fireEvent.click(phrase(text)); };
 const before = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 const unnamed = () => ['button', 'textbox', 'combobox', 'checkbox', 'radio'].flatMap((role) =>
   screen.queryAllByRole(role, { name: (name) => name.trim() === '' }).map((el) => `${role}: ${el.outerHTML.slice(0, 80)}`));
@@ -32,31 +34,40 @@ describe('C10 communication layout', () => {
   it('C10 the message region comes before the phrase grid', () => {
     mount(ready());
     const message = screen.getByRole('region', { name: 'Message' });
-    const grid = screen.getByRole('group', { name: 'Phrases' });
+    const grid = screen.getByRole('group', { name: 'Phrase groups' });
     expect(before(message, grid)).toBe(true);
   });
 
-  it('C10 Speak and Undo appear only with a message', () => {
-    mount(ready());
-    expect(maybeButton(/^Speak/)).toBeNull();
-    expect(maybeButton(/^Undo/)).toBeNull();
-    fireEvent.click(phrase('Yes'));
+  it('C10 Speak and Undo are always on screen, muted without a message, and work with one', () => {
+    const h = ready();
+    mount(h);
     expect(button(/^Speak/)).toBeTruthy();
     expect(button(/^Undo/)).toBeTruthy();
+    add('Quick', 'Yes');
+    expect(h.snap.message).toEqual(['Yes']);
+    expect(button(/^Speak/)).toBeTruthy();
     fireEvent.click(button(/^Undo/));
-    expect(maybeButton(/^Speak/)).toBeNull();
-    expect(maybeButton(/^Undo/)).toBeNull();
+    expect(h.snap.message).toEqual([]);
+    expect(button(/^Speak/)).toBeTruthy();
+    expect(button(/^Undo/)).toBeTruthy();
   });
 
-  it('C10 "Say it again" appears only after something was spoken, with the last spoken text', () => {
-    mount(ready());
+  it('C10 "Say it again" appears only when the message is empty and something was spoken', () => {
+    const h = ready();
+    mount(h);
     expect(maybeButton(/Say it again/)).toBeNull();
-    fireEvent.click(phrase('Yes'));
+    add('Quick', 'Yes');
     expect(maybeButton(/Say it again/)).toBeNull();
     fireEvent.click(button(/^Speak/));
     expect(button(/Say it again/)).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Message' }).textContent).toMatch(/Yes/);
-    expect(maybeButton(/^Speak/)).toBeNull();
+    add('Quick', 'No');
+    expect(maybeButton(/Say it again/)).toBeNull();
+    fireEvent.click(button(/^Undo/));
+    expect(button(/Say it again/)).toBeTruthy();
+    fireEvent.click(button(/Say it again/));
+    expect(h.spoken).toEqual(['Yes', 'Yes']);
+    expect(h.snap.message).toEqual([]);
   });
 
   it('C10 the Helper panel shows "Your controls" tiles before "Scanning and message"', () => {
@@ -119,6 +130,7 @@ describe('C11 sizes and names', () => {
     mount(h);
     const states: Array<[string, () => void]> = [
       ['board', () => {}],
+      ['group', () => { fireEvent.click(button(/^Open Quick/)); }],
       ['message', () => { fireEvent.click(phrase('Yes')); }],
       ['helper', () => { fireEvent.click(button('Helper')); }],
       ['clear confirmation', () => { fireEvent.click(button(/^Clear/)); }],
@@ -147,7 +159,7 @@ describe('C16 focus', () => {
 
   it('C16 the Clear confirmation focuses its question; Keep it and Yes return focus to the Helper button', () => {
     mount(ready());
-    fireEvent.click(phrase('Yes'));
+    add('Quick', 'Yes');
     fireEvent.click(button('Helper'));
     fireEvent.click(button(/^Clear/));
     const question = document.activeElement as HTMLElement;

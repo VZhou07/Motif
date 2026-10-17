@@ -57,16 +57,16 @@ function ready2(): Harness {
   return h;
 }
 /** Tiring is reported from Change controls (two movements). */
-function tiringStage(): Harness { const h = ready2(); h.session.selectTarget('helper'); h.session.selectTarget('change-controls'); h.session.selectTarget('report-tiring'); expect(h.snap.stage).toBe('tiring'); return h; }
+function tiringStage(): Harness { const h = ready2(); h.click('change-controls'); h.click('report-tiring'); expect(h.snap.stage).toBe('tiring'); return h; }
 /** Adding a second movement, at the comfort screen (then mapping after Comfortable). */
 function adding(stage: 'choose' | 'comfort' | 'mapping'): Harness {
   const h = ready();
-  if (stage === 'choose') { h.session.selectTarget('helper'); h.session.selectTarget('add-movement'); return h; }
+  if (stage === 'choose') { h.click('add-movement'); return h; }
   h.addMovement(OPEN_MOUTH, perform);
   if (stage === 'mapping') h.selectByGesture('choose-different');
   return h;
 }
-function changeControls(): Harness { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('change-controls'); expect(h.snap.stage).toBe('mapping'); return h; }
+function changeControls(): Harness { const h = ready(); h.click('change-controls'); expect(h.snap.stage).toBe('mapping'); return h; }
 function discoverResults(): Harness {
   const h = atChoose();
   h.session.startDiscovery();
@@ -227,7 +227,7 @@ describe('U1 setup progress bar', () => {
     ['adding choose', () => adding('choose'), ADDING, 0], ['adding comfort', () => adding('comfort'), ADDING, 4], ['adding mapping', () => adding('mapping'), ADDING, 4],
     ['restoring rest', () => restoring(false), RESTORING, 0], ['quick restore confirm', () => restoring(true), RESTORING, 3],
     ['tiring', () => tiringStage(), null, null],
-    ['helper recalibrate confirmation (not a setup stage)', () => { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('recalibrate'); return h; }, null, null],
+    ['helper recalibrate confirmation (not a setup stage)', () => { const h = ready(); h.click('recalibrate'); return h; }, null, null],
     ['change controls mapping', () => changeControls(), null, null],
   ];
   for (const [name, make, segments, current] of cases) {
