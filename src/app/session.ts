@@ -688,7 +688,8 @@ export class MotifSession {
       return;
     }
     scanner.setSuspended(false, nowMs);
-    if (this.lastScanFrameTimestamp !== undefined) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
+    // A paused scan never counts toward the step fallback, which would otherwise rebuild an unpaused scanner.
+    if (this.lastScanFrameTimestamp !== undefined && !scanner.snapshot.paused) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
     this.lastScanFrameTimestamp = frame.timestampMs;
     const update = this.runtime.step(frame, nowMs);
     // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
