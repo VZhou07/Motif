@@ -50,18 +50,20 @@ function ready(options: ConstructorParameters<typeof Harness>[0] = {}): Harness 
 function ready2(): Harness {
   const h = ready();
   h.addMovement(OPEN_MOUTH, perform);
-  h.selectByGesture('comfortable');
+  h.selectByGesture('choose-different');
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
   h.stepTo('finish-practice');
   return h;
 }
+/** Tiring is reported from Change controls (two movements). */
+function tiringStage(): Harness { const h = ready2(); h.session.selectTarget('helper'); h.session.selectTarget('change-controls'); h.session.selectTarget('report-tiring'); expect(h.snap.stage).toBe('tiring'); return h; }
 /** Adding a second movement, at the comfort screen (then mapping after Comfortable). */
 function adding(stage: 'choose' | 'comfort' | 'mapping'): Harness {
   const h = ready();
   if (stage === 'choose') { h.session.selectTarget('helper'); h.session.selectTarget('add-movement'); return h; }
   h.addMovement(OPEN_MOUTH, perform);
-  if (stage === 'mapping') h.selectByGesture('comfortable');
+  if (stage === 'mapping') h.selectByGesture('choose-different');
   return h;
 }
 function changeControls(): Harness { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('change-controls'); expect(h.snap.stage).toBe('mapping'); return h; }
@@ -177,8 +179,8 @@ describe('U2 setupProgress', () => {
     }
   });
 
-  it('U2 is hidden on tiring, recalibrate-confirm, Change controls and every non-setup stage', async () => {
-    for (const stage of ['tiring', 'recalibrate-confirm', 'welcome', 'practice', 'communication'] as const) {
+  it('U2 is hidden on tiring, Change controls and every non-setup stage', async () => {
+    for (const stage of ['tiring', 'welcome', 'practice', 'communication'] as const) {
       expect([stage, await setupProgress(snap({ stage, approvedModels: [model] }))]).toEqual([stage, null]);
     }
     for (const stage of ['mapping', 'mapping-confirm'] as const) {
@@ -224,8 +226,8 @@ describe('U1 setup progress bar', () => {
     ['discover-results', () => discoverResults(), FIRST, 1],
     ['adding choose', () => adding('choose'), ADDING, 0], ['adding comfort', () => adding('comfort'), ADDING, 4], ['adding mapping', () => adding('mapping'), ADDING, 4],
     ['restoring rest', () => restoring(false), RESTORING, 0], ['quick restore confirm', () => restoring(true), RESTORING, 3],
-    ['tiring', () => { const h = ready2(); h.stepTo('tiring'); return h; }, null, null],
-    ['recalibrate-confirm', () => { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('recalibrate'); return h; }, null, null],
+    ['tiring', () => tiringStage(), null, null],
+    ['helper recalibrate confirmation (not a setup stage)', () => { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('recalibrate'); return h; }, null, null],
     ['change controls mapping', () => changeControls(), null, null],
   ];
   for (const [name, make, segments, current] of cases) {
@@ -267,8 +269,7 @@ describe('U3 plain words', () => {
     const screens: Array<[string, () => Harness]> = [
       ['baseline', () => atBaseline()], ['choose', () => atChoose()], ['training', () => atTraining()], ['verify', () => atVerify()], ['negative', () => atNegative()],
       ['comfort', () => atComfort()], ['discover-results', () => discoverResults()], ['adding mapping', () => adding('mapping')], ['restoring', () => restoring(false)],
-      ['quick restore', () => restoring(true)], ['tiring', () => { const h = ready2(); h.stepTo('tiring'); return h; }],
-      ['recalibrate', () => { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('recalibrate'); return h; }],
+      ['quick restore', () => restoring(true)], ['tiring', () => tiringStage()],
       ...FAILURE_KINDS.map((kind): [string, () => Harness] => [`failed ${kind}`, () => FAILS[kind]()]),
     ];
     for (const [name, make] of screens) {
@@ -489,8 +490,7 @@ describe('U9 short leads', () => {
       ['baseline', () => atBaseline()], ['choose', () => atChoose()], ['training', () => atTraining()], ['verify', () => atVerify()], ['negative', () => atNegative()],
       ['comfort', () => atComfort()], ['discover', () => { const h = atChoose(); h.session.startDiscovery(); h.run(500); return h; }], ['discover-results', () => discoverResults()],
       ['mapping', () => adding('mapping')], ['mapping-confirm', () => { const h = adding('mapping'); h.selectByGesture('map:0'); return h; }],
-      ['tiring', () => { const h = ready2(); h.stepTo('tiring'); return h; }],
-      ['recalibrate-confirm', () => { const h = ready(); h.session.selectTarget('helper'); h.session.selectTarget('recalibrate'); return h; }],
+      ['tiring', () => tiringStage()],
       ...FAILURE_KINDS.map((kind): [string, () => Harness] => [`failed ${kind}`, () => FAILS[kind]()]),
     ];
     for (const [name, make] of stages) {
@@ -535,7 +535,7 @@ describe('U12 names and sizes', () => {
   it('U12 every control on every setup screen has an accessible name', () => {
     const screens: Array<[string, () => Harness]> = [
       ['baseline', () => atBaseline()], ['choose', () => atChoose()], ['training', () => atTraining()], ['comfort', () => atComfort()],
-      ['discover-results', () => discoverResults()], ['mapping', () => adding('mapping')], ['tiring', () => { const h = ready2(); h.stepTo('tiring'); return h; }],
+      ['discover-results', () => discoverResults()], ['mapping', () => adding('mapping')], ['tiring', () => tiringStage()],
       ['change controls', () => changeControls()], ['restoring', () => restoring(false)], ['quick restore', () => restoring(true)],
       ...FAILURE_KINDS.map((kind): [string, () => Harness] => [`failed ${kind}`, () => FAILS[kind]()]),
     ];
