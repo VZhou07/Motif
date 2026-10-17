@@ -32,7 +32,7 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 | --- | --- |
 | W0/W1/WF1/WF2 | Reached. |
 | W2–W5 (camera, calibration, one-gesture communication, first slice) | Software verified; human acceptance pending (real webcam, live values, anatomical/head-direction labels, comfort, speech audibility). Reviews: r5_review → r5_rereview APPROVED; w2_w4_test_review → fixes → w2_w4_recheck PASS. |
-| W6 remaining P0 (multi-gesture) | IMPLEMENTING. R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
+| W6 remaining P0 (multi-gesture) | TESTING (session 3 coordinator owns `src/app/session.test.ts`, `src/app/session.ts`, `src/components/**`, `src/App.test.tsx`). R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
 | W7a profiles/recalibration → W7b scoring/recommendations → W7c discovery | Authorized, not started. Each needs its own reasoning revision + independent review before code. |
 | W8 hardening | Authorized, not started. Human checks stay pending. |
 
@@ -64,3 +64,8 @@ Done and committed:
 - npm defaults to offline; network installs need native approval with command-local flags. No global config changes.
 - Git author identity is configured locally (values not logged).
 - Running processes/worktrees left by this session: none.
+
+## Environment (Linux server, session 3, 2026-10-17)
+
+- Linux x64, Node 24.18.0. `npm ci` + `npm run setup:assets` worked online. No Chrome/Edge installed: `scripts/browser-check.mjs` falls back to Playwright's bundled Chromium (revision 1248, already present in the default Playwright cache; otherwise `npx playwright install chromium`). Baseline at `c72dfd0`: tsc PASS, vitest 12 files/110 PASS, build PASS, browser-check 12/12 PASS.
+- Coordinator: Claude Code (session 3). Commits: `f1291e7 Add bundled Chromium fallback`.
