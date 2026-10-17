@@ -289,4 +289,34 @@ describe('Motif app', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Look for movements again' }));
     expect(h.snap.stage).toBe('discover');
   });
+
+  it('gives every control on each screen an accessible name and keeps one app announcer', () => {
+    const unnamed = () => ['button', 'textbox', 'combobox', 'checkbox', 'progressbar'].flatMap((role) =>
+      screen.queryAllByRole(role, { name: (name) => name.trim() === '' }).map((element) => `${role}: ${element.outerHTML.slice(0, 80)}`));
+    const announcers = () => document.querySelectorAll('[aria-live]').length;
+    const h = new Harness();
+    h.session.setPhrase(0, 'Yes');
+    const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    const screens: Array<[string, () => void]> = [
+      ['welcome', () => {}],
+      ['rest check', () => { h.session.setCamera('running'); h.session.startBaseline(); h.run(2_000); }],
+      ['choose', () => h.run(9_000)],
+      ['training', () => h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' })],
+      ['comfort', () => { h.followPrompts((snap) => snap.stage === 'negative'); h.run(11_000, (t) => ({ headYaw: 6 * Math.sin(t / 900) })); }],
+      ['mapping', () => h.selectByGesture('comfortable')],
+      ['mapping confirm', () => h.selectByGesture('map:0')],
+      ['practice', () => h.selectByGesture('approve-mapping')],
+      ['communication', () => h.selectByGesture('finish-practice')],
+      ['recalibrate', () => h.selectByGesture('recalibrate')],
+      ['assisted', () => { h.selectByGesture('keep-current'); h.session.useAssisted(); }],
+    ];
+    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'mapping', 'mapping-confirm', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
+    for (const [index, [name, go]] of screens.entries()) {
+      act(go);
+      expect([name, h.snap.stage]).toEqual([name, stages[index]]);
+      expect([name, unnamed()]).toEqual([name, []]);
+      expect([name, announcers()]).toEqual([name, 1]);
+    }
+    view.unmount();
+  });
 });
