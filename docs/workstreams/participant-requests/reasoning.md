@@ -178,6 +178,13 @@ One controller per shared client. Agent 3 calls `controller.dispose()` before `c
 - B4: cancel subject bound to user actions with a local monotonic sequence; terminal subject never falls through; mid-dwell completion and clock-skew tests.
 - M1 cancel-rejection wording; M2 announcement dedupe/order/no token; M3 gesture tests labelled feature-level with real-session tests for Agent 3; M4 PGlite transport details and test-only import exception; M5 helper buttons same rules; M6 pairing errors, already_paired, sign-out warning; M7 placement; M8 lifetime and fail-closed id; M9 new id after removal; M10 added tests.
 
+## Implementation notes (routine choices made while coding; no design change)
+
+- The controller starts `client.watch` in its constructor instead of on the first subscriber, so a send result is reconciled even before the UI subscribes. `dispose()` unwatches.
+- A send rejected with `session_changed` (account changed under it) is marked not confirmed silently and announced only when the next authoritative snapshot confirms the same person; if the person changed, the entry is dropped unannounced. This avoids a stale-session announcement during a switch (found by the direct A1 → A2 test).
+- Card helper buttons have their own accessible names ("Cancel this water request", "Remove this unconfirmed water request") so they never share a name with the Cancel scan target.
+- Component tests use a minimal stand-in `CareClient` because PGlite cannot load under jsdom; all delivery behaviour is tested against the real `CareService` and SQL in node-environment tests.
+
 ## Review record
 
 | Revision | Reviewer | Findings / resolution | Verdict |
