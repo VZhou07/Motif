@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { liveDeviation, MOVEMENT_OPTIONS, type MovementOption } from '../app/movements';
+import { liveDeviation, MOVEMENT_OPTIONS } from '../app/movements';
 import type { MotifSession } from '../app/session';
 import type { CapturePrompt, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
@@ -116,15 +116,13 @@ export function CaptureView({ snapshot, session }: ViewProps) {
 }
 
 export function ChooseView({ snapshot, session }: ViewProps) {
-  const [selected, setSelected] = useState<MovementOption | null>(null);
-  const [name, setName] = useState('');
   const regions = [...new Set(MOVEMENT_OPTIONS.map((option) => option.region))];
   // While adding, movements already in the approved set are refused by the session; show that up front.
   const inUse = new Set(snapshot.adding ? snapshot.approvedModels.map((model) => `${model.feature}:${model.direction}`) : []);
   return (
     <>
       <Heading eyebrow="STEP 2 · FIND YOUR MOVEMENT" title={<>A movement that<br /><em>works for you.</em></>}
-        lead="Choose any movement you can comfortably repeat and hold until the Rest cue. The number shows how strongly it registers compared with your own rest." />
+        lead="Click any movement you can comfortably repeat and hold until the Rest cue; recording starts right away. The number shows how strongly it registers compared with your own rest." />
       <p className="helper-copy">The rhythm alternates: 5 seconds of Rest, then 5 seconds of Action. Stay relaxed during Rest; make and hold your movement during Action. The camera overlay shows what Motif is measuring.</p>
       {(snapshot.recalibrating || snapshot.adding) && <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />}
       {snapshot.adding && <p className="status-notice">Adding a movement to: {snapshot.mappingLabel}. Movements you already use cannot be chosen twice.</p>}
@@ -137,8 +135,8 @@ export function ChooseView({ snapshot, session }: ViewProps) {
               const key = `${option.feature}:${option.direction}`;
               const used = inUse.has(key);
               return (
-                <button key={key} type="button" className="button feature-button" aria-pressed={selected === option} disabled={used}
-                  onClick={() => { setSelected(option); setName((current) => (!current.trim() || current === selected?.label ? option.label : current)); }}>
+                <button key={key} type="button" className="button feature-button" disabled={used || snapshot.camera !== 'running'}
+                  onClick={() => session.chooseMovement({ feature: option.feature, direction: option.direction, label: option.label })}>
                   {option.label}<span>{used ? 'already in use' : deviation === null ? '—' : `${Math.max(0, deviation).toFixed(1)}× rest`}</span>
                 </button>
               );
@@ -146,23 +144,13 @@ export function ChooseView({ snapshot, session }: ViewProps) {
           </div>
         </fieldset>
       ))}
-      <label className="text-field">Name for this movement <span>(optional)</span>
-        <input value={name} maxLength={60} placeholder={selected ? 'My comfortable movement' : 'Choose a movement above first'} disabled={!selected} onChange={(event) => setName(event.target.value)} />
-      </label>
       <div className="button-row">
         <button type="button" className="button" disabled={snapshot.camera !== 'running'} onClick={() => session.startDiscovery()}>Not sure? Find my movements</button>
       </div>
       <div className="button-row">
-        <button type="button" className="button button-primary" disabled={!selected || snapshot.camera !== 'running'}
-          onClick={() => selected && session.chooseMovement({ feature: selected.feature, direction: selected.direction, label: name.trim() || selected.label })}>
-          Record this movement<Icon name="arrow" /></button>
         <button type="button" className="button button-quiet" onClick={() => session.cancel()}>Stop setup</button>
       </div>
-      {(!selected || snapshot.camera !== 'running') && (
-        <p className="helper-copy" role="status">
-          {!selected ? 'Choose a movement above to enable recording. The name is optional.' : 'Waiting for the camera before you can record.'}
-        </p>
-      )}
+      {snapshot.camera !== 'running' && <p className="helper-copy" role="status">Waiting for the camera before you can record.</p>}
       <p className="helper-copy">Next: three practice attempts, two separate checks, then ten seconds of everyday activity. Head-direction labels are calculated from the camera geometry and still need confirmation on real hardware.</p>
       <SetupOptions snapshot={snapshot} session={session} />
     </>
