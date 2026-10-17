@@ -10,6 +10,8 @@ import { STARTER_PHRASES } from './types';
 export const PROFILE_VERSION = 1;
 export const PROFILE_KEY = 'motif.profiles';
 export const MAX_PROFILES = 8;
+/** Reserved name the session refreshes automatically after approval, so a page refresh never loses the setup. */
+export const AUTO_PROFILE_NAME = 'Last setup';
 export const FEATURE_SCHEMA = FEATURE_IDS.join(',');
 /** Mirrors SESSION_LIMITS scan bounds (checked by a test) without importing the session. */
 export const PROFILE_SCAN = { minMs: 1_000, maxMs: 6_000, stepMs: 500 } as const;

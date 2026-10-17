@@ -9,7 +9,7 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
+import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
   type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
@@ -618,6 +618,7 @@ export class MotifSession {
       this.activeSignature = this.signature(profile.models, profile.mapping.assignments, profile.phrases, profile.scanIntervalMs);
       this.refreshProfiles();
     }
+    this.autoSaveProfile();
     this.enterPractice();
     this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.`);
   }
@@ -889,6 +890,14 @@ export class MotifSession {
     return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, phrases, intervalMs]);
   }
 
+  /** Keeps the approved setup under a reserved name; failures (blocked or full storage) are silent and never affect input. */
+  private autoSaveProfile(): void {
+    if (!this.hasApproved || !this.mapping) return;
+    const built = buildProfile({ name: AUTO_PROFILE_NAME, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs });
+    if (built.ok) this.store.save(built.value, true);
+    this.refreshProfiles();
+  }
+
   /** Explicit, caregiver-assisted Save of the approved setup. Never reachable from the scanner. */
   saveProfile(name: string, replace = false): StoreResult {
     const refuse = (reason: string): StoreResult => { this.announce(reason); this.publish(); return { ok: false, code: 'invalid', reason }; };
@@ -1131,6 +1140,7 @@ export class MotifSession {
   private changeInterval(delta: number, nowMs: number): void {
     this.intervalMs = Math.max(SESSION_LIMITS.scanMinMs, Math.min(SESSION_LIMITS.scanMaxMs, this.intervalMs + delta));
     this.scanner?.setInterval(this.intervalMs, nowMs);
+    this.autoSaveProfile();
     this.announce(`Scanning every ${(this.intervalMs / 1_000).toFixed(1)} seconds.`);
   }
 
