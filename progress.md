@@ -46,9 +46,9 @@ Done and committed:
 
 ## Exact next work (ordered)
 
-1. Write W6 session tests in `src/app/session.test.ts` (new `describe('multiple gestures')`): add a second gesture (MOUTH) via `addMovement`, assert cross-check evidence and negative window over both; candidate that disturbs the old gesture fails its cross-check and the old set/mapping stay active after fresh neutral; duplicate movement refused; simultaneous BROW+MOUTH selects nothing; Next/Select step mode: no timed advance, a next dwell spanning a scan boundary selects nothing, select picks the stepped item; previous with 3 gestures; pause gesture toggles and next is ignored while paused; one-gesture fallback ignores the unmapped gesture; Change controls needs confirm + fresh neutral, Keep current preserves mapping; Use previous controls; idle fallback after 60 s; 3- and 4-gesture mappings reach every control; assisted mode unaffected. Fix any bugs found. Commit tests and each fix separately.
-2. Small UI follow-ups (commit separately): CameraPanel lists every approved movement with its action; ChooseView disables already-used movements while adding; EvidencePanel labels cross-checks; App test that renders mapping proposals with scan highlight.
-3. Full checks (tsc, vitest, build, browser-check), then an independent testing-review subagent (give it the skill file, the four docs, role, R6 revision 2, files, checks). Fix blockers as small commits; record results in `reasoning.md` (R6 review table) and here; mark W6 "software verified; human acceptance pending" in `plan.md`.
+1. DONE (session 3): W6 session tests (`describe('multiple gestures (R6)')`, 13 tests: add/cross-check/negative, interfering candidate, duplicate refusal, simultaneous movements, step mode, next across a boundary in fallback, idle fallback counting, previous, pause, one-movement mapping, Change controls/Keep current, Use previous, 4-movement reachability, 3-movement auto mapping, assisted, recalibration with a set). No session bugs found. Commits `b48b127`, `75f2ad1`, `5b9edcb`.
+2. DONE: UI follow-ups `aa5db2e` (camera panel lists movements + actions), `3dcd476` (chooser disables used movements while adding), `c7e4e7f` (evidence labels cross-checks; evidence also shown on the comfort screen; App test scans mapping proposals).
+3. IN PROGRESS: full checks at `c7e4e7f`: tsc PASS, vitest 12 files/129 PASS, build PASS, browser-check 12/12 PASS. Independent testing review `w6_test_review` (read-only) running. Then record results in `reasoning.md` (R6 table), here, and `plan.md` (W6 software verified; human acceptance pending).
 4. W7a: write R7 (local profiles: opt-in Save, named profiles, Delete, version/schema validation, nonfinite rejection, disarmed restore → rest check → revalidation → mapping confirmation; saved phrases; never video/frames/messages) in `reasoning.md`, get independent review, then implement in small commits. Then W7b, W7c, W8 per `plan.md`.
 
 ## Known notes and risks
@@ -68,4 +68,4 @@ Done and committed:
 ## Environment (Linux server, session 3, 2026-10-17)
 
 - Linux x64, Node 24.18.0. `npm ci` + `npm run setup:assets` worked online. No Chrome/Edge installed: `scripts/browser-check.mjs` falls back to Playwright's bundled Chromium (revision 1248, already present in the default Playwright cache; otherwise `npx playwright install chromium`). Baseline at `c72dfd0`: tsc PASS, vitest 12 files/110 PASS, build PASS, browser-check 12/12 PASS.
-- Coordinator: Claude Code (session 3). Commits: `f1291e7 Add bundled Chromium fallback`.
+- Coordinator: Claude Code (session 3). Commits from `f1291e7 Add bundled Chromium fallback` onward.
