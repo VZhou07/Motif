@@ -226,4 +226,31 @@ describe('Motif app', () => {
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.restoring).toBe('Alex');
   });
+
+  it('shows per-movement evidence with denominators in the evidence panel', () => {
+    const h = twoMovements();
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    const list = screen.getByRole('list', { name: 'Your movements' });
+    const items = [...list.children].map((item) => item.textContent ?? '');
+    expect(items[0]).toMatch(/^Raise left outer eyebrow3 of 3 required checks passed \(each had to pass\)0 accidental activations in [\d.]+ s over 2 everyday checks/);
+    expect(items[1]).toMatch(/^Open mouth2 of 2 required checks passed \(each had to pass\)0 accidental activations in [\d.]+ s over 1 everyday check/);
+    expect(list.textContent).not.toMatch(/%|accura|reliab/i);
+  });
+
+  it('asks which movement is tiring, then explains the recommendation and offers a helper form', () => {
+    const h = twoMovements();
+    act(() => h.stepTo('tiring'));
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Which movement/);
+    expect(screen.getByRole('button', { name: '“Open mouth” is tiring' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: '“Open mouth” is tiring' }));
+    expect(h.snap.stage).toBe('mapping');
+    expect(screen.getByLabelText('Why this is recommended').textContent).toMatch(/Open mouth is left unused because you reported it tiring once/);
+    const [brow, mouth] = h.snap.approvedModels;
+    fireEvent.change(screen.getByLabelText('Open mouth'), { target: { value: 'select' } });
+    fireEvent.change(screen.getByLabelText('Raise left outer eyebrow'), { target: { value: 'pause' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Review these controls' }));
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.pendingMapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow!.id]: 'pause' });
+  });
 });
