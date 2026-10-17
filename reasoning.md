@@ -654,7 +654,6 @@ The user explicitly requested instructions that the whole system works together,
 
 Instruction review: conflict_reasoning independently checked the actual six-file changes, account/isolation/integration requirements and ownership, validated links/whitespace and checked the OWASP source. PASS, no blockers. This is a documentation gate only; the implementation design and code/hardware gates remain open.
 
-
 ## UX slice 1: Get started (branch ux-setup-flow, 2026-10-17)
 - **Design:** `useMotif` gets `getStarted()`: `await startCamera()`; only if it returned true call `session.startBaseline()`. `WelcomeView` shows one primary "Get started" when camera is off/error (label "Retry camera" on error), or "Start the rest check" when the camera is already running. With a saved setup the primary stays Continue and "Set up again" runs `getStarted()`. The camera panel hides its own Start button on the `welcome` stage only. A one-line overview ("About 1½ minutes: rest, three practice attempts, two checks, one everyday test") replaces the journey cards. The saved-setup copy depends on whether the saved profile has a baseline (`snapshot.profiles` gains `hasBaseline`, or the copy is made neutral).
 - **Contracts:** no change to engine, tracker or session stage machine; `startBaseline` still refuses unless the camera is running.
