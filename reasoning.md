@@ -641,3 +641,9 @@ Initial proposal consistency review: conflict_reasoning independently inspected 
 ## Four-agent prompt handoff
 
 The user requested implementation prompts for four teammates. docs/agent-prompts.md preserves the selected C1–C6 ownership/contracts and review gates. AGENTS.md explicitly allows feature-local reasoning/progress journals while the integration owner alone edits root/shared files, preventing parallel journal conflicts. conflict_reasoning independently inspected the actual prompts/rules/plan and checked required paths, local links and whitespace: PASS, no blockers. This is documentation validation only; feature designs and implementation tests remain each assigned agent's responsibility. No implementation workers or new Goal were launched.
+
+## Account access and integrated completion instructions
+
+The user explicitly requested instructions that the whole system works together, with caregivers distinguished from participants and restricted to the accounts they may access. The plan/prompts now require actual caregiver auth, scoped participant pairing, account/group ownership enforced server-side across APIs/live events, invitation expiry/revocation, safe identity changes, shared auth/client routing and tests of cross-account denial. The integration owner is accountable for the merged application's real sign-in/pair/request/acknowledgment/browser-return flow; per-branch tests and conflict resolution cannot stand in for integration. This remains instruction/design-contract work, not implemented authentication. Provider choice and detailed auth engineering require a bounded independent design review before coding.
+
+Instruction review: conflict_reasoning independently checked the actual six-file changes, account/isolation/integration requirements and ownership, validated links/whitespace and checked the OWASP source. PASS, no blockers. This is a documentation gate only; the implementation design and code/hardware gates remain open.
