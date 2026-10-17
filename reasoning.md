@@ -633,3 +633,15 @@ User request (2026-10-17, awake and directing): (a) after saving, a helper butto
 - The skip path does not call `beginBaseline()`: it repeats its resets (close open cycle, clear candidate/diagnostic/report), sets `restoring`, uses `recent.baseline`, and calls `beginRecheck()` without stamping a new rest time.
 - `modelKey` is built from `MODEL_KEYS` order. Evidence text for a skipped cycle states that no attempts or everyday check ran this time ("checked within the last hour; not repeated"). The helper text next to the button says the same person must restore within the hour to skip the checks.
 - Added tests: partial restore stamping (B1); reuse cleared by an intervening rest check, failed setup, or another profile (B2); exactly 60 minutes stale; nothing armed before approval on the full-skip path; rest-fit failure with a reused baseline is still reported.
+
+## R15 — Back to start from assisted input (revision 1)
+
+User request (2026-10-17): the same "Done, back to start screen" button inside assisted input started from the start screen ("Use assisted input (Space switch) instead" next to Start camera).
+- Case: `communication` stage, `inputMode === 'assisted'`, no approved movement setup. The save panel is absent there (nothing to save), so the button is rendered by CommunicationView itself, helper-only (plain button, not a scan target; the existing scanned "Set up a movement" control is unchanged).
+- `returnToStart()` accepts this case without the saved-profile guard: there is no setup to lose. It cancels speech/cues, clears the message and last spoken text, sets `inputMode = 'gesture'`, resets scan/practice state via `setStage('welcome')`, and keeps phrases (they may have been edited on the start screen; nothing restores them otherwise) and scan speed. `recent` is not touched (assisted input already cleared it).
+- Assisted input that has an approved movement setup keeps the existing guarded behaviour (must be saved first; save panel shows the button).
+- Tests: assisted-only button returns to welcome with message cleared, inputMode gesture, phrases kept, Space no longer selects; button absent during practice; assisted with an unsaved approved setup still refused.
+
+### R15 review record
+- Reasoning review: APPROVED (revision 1) with two conditions, both implemented: guard requires `communication` + assisted + no approved setup (practice refused); plain announcement naming no profile. Candidate/diagnostic/report also cleared.
+- Testing review: FAIL (no test that the button is hidden in assisted practice) → test added → re-check PASS. tsc clean; vitest 31 files/374 PASS; build PASS; mutations (stage check, !hasApproved, message, inputMode, speech.cancel, practice visibility) each caught.

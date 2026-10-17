@@ -2,6 +2,10 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Latest focused task — Back to start from assisted input (R15)
+
+- User asked for the same "Done, back to start screen" button inside assisted input started from the start screen. State: **software verified; human check pending** (click it in the real app). R15 reasoning APPROVED with conditions; testing review FAIL → practice test added → PASS (374 tests, tsc, build). Committed locally after R14 commits; nothing pushed; no processes running.
+
 ## Latest focused task — save panel, Back to start, one-hour check reuse (R14)
 
 - User (awake, 2026-10-17) asked: save panel should visibly finish; a button returns to the start screen after saving; restoring the same profile within an hour should not repeat the rest check or movement checks done within that hour. Base `ba15850`, uncommitted working tree.
