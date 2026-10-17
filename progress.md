@@ -1,68 +1,60 @@
 # Motif technical handoff
 
-For the short plain-language update, read [STATUS.md](STATUS.md). Build Goal is ACTIVE. User is sleeping: do not ask questions. Camera is covered; no live-person camera, comfort, audio-audibility, or accessibility acceptance may be claimed.
+Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, then P1 in order, then hardening; P2 excluded). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
-## Resume first
+## Resume first (next agent)
 
-1. Read AGENTS.md, plan.md, reasoning.md and .agents/skills/motif-checkpoint/SKILL.md.
-2. Inspect Git status, tracked/untracked changes and any listed command sessions. Preserve other agents' work; transfer file ownership before editing.
-3. Continue the first actionable unmet software criterion. Keep unavailable human checks pending and continue independent approved work.
-4. Update this handoff and STATUS.md at milestones/before interruption. User approved short local verified commits; never push.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R4–R6 matter most) and `.agents/skills/motif-checkpoint/SKILL.md`.
+2. Run `git status` and `git log --oneline -n 8`. Expected: clean tree; newest commit `Update build handoff` (docs only), directly on top of `e266183 Add mapping confirmation screen`. No processes or extra worktrees were left running (`git worktree list` shows only the main folder).
+3. Run the baseline checks below. All must pass before you change anything.
+4. Continue with "Exact next work", step 1. Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
-## Current state
+## Last passing commit
 
-- Approved scope: all P0, then P1 profiles/recalibration -> observed scoring/mapping recommendations -> verified free discovery -> hardening. P2 excluded.
-- Goal created on user build instruction; no token/time budget specified beyond runtime limits.
-- Last commit/base: e1bb56e (initial README). No application baseline passes yet. Planning/skill files are untracked.
-- R1/R3 product/design approval and R2 skill verification are complete; historical details remain in reasoning.md.
-- R4 revision1 APPROVED by build_review before code. Clarifications: one common preprocessor/reset per phase; any interruption invalidates a held-out positive attempt.
+- Tip: `Update build handoff` (docs only) on top of `e266183 Add mapping confirmation screen`. Code state verified at `e266183`: `npx tsc --noEmit` PASS; `npx vitest run` 12 files/110 tests PASS; `npm run build` PASS; `node scripts/browser-check.mjs` (after build) 12/12 PASS.
+- History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
-## Active owners (do not overlap writes)
+## Baseline commands (Windows PowerShell, repo root)
 
-Session 2 (Kiro coordinator, 2026-10-17 ~03:00) took over. The earlier face_tracker/core_engine/build_review workers are gone; their files were reconciled with the handoff and ownership transferred to the Kiro coordinator.
-
-| Agent | Owned files | State / acceptance |
-| --- | --- | --- |
-| Kiro coordinator | everything (package/config/scripts, src/**, shared docs) | Implementing R5 UI orchestration after independent review. |
-| Reviewers (subagents) | Read-only | Spawned per review; report to coordinator. |
-
-Reconciled baseline (session 2, uncommitted, all untracked): tracker (FaceTracker, extractFeatures) and engine (features, calibration, recognition, verification, scanner) implemented with tests. `npx vitest run` 8 files/61 tests PASS; `npx tsc --noEmit` PASS; `npm run build` PASS (asset check OK). App.tsx is a placeholder; `scripts/browser-check.mjs` (referenced by `test:browser`) does not exist yet. No independent testing review of tracker/engine is recorded yet.
-
-Recovered partial work: the earlier Codex root (process started 01:57, last write 02:59, idle since) had written `src/components/Workspace.tsx` against an older unreviewed `MotifState` and expanded `src/styles.css`. Workspace.tsx was moved, unchanged, to `.cache/superseded/Workspace.tsx` (gitignored) because it does not match the reviewed R5 session; its styles/copy/icons are reused by the new components.
+- `npx tsc --noEmit` · `npx vitest run` · `npm run build` (also checks the local model/WASM assets) · `node scripts/browser-check.mjs` (run after build; uses Chrome's synthetic fake camera `--use-fake-device-for-media-stream`, never the real webcam; screenshots go to gitignored `test-results/`).
+- Dev server for manual use: `npm run dev` (http://127.0.0.1:5173).
+- Model/WASM assets live in gitignored `public/models` and `public/mediapipe`; if missing, run `npm run setup:assets` (needs network approval).
 
 ## Checkpoints
 
 | Item | State |
 | --- | --- |
-| W0/W1/WF1/WF2 | Reached (planning, skills, scope approval). |
-| W2 camera/dashboard | Software verified; human acceptance pending (real webcam, live values, side/head-sign labels). |
-| W3 calibration/one gesture | Software verified; human acceptance pending (real-person rest/training/checks, comfort). |
-| W4/W5 communication/first-slice checks | Software verified; human acceptance pending (gesture-only compose/speak, speech audibility). Independent review: w2_w4_test_review → fixes → w2_w4_recheck PASS. |
-| W6 remaining P0 | Authorized, planned. |
-| W7a/b/c all P1 | Authorized, planned in that order. |
-| W8 hardening | Authorized, planned; human checks pending. |
+| W0/W1/WF1/WF2 | Reached. |
+| W2–W5 (camera, calibration, one-gesture communication, first slice) | Software verified; human acceptance pending (real webcam, live values, anatomical/head-direction labels, comfort, speech audibility). Reviews: r5_review → r5_rereview APPROVED; w2_w4_test_review → fixes → w2_w4_recheck PASS. |
+| W6 remaining P0 (multi-gesture) | IMPLEMENTING. R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
+| W7a profiles/recalibration → W7b scoring/recommendations → W7c discovery | Authorized, not started. Each needs its own reasoning revision + independent review before code. |
+| W8 hardening | Authorized, not started. Human checks stay pending. |
 
-## Commands and environment
+## W6 status (R6 revision 2)
 
-- Node24.13.1/npm11.8.0/Python3.11.9; Chrome/Edge installed; Claude CLI absent.
-- npm default offline/proxy sandbox blocks network. Native-approved command-local online flags and a permitted cache work; registry/model HEAD preflight passed. Do not change global config.
-- Current npm metadata: React19.3.1/Vite8.3.4/plugin-react6.1.2/TS7.0.2/Vitest5.0.5/Tailwind4.3.3/MediaPipe1.1.1. Use jsdom26.1.0 for Node compatibility.
-- Local Git author name/email configured; no values logged. Commit only passed reviewed chunks.
-- Windows power plan allows sleep45min AC/15min battery; user informed to keep machine awake. No OS settings changed.
-- Running command sessions: none yet.
-- Last checks: planning/skill validators,13 local links/2 imports/whitespace, independent reviews passed. No app tests/build yet.
+Done and committed:
+- `src/app/mapping.ts` (+7 tests): proposals for 1–4 gestures, validation (one select, distinct actions, previous needs next, max 4), `step` vs `auto` mode, descriptions.
+- `src/app/session.ts` / `types.ts`: approved gesture SET + mapping replaces the single model; "Add a movement" (duplicates refused), held-out attempts plus one cross-check per existing gesture, negative window over the whole set; `mapping` → `mapping-confirm` (only Approve arms; Keep current first); Change controls; Use previous controls (practice; revalidated, needs approval); per-action routing (only the select gesture latches; next/previous move; pause toggles; unmapped events consumed and ignored); step mode has no timed advance; 60 s idle fail-safe switches to automatic scanning.
+- UI: mapping/confirmation screens, step-mode hint, movement name shown during check attempts, decision targets rendered in the toolbar.
+- Test helpers ready but NOT yet used: `Harness.stepTo`, `Harness.addMovement`, constants `MOUTH`, `PUCKER`, `CHEEK`, `HEAD_WOBBLE` in `src/app/session.test-support.ts`.
 
-## Exact next work
+## Exact next work (ordered)
 
-Session 2 progress (R5 rev2 approved; implementing):
-- DONE (uncommitted): `fitGesture` settled-movement change + 4 tests; `src/app/{types,capture,movements,session}.ts`; `session.test-support.ts` + `session.test.ts` (23 tests: full gesture-only flow, interruption redo, held-out fail → new cycle, weak movement, negative fail/restart, tracking loss mid-dwell, hidden tab, watchdog, scan-boundary latch, once-per-hold, pause/resume, speed, recalibrate keep/cancel/replace, decision gating, no local speech, assisted Space). `npx vitest run src/app` PASS; engine PASS.
-- DONE (uncommitted): `src/app/speech.ts` (+3 tests), `src/app/useMotif.ts`, `src/components/{Icon,CameraPanel,ScanBoard,SetupViews,ReviewViews,CommunicationView}.tsx`, `src/App.tsx` (+5 RTL tests in `src/App.test.tsx`), `index.html` inline favicon, `scripts/browser-check.mjs`.
-- Evidence (session 2, ~07:10): `npx vitest run` 11 files/96 tests PASS; `npx tsc --noEmit` PASS; `npm run build` PASS; `node scripts/browser-check.mjs` (after build) 12/12 PASS on installed Chrome with `--use-fake-device-for-media-stream` (synthetic pattern; real webcam never opened): local model loads, inference reports `missing` face, rest check stays at 0% (fail closed), assisted Space adds "Yes", no storage, no off-device requests, reduced motion, keyboard focus, no console errors, camera denial explained. Screenshots in `test-results/` (gitignored).
-- Review: w2_w4_test_review (BLOCKING: 3 test gaps) → fixed (cap 5, +7 tests, fewer live regions) → w2_w4_recheck PASS. Vitest 11 files/103 tests PASS; tsc PASS; build PASS; browser-check 12/12 PASS.
-- NEXT: local commit "Add guided calibration app"; then W6 R6 design (two gestures: Next/Select, ambiguity, 3+ mappings, reapproval on mapping edits, one-gesture fallback).
+1. Write W6 session tests in `src/app/session.test.ts` (new `describe('multiple gestures')`): add a second gesture (MOUTH) via `addMovement`, assert cross-check evidence and negative window over both; candidate that disturbs the old gesture fails its cross-check and the old set/mapping stay active after fresh neutral; duplicate movement refused; simultaneous BROW+MOUTH selects nothing; Next/Select step mode: no timed advance, a next dwell spanning a scan boundary selects nothing, select picks the stepped item; previous with 3 gestures; pause gesture toggles and next is ignored while paused; one-gesture fallback ignores the unmapped gesture; Change controls needs confirm + fresh neutral, Keep current preserves mapping; Use previous controls; idle fallback after 60 s; 3- and 4-gesture mappings reach every control; assisted mode unaffected. Fix any bugs found. Commit tests and each fix separately.
+2. Small UI follow-ups (commit separately): CameraPanel lists every approved movement with its action; ChooseView disables already-used movements while adding; EvidencePanel labels cross-checks; App test that renders mapping proposals with scan highlight.
+3. Full checks (tsc, vitest, build, browser-check), then an independent testing-review subagent (give it the skill file, the four docs, role, R6 revision 2, files, checks). Fix blockers as small commits; record results in `reasoning.md` (R6 review table) and here; mark W6 "software verified; human acceptance pending" in `plan.md`.
+4. W7a: write R7 (local profiles: opt-in Save, named profiles, Delete, version/schema validation, nonfinite rejection, disarmed restore → rest check → revalidation → mapping confirmation; saved phrases; never video/frames/messages) in `reasoning.md`, get independent review, then implement in small commits. Then W7b, W7c, W8 per `plan.md`.
 
-Earlier plan (session 1):
-1. Root writes package/config/asset setup and installs dependencies via native-approved network command.
-2. Tracker/core workers implement their approved R4 modules; root builds camera dashboard then guided calibration/communication UI.
-3. Run unit tests, typecheck/build, have independent reviewer run checks, fix blockers, and commit passing work locally.
-4. Record remaining failures, active sessions, exact next action and last passing commit here before any interruption. Never claim covered-camera tests passed.
+## Known notes and risks
+
+- Head-direction labels (+yaw = person's left, +pitch = chin down, +roll = right shoulder) are derived mathematically; real-camera confirmation pending.
+- The 60 s baseline valid-time cap is effectively unreachable (the 5-interruption cap fires first); kept as defensive code.
+- `.cache/superseded/Workspace.tsx` (gitignored) is an earlier agent's unused UI draft; safe to ignore.
+- Git prints LF→CRLF warnings on add; harmless. Do not change Git config.
+
+## Environment
+
+- Node 24.13.1, npm 11.8.0, Chrome and Edge installed. Pinned deps in `package.json`/lockfile (React 19.3.1, Vite 8.3.4, TS 7.0.2, Vitest 5.0.5, Tailwind 4.3.3, MediaPipe tasks-vision 1.1.1, Playwright 1.64.1, jsdom 26.1.0).
+- npm defaults to offline; network installs need native approval with command-local flags. No global config changes.
+- Git author identity is configured locally (values not logged).
+- Running processes/worktrees left by this session: none.

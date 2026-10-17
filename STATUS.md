@@ -1,9 +1,11 @@
 # Motif build update
 
-**Works now (in automated tests):** the app's main screens exist. A person rests for 10 seconds, picks a comfortable movement, practices it 3 times, passes 2 separate checks and a 10-second "everyday activity" check, then approves it. After that, the movement alone can pick phrases, build a message, speak it, pause, change speed and recalibrate. If the face is lost or the tab is hidden, nothing gets selected. A Space-bar mode exists for people who can't use a face movement.
+**Works now (in automated tests):** a person rests for 10 seconds, picks a comfortable movement, practices it, passes separate checks and an "everyday activity" check, then approves it. After that, the movement alone can pick phrases, build a message, speak it, pause, change speed and recalibrate. If the face is lost or the tab is hidden, nothing gets selected. A Space-bar mode exists for people who can't use a face movement. A browser test with a fake test camera passes.
 
-**Doing next:** small screen tests, an automatic browser check with a fake test camera (your real camera is never used), an independent review, then saving a checkpoint. After that: two-movement controls, saved profiles, scoring, and movement discovery.
+**Half done:** using two to four movements together (for example one moves to the next item and one selects). The main logic and screens are in place, but the tests and the independent review for it are still to do.
+
+**Next:** finish those tests and the review, then saved profiles, scoring, movement discovery, and final polish.
 
 **Still needs a person:** the camera is covered, so real face tracking, comfort, spoken audio and hands-free use have not been tried by a human yet.
 
-For exact restart steps, see `progress.md`.
+Saved work is split into many small commits. Exact restart steps are in `progress.md`.
