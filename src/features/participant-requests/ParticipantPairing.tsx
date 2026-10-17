@@ -45,7 +45,7 @@ export function ParticipantPairing({ controller }: { controller: ParticipantRequ
   } else {
     body = (
       <form onSubmit={submit}>
-        {state === 'revoked' && <p>Your caregiver removed this pairing. Ask for a new invitation.</p>}
+        {state === 'revoked' && <p>Your caregiver removed this pairing. Ask them for a new invitation and enter it below; this device will sign out of the old pairing first.</p>}
         <p>Ask your caregiver for an invitation code, then enter it here. Pairing lets this device send the requests you choose; your camera and movements stay on this device.</p>
         <label className="text-field">Invitation code
           <input value={code} autoComplete="off" spellCheck={false} disabled={busy} onChange={(event) => setCode(event.target.value)} />

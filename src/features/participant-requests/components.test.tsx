@@ -127,10 +127,25 @@ describe('participant pairing view', () => {
     expect(screen.getByLabelText('Invitation code')).toBeTruthy();
   });
 
+  it('a revoked device signs out of the old pairing before using a new code', async () => {
+    const order: string[] = [];
+    const { client } = stand({ ...online(), requests: [],
+      access: { version: 1, role: 'revoked', group: null, participant: { ...participant, revoked_at: date }, receiver_name: null } });
+    client.signOut.mockImplementation(async () => { order.push('signOut'); });
+    client.pair.mockImplementation(async () => { order.push('pair'); return client.snapshot; });
+    const controller = new ParticipantRequestController({ client });
+    render(<ParticipantPairing controller={controller} />);
+    fireEvent.change(screen.getByLabelText('Invitation code'), { target: { value: 'c'.repeat(64) } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Pair this device' })); });
+    expect(order).toEqual(['signOut', 'pair']);
+    expect(client.pair).toHaveBeenCalledWith('c'.repeat(64));
+  });
+
   it('explains revoked, caregiver and not-configured states', () => {
     const revoked = stand({ ...online(), access: { version: 1, role: 'revoked', group: null, participant: { ...participant, revoked_at: date }, receiver_name: null }, requests: [] });
     const { unmount } = render(<ParticipantPairing controller={new ParticipantRequestController({ client: revoked.client })} />);
-    expect(screen.getByText('Your caregiver removed this pairing. Ask for a new invitation.')).toBeTruthy();
+    expect(screen.getByText(/Your caregiver removed this pairing\. Ask them for a new invitation/)).toBeTruthy();
+    expect(screen.getByLabelText('Invitation code')).toBeTruthy();
     unmount();
     const caregiver = stand({ ...online(), participants: [], requests: [],
       access: { version: 1, role: 'caregiver', group: { id: GID, owner_id: participant.user_id, name: 'Ward A', created_at: date }, participant: null, receiver_name: 'Ward A' } });

@@ -167,6 +167,9 @@ export class ParticipantRequestController {
     this.pairing = { busy: true, error: null };
     this.update();
     try {
+      // A revoked device still holds the identity bound to the removed pairing; the server
+      // refuses to bind it again, so pairing with a new invitation starts from a fresh sign-in.
+      if (this.roleState === 'revoked') await this.client.signOut();
       await this.client.pair(token.trim());
       this.pairing = { busy: false, error: null };
       this.update();
