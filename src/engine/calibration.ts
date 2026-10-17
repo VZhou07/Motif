@@ -1,22 +1,48 @@
 import {
-  FEATURE_IDS, type Baseline, type FeatureFrame, type FeatureId, type GestureModel,
+  FEATURE_IDS, WINK_FEATURES, type Baseline, type FeatureFrame, type FeatureId, type GestureModel,
   type Result, type TrainingTrial,
 } from '../domain/types'
-import { featureNoiseFloor, quantile, validateStream } from './features'
+import { featureNoiseFloor, isValidFrame, MAX_FRAME_GAP_MS, quantile, validateStream } from './features'
 
 /** Minimum uninterrupted settled movement evidence per training trial (matches the per-phase minimum). */
 export const SETTLED_MOVEMENT_MS = 600
 export const SETTLED_RETURN_MS = 600
 
 /**
- * A movement prompt includes the person's reaction and onset time. Assess only
- * the last two-thirds of the prompted movement, split by time.
+ * Strongest valid hold inside Action: every contiguous slice whose timestamp
+ * span is at least 600 ms and that passes the same density checks as a settled
+ * movement. Rest tails stay time-fixed in `settledReturn`.
  */
-export function settledMovement(movement: readonly FeatureFrame[]): FeatureFrame[] {
-  if (!movement.length) return []
-  const start = movement[0]!.timestampMs
-  const settledStart = start + (movement[movement.length - 1]!.timestampMs - start) / 3
-  return movement.filter((frame) => frame.timestampMs >= settledStart)
+export function strongestHold(
+  movement: readonly FeatureFrame[],
+  feature: FeatureId,
+  direction: 1 | -1,
+  center: number,
+): Result<number> {
+  let best: number | undefined
+  for (let start = 0; start < movement.length; start += 1) {
+    if (!isValidFrame(movement[start]!)) continue
+    const signed: number[] = [direction * (movement[start]!.values[feature]! - center)]
+    for (let end = start + 1; end < movement.length; end += 1) {
+      const previous = movement[end - 1]!
+      const frame = movement[end]!
+      const gap = frame.timestampMs - previous.timestampMs
+      if (!isValidFrame(frame) || gap <= 0 || gap > MAX_FRAME_GAP_MS) break
+      signed.push(direction * (frame.values[feature]! - center))
+      const span = frame.timestampMs - movement[start]!.timestampMs
+      if (span < SETTLED_MOVEMENT_MS || signed.length < Math.ceil(span / 125) + 1) continue
+      const score = quantile(signed, 0.25)
+      const peak = quantile(signed, 0.75)
+      if (peak > Math.max(score, featureNoiseFloor(feature)) * 4) continue
+      if (best === undefined || score > best) best = score
+    }
+  }
+  if (best === undefined) return { ok: false, reasons: ['Hold the movement a little longer after it starts.'] }
+  return { ok: true, value: best }
+}
+
+export function activationMsFor(feature: FeatureId): number {
+  return (WINK_FEATURES as readonly FeatureId[]).includes(feature) ? 500 : 250
 }
 
 /** Allow the return prompt's recovery time, then assess a fixed, sufficiently long tail. */
@@ -121,12 +147,9 @@ export function fitGesture(options: FitGestureOptions): GestureFitResult {
         restTimestamps.add(frame.timestampMs)
       })
     }
-    const settled = settledMovement(trial.movement)
-    const settledValidation = validateStream(settled, SETTLED_MOVEMENT_MS)
-    if (!settledValidation.ok) {
-      return { ok: false, reasons: ['Hold the movement a little longer after it starts.', ...settledValidation.reasons] }
-    }
-    movementLows.push(quantile(settled.map((frame) => direction * (frame.values[feature]! - statistics.center)), 0.25))
+    const hold = strongestHold(trial.movement, feature, direction, statistics.center)
+    if (!hold.ok) return { ok: false, reasons: hold.reasons }
+    movementLows.push(hold.value)
   }
   const weakestMovement = Math.min(...movementLows)
   // A quiet initial baseline can have almost no variance. Later relaxed readings
@@ -163,7 +186,7 @@ export function fitGesture(options: FitGestureOptions): GestureFitResult {
       id: options.id ?? `${feature}:${direction}`, label: options.label ?? feature,
       feature, direction, baselineCenter: statistics.center,
       activationThreshold: restCeiling + margin * ACTIVATION_FRACTION, releaseThreshold,
-      activationMs: 250, releaseMs: 350,
+      activationMs: activationMsFor(feature), releaseMs: 350,
     },
   }
 }
