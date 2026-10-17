@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -197,7 +197,7 @@ describe('Motif app', () => {
     expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles.map((profile: { name: string }) => profile.name)).toEqual(['Last setup']);
   });
 
-  it('offers Continue and a confirmed delete for the saved setup on the welcome screen', () => {
+  it('offers Continue and a confirmed delete for the saved setup on the welcome screen', async () => {
     const storage = createMemoryStorage();
     const first = new Harness({ profiles: createLocalProfileStore(() => storage) });
     first.setUpToCommunication();
@@ -206,13 +206,14 @@ describe('Motif app', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('1 saved item could not be read and was ignored.')).toBeTruthy();
-    expect((screen.getByRole('button', { name: 'Continue with your last setup' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Continue with your last setup' }) as HTMLButtonElement).disabled).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Delete saved setup' }));
     fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
     expect(screen.getByRole('button', { name: 'Continue with your last setup' })).toBeTruthy();
-    act(() => h.session.setCamera('running'));
+    // With the camera off, Continue starts it first, then begins the disarmed re-check.
     fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
-    expect(h.snap.stage).toBe('baseline');
+    await waitFor(() => expect(h.snap.stage).toBe('baseline'));
+    expect(h.snap.camera).toBe('running');
     expect(h.snap.restoring).toBe('Last setup');
     expect(screen.queryByRole('button', { name: 'Continue with your last setup' })).toBeNull();
   });
