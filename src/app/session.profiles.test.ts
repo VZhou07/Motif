@@ -332,6 +332,11 @@ describe('restoring a profile (R7)', () => {
 
   it('re-approving the saved controls through Choose different controls is not a change', () => {
     const { storage } = savedPersonA();
+    // Store the same controls with their keys in reverse order: order must not count as a change.
+    const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
+    const assignments = raw.profiles[0].mapping.assignments;
+    raw.profiles[0].mapping.assignments = Object.fromEntries(Object.entries(assignments).reverse());
+    storage.setItem(PROFILE_KEY, JSON.stringify(raw));
     const h = restoreOn(storage);
     recheck(h);
     h.selectByGesture('comfortable');
