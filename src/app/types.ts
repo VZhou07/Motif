@@ -1,8 +1,9 @@
 import type { Baseline, FeatureFrame, FeatureId, GestureModel, RuntimePhase, TrackingState } from '../domain/types';
+import type { Mapping, MappingProposal, ScanMode } from './mapping';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
-  | 'setup-failed' | 'comfort' | 'mapping' | 'practice' | 'communication' | 'recalibrate-confirm';
+  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm';
 
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
 /** `assisted` is the clearly labeled Space/mouse path; it never produces calibration evidence. */
@@ -21,9 +22,15 @@ export interface CaptureStatus {
   validMs: number;
   interruptions: number;
   notice: string | null;
+  /** The movement to perform in this training/check attempt, if any. */
+  movement: string | null;
 }
 
-export interface AttemptEvidence { attempt: number; passed: boolean; eventCount: number; validDurationMs: number; reasons: string[] }
+export interface AttemptEvidence {
+  attempt: number; passed: boolean; eventCount: number; validDurationMs: number; reasons: string[];
+  /** Movement expected in this attempt; cross-checks confirm an existing movement still works with the new one. */
+  expected: string; kind: 'held-out' | 'cross-check';
+}
 export interface NegativeEvidence { passed: boolean; eventCount: number; validDurationMs: number; restarts: number; reasons: string[] }
 export interface CycleEvidence {
   cycle: number;
@@ -63,7 +70,18 @@ export interface SessionSnapshot {
   baseline: Baseline | null;
   choice: MovementChoice | null;
   candidate: GestureModel | null;
+  /** The select gesture of the approved set (or the first approved gesture). */
   approvedModel: GestureModel | null;
+  /** Every approved, verified gesture; all are observed for ambiguity, only mapped ones act. */
+  approvedModels: GestureModel[];
+  mapping: Mapping | null;
+  mappingLabel: string | null;
+  /** Mapping waiting for explicit approval in `mapping-confirm`. */
+  pendingMapping: MappingProposal | null;
+  scanMode: ScanMode;
+  /** True after the step-mode idle fail-safe switched to automatic scanning. */
+  stepFallback: boolean;
+  adding: boolean;
   inputMode: InputMode;
   recalibrating: boolean;
   capture: CaptureStatus | null;

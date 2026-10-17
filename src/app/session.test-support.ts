@@ -1,10 +1,15 @@
 import { FEATURE_IDS, type FeatureFrame, type FeatureId } from '../domain/types';
 import { MotifSession } from './session';
-import type { SessionSnapshot, SpeechPort } from './types';
+import type { MovementChoice, SessionSnapshot, SpeechPort } from './types';
 
 export type Values = Partial<Record<FeatureId, number>>;
 export const REST: Values = {};
 export const BROW: Values = { browOuterUpLeft: 0.7 };
+export const MOUTH: Values = { jawOpen: 0.7 };
+export const PUCKER: Values = { mouthPucker: 0.7 };
+export const CHEEK: Values = { cheekPuff: 0.7 };
+/** Everyday activity that avoids every test movement: small head turns only. */
+export const HEAD_WOBBLE = (t: number): Values => ({ headYaw: 6 * Math.sin(t / 900) });
 
 export function frameAt(timestampMs: number, overrides: Values = {}): FeatureFrame {
   return { timestampMs, tracking: 'tracked', values: {
@@ -45,7 +50,7 @@ export class Harness {
   }
 
   /** Follows on-screen capture prompts with a human reaction delay until `done` or a time cap. */
-  followPrompts(done: (snap: SessionSnapshot) => boolean, movement: Values = BROW, reactionMs = 400, capMs = 120_000): void {
+  followPrompts(done: (snap: SessionSnapshot) => boolean, movement: Values | ((snap: SessionSnapshot) => Values) = BROW, reactionMs = 400, capMs = 120_000): void {
     const start = this.now;
     let prompt = this.snap.capture?.prompt;
     let since = this.now;
@@ -55,7 +60,7 @@ export class Harness {
       if (current !== prompt) { prompt = current; since = this.now; }
       const elapsed = this.now - since;
       const moving = (current === 'Move' && elapsed >= reactionMs) || (current === 'Return to rest' && elapsed < reactionMs);
-      this.step(moving ? movement : REST);
+      this.step(moving ? (typeof movement === 'function' ? movement(this.snap) : movement) : REST);
     }
   }
 
@@ -83,6 +88,26 @@ export class Harness {
     return scan ? scan.targets[scan.index]?.id : undefined;
   }
 
+  /** Step mode: rest to arm, use `next` until `id` is highlighted, then `select`. */
+  stepTo(id: string, next: Values = MOUTH, select: Values = BROW): void {
+    this.run(600);
+    for (let guard = 0; this.highlightedId() !== id; guard += 1) {
+      if (guard > 30) throw new Error(`could not step to ${id}`);
+      this.run(600, next);
+      this.run(600);
+    }
+    this.run(600, select);
+    this.run(600);
+  }
+
+  /** From communication: add a movement via the scanned control and verify it (held-out, cross-checks, negative). */
+  addMovement(choice: MovementChoice, movementFor: (label: string | null) => Values, everyday: (t: number) => Values = HEAD_WOBBLE): void {
+    if (this.snap.scanMode === 'step') this.stepTo('add-movement'); else this.selectByGesture('add-movement');
+    this.session.chooseMovement(choice);
+    this.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => movementFor(snap.capture?.movement ?? null));
+    if (this.snap.stage === 'negative') this.run(11_000, everyday);
+  }
+
   /** Camera on, rest check, chosen movement, training, held-out checks and negative window. */
   calibrate(movement: Values = BROW): void {
     this.session.setCamera('running');
@@ -93,11 +118,12 @@ export class Harness {
     this.run(11_000, (t) => ({ jawOpen: 0.1 + 0.3 * Math.abs(Math.sin(t / 300)), headYaw: 6 * Math.sin(t / 900) }));
   }
 
-  /** Full setup through comfort, mapping approval and practice, all by gesture. */
+  /** Full setup through comfort, mapping choice + approval and practice, all by gesture. */
   setUpToCommunication(): void {
     this.calibrate();
     this.selectByGesture('comfortable');
-    this.selectByGesture('approve');
+    this.selectByGesture('map:0');
+    this.selectByGesture('approve-mapping');
     this.selectByGesture('finish-practice');
   }
 }

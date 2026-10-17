@@ -18,9 +18,15 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     h.selectByGesture('comfortable');
     expect(h.snap.stage).toBe('mapping');
     expect(h.snap.approvedModel).toBeNull();
-    h.selectByGesture('approve');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['map:0', 'reject']);
+    h.selectByGesture('map:0');
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.mapping).toBeNull();
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping']);
+    h.selectByGesture('approve-mapping');
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.approvedModel?.feature).toBe('browOuterUpLeft');
+    expect(h.snap.mapping?.mode).toBe('auto');
     expect(h.snap.cycles[0]!.outcome).toBe('approved');
 
     h.selectByGesture('phrase:0');
@@ -43,7 +49,8 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     h.session.startBaseline();
     h.run(10_500);
     h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Brow' });
-    h.session.decide('approve');
+    h.session.decide('approve-mapping');
+    h.session.chooseSetupTarget('map:0');
     h.session.selectTarget('phrase:0');
     h.session.switchPress();
     expect(h.snap.stage).toBe('training');
@@ -298,14 +305,17 @@ describe('communication safety', () => {
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModel).toEqual(old);
     h.selectByGesture('comfortable');
-    h.selectByGesture('approve');
+    h.selectByGesture('map:0');
+    h.selectByGesture('approve-mapping');
     expect(h.snap.approvedModel?.id).not.toBe(old.id);
+    expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.cycles.at(-1)?.outcome).toBe('approved');
   });
 
   it('ignores setup decisions that are not currently offered', () => {
     const h = ready();
-    h.session.decide('approve');
+    h.session.decide('approve-mapping');
+    h.session.chooseSetupTarget('map:0');
     h.session.decide('start-recalibration');
     expect(h.snap.stage).toBe('communication');
   });

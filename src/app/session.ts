@@ -5,6 +5,7 @@ import { GestureRuntime } from '../engine/recognition';
 import { ScanController } from '../engine/scanner';
 import { evaluatePositiveAttempt } from '../engine/verification';
 import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from './capture';
+import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import {
   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
   type InputMode, type MovementChoice, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
@@ -21,16 +22,20 @@ export const SESSION_LIMITS = {
   scanMinMs: 1_000,
   scanMaxMs: 6_000,
   scanStepMs: 500,
+  /** Step mode with no gesture event for this much valid tracking reverts to automatic scanning (R6 B2). */
+  stepIdleMs: 60_000,
 } as const;
 
 export const DECISION_LABELS = {
   comfortable: 'Yes, this movement is comfortable',
   'record-again': 'Record this movement again',
   'another-movement': 'Choose another movement',
-  approve: 'Approve: this movement selects the highlighted item',
-  reject: 'Do not use this movement',
-  'start-recalibration': 'Start recalibration',
   'keep-current': 'Keep current setup',
+  reject: 'Do not use this movement',
+  'choose-different': 'Choose different controls',
+  'approve-mapping': 'Approve these controls',
+  'use-previous': 'Use previous controls',
+  'start-recalibration': 'Start recalibration',
   'same-movement': 'Use the same movement again',
   'restart-recalibration': 'Restart recalibration',
 } as const;
@@ -40,6 +45,7 @@ const CONTROL_LABELS: Record<string, string> = {
   speak: 'Speak message', clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
   practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Finish practice',
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
+  'change-controls': 'Change controls', 'add-movement': 'Add a movement',
 };
 
 const silentSpeech: SpeechPort = { status: () => ({ available: false, voiceName: null }), speak: () => false, cancel: () => {} };
@@ -74,7 +80,17 @@ export class MotifSession {
   private approvedBaseline: Baseline | null = null;
   private choice: MovementChoice | null = null;
   private candidate: GestureModel | null = null;
-  private approvedModel: GestureModel | null = null;
+  private approvedModels: GestureModel[] = [];
+  private mapping: Mapping | null = null;
+  private previousMapping: Mapping | null = null;
+  private pendingMapping: MappingProposal | null = null;
+  /** True while a new movement is being added to an existing approved set. */
+  private adding = false;
+  private stepFallback = false;
+  /** Expected gesture id for each verification attempt: held-out attempts, then cross-checks. */
+  private verifyPlan: string[] = [];
+  private idleValidMs = 0;
+  private lastScanFrameTimestamp: number | undefined;
   private inputMode: InputMode = 'gesture';
   private recalibrating = false;
   private cycles: CycleEvidence[] = [];
@@ -118,6 +134,28 @@ export class MotifSession {
   /** Republish after an external status change (for example, voices finished loading). */
   refresh(): void { this.publish(); }
 
+  // ── Gesture set helpers (R6) ─────────────────────────────────────────────
+
+  private get hasApproved(): boolean { return this.approvedModels.length > 0 && this.mapping !== null; }
+
+  /** Models being verified or mapped: approved + candidate when adding, the candidate alone otherwise. */
+  private mappingSet(): GestureModel[] {
+    if (!this.candidate) return this.approvedModels;
+    return this.adding ? [...this.approvedModels, this.candidate] : [this.candidate];
+  }
+
+  private selectModel(): GestureModel | null {
+    return this.approvedModels.find((model) => this.mapping?.assignments[model.id] === 'select') ?? this.approvedModels[0] ?? null;
+  }
+
+  private scanMode(): ScanMode {
+    return this.mapping?.mode === 'step' && !this.stepFallback ? 'step' : 'auto';
+  }
+
+  private labelOf(id: string): string {
+    return [...this.mappingSet(), ...this.approvedModels].find((model) => model.id === id)?.label ?? 'your movement';
+  }
+
   // ── Inputs ────────────────────────────────────────────────────────────────
 
   /** Tracker frames. Stale, hidden-tab, or invalid input is converted to a fail-closed frame. */
@@ -148,7 +186,7 @@ export class MotifSession {
       this.failClosed(nowMs, 'stale');
       changed = true;
     }
-    if (this.scanner) {
+    if (this.scanner && !this.isStepping()) {
       const before = this.scanner.snapshot.index;
       this.scanner.tick(nowMs);
       changed ||= this.scanner.snapshot.index !== before;
@@ -251,24 +289,32 @@ export class MotifSession {
       cycle.training = { ok: fitted.ok, reasons: fitted.ok ? [] : fitted.reasons };
       if (!fitted.ok) { this.fail('training', 'This movement could not be learned yet', fitted.reasons); return; }
       this.candidate = fitted.value;
+      this.verifyPlan = [fitted.value.id, fitted.value.id, ...(this.adding ? this.approvedModels.map((model) => model.id) : [])];
       this.setStage('verify');
       this.trialRecorder = new TrialRecorder();
-      this.announce('Movement learned. Now two new check attempts; they do not change what was learned.');
+      this.announce(`Movement learned. Now ${this.verifyPlan.length} new check attempts; they do not change what was learned.`);
       return;
     }
     const model = this.candidate;
-    if (!model) return;
-    const result = evaluatePositiveAttempt(model, update.value.frames, model.id);
+    const expectedId = this.verifyPlan[cycle.heldOut.length];
+    if (!model || !expectedId) return;
+    const set = this.mappingSet();
+    const kind = expectedId === model.id ? 'held-out' : 'cross-check';
+    const result = evaluatePositiveAttempt(set, update.value.frames, expectedId);
     cycle.heldOut.push({ attempt: cycle.heldOut.length + 1, passed: result.passed, eventCount: result.eventCount,
-      validDurationMs: result.validDurationMs, reasons: result.reasons });
-    if (!result.passed) { this.fail('verification', 'A check attempt did not pass', result.reasons); return; }
-    if (cycle.heldOut.length < SESSION_LIMITS.heldOutAttempts) {
-      this.announce(`Check attempt ${cycle.heldOut.length} passed.`);
+      validDurationMs: result.validDurationMs, reasons: result.reasons, expected: this.labelOf(expectedId), kind });
+    if (!result.passed) {
+      this.fail('verification', kind === 'cross-check' ? `The new movement interfered with “${this.labelOf(expectedId)}”` : 'A check attempt did not pass', result.reasons);
+      return;
+    }
+    const next = this.verifyPlan[cycle.heldOut.length];
+    if (next) {
+      this.announce(`Check attempt ${cycle.heldOut.length} passed. Next: ${this.labelOf(next)}.`);
       return;
     }
     this.setStage('negative');
-    this.negativeMonitor = new NegativeMonitor([model]);
-    this.announce('Both checks passed. Now move naturally for ten seconds without making your movement.');
+    this.negativeMonitor = new NegativeMonitor(set);
+    this.announce('All checks passed. Now move naturally for ten seconds without making any of your movements.');
     this.cue('Everyday activity');
   }
 
@@ -325,12 +371,14 @@ export class MotifSession {
     this.failure = null;
   }
 
-  private startScanner(targets: ScanTarget[], driver: 'gesture' | 'assisted', model: GestureModel | null): void {
+  private startScanner(targets: ScanTarget[], driver: 'gesture' | 'assisted', models: readonly GestureModel[]): void {
     const nowMs = this.clock();
     this.scanTargets = targets;
     this.scanner = new ScanController(targets.map((target) => target.id), this.intervalMs, nowMs);
     this.scanDriver = driver;
-    this.runtime = driver === 'gesture' && model ? new GestureRuntime(model) : null;
+    this.runtime = driver === 'gesture' && models.length ? new GestureRuntime(models) : null;
+    this.idleValidMs = 0;
+    this.lastScanFrameTimestamp = undefined;
     // A gesture-driven scanner waits for valid tracking; selections additionally need fresh neutral.
     if (driver === 'gesture' && (!this.runtime || this.tracking !== 'tracked' || this.camera !== 'running')) this.scanner.setSuspended(true, nowMs);
     if (driver === 'assisted' && this.hidden) this.scanner.setSuspended(true, nowMs);
@@ -341,16 +389,18 @@ export class MotifSession {
   }
 
   private allowedDecisions(): DecisionId[] {
-    const keep = this.recalibrating && this.approvedModel !== null;
+    const keep = (this.recalibrating || this.adding) && this.hasApproved;
     switch (this.stage) {
-      case 'comfort': return ['comfortable', 'record-again', 'another-movement'];
-      case 'mapping': return ['approve', 'reject'];
+      case 'comfort': return ['comfortable', 'record-again', 'another-movement', ...(keep ? ['keep-current' as const] : [])];
+      case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []), ...(this.candidate ? ['reject' as const] : [])];
+      case 'mapping-confirm': return ['choose-different', 'approve-mapping'];
       case 'recalibrate-confirm': return ['start-recalibration', 'keep-current'];
-      case 'choose': return keep ? ['same-movement', 'keep-current'] : [];
+      case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
+      case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'keep-current'] : [];
       case 'setup-failed': {
         const kind = this.failure?.kind;
         const list: DecisionId[] = [];
-        if (kind === 'cancelled' && keep) list.push('restart-recalibration');
+        if (kind === 'cancelled' && keep && this.recalibrating) list.push('restart-recalibration');
         if (this.baseline && this.choice && kind !== 'baseline' && kind !== 'cancelled') list.push('record-again');
         if (this.baseline) list.push('another-movement');
         if (keep) list.push('keep-current');
@@ -360,31 +410,49 @@ export class MotifSession {
     }
   }
 
-  private restrictedScanner(model: GestureModel | null): void {
-    const decisions = this.allowedDecisions();
-    if (model && decisions.length) this.startScanner(this.decisionTargets(decisions), 'gesture', model);
+  /** Setup choices in scan order. The mapping stage lists Keep current first, then proposals, then Reject. */
+  private setupTargets(): ScanTarget[] {
+    const decisions = this.decisionTargets(this.allowedDecisions());
+    if (this.stage !== 'mapping') return decisions;
+    const proposals = proposeMappings(this.mappingSet()).map((proposal) => ({ id: proposal.id, label: proposal.label, kind: 'decision' as const }));
+    const keep = decisions.filter((target) => target.id === 'keep-current');
+    return [...keep, ...proposals, ...decisions.filter((target) => target.id !== 'keep-current')];
+  }
+
+  /** Setup scanners: any verified movement in play selects the highlighted choice (R6). */
+  private restrictedScanner(models: readonly GestureModel[]): void {
+    const targets = this.setupTargets();
+    if (models.length && targets.length) this.startScanner(targets, 'gesture', models);
   }
 
   private enterChoose(): void {
     this.setStage('choose');
-    if (this.recalibrating) this.restrictedScanner(this.approvedModel);
+    if (this.recalibrating || this.adding) this.restrictedScanner(this.approvedModels);
   }
 
   private enterComfort(): void {
     this.setStage('comfort');
-    this.restrictedScanner(this.candidate);
+    this.restrictedScanner(this.mappingSet());
     this.announce('Verified. Is this movement comfortable to repeat?');
   }
 
   private enterMapping(): void {
     this.setStage('mapping');
-    this.restrictedScanner(this.candidate);
-    this.announce('Review the mapping: your movement selects the highlighted item.');
+    this.pendingMapping = null;
+    this.restrictedScanner(this.mappingSet());
+    this.announce('Choose your controls. Nothing changes until you approve.');
+  }
+
+  private enterMappingConfirm(proposal: MappingProposal): void {
+    this.setStage('mapping-confirm');
+    this.pendingMapping = proposal;
+    this.restrictedScanner(this.mappingSet());
+    this.announce(`Review: ${proposal.label}.`);
   }
 
   private enterRecalibrateConfirm(): void {
     this.setStage('recalibrate-confirm');
-    this.restrictedScanner(this.approvedModel);
+    this.restrictedScanner(this.approvedModels);
   }
 
   private fail(kind: FailureKind, title: string, reasons: string[]): void {
@@ -393,7 +461,7 @@ export class MotifSession {
     this.candidate = null;
     this.setStage('setup-failed');
     this.failure = { kind, title, reasons };
-    if (this.recalibrating) this.restrictedScanner(this.approvedModel);
+    if (this.recalibrating || this.adding) this.restrictedScanner(this.approvedModels);
     this.announce(`${title}. ${reasons[0] ?? ''}`.trim());
   }
 
@@ -414,29 +482,65 @@ export class MotifSession {
     this.announce(`Training "${choice.label}": three attempts. Rest, move when prompted and hold, then return to rest.`);
   }
 
-  private approve(): void {
+  /** Choosing a proposal never arms it; it opens an explicit confirmation step. */
+  private chooseProposal(id: string): void {
+    if (this.stage !== 'mapping') return;
+    const proposal = proposeMappings(this.mappingSet()).find((candidate) => candidate.id === id);
+    if (proposal) this.enterMappingConfirm(proposal);
+  }
+
+  private approveMapping(): void {
+    const pending = this.pendingMapping;
+    const set = this.mappingSet();
     const cycle = this.cycles[this.cycles.length - 1];
-    if (!this.candidate || !cycle || cycle.outcome !== 'verified') return;
-    this.approvedModel = this.candidate;
-    this.approvedBaseline = this.baseline;
+    if (!pending) return;
+    const valid = validateMapping(set, pending.assignments);
+    if (!valid.ok) { this.enterMapping(); this.announce(valid.reasons[0] ?? 'Those controls are not valid.'); return; }
+    if (this.candidate) {
+      if (!cycle || cycle.outcome !== 'verified') return;
+      cycle.outcome = 'approved';
+      this.approvedBaseline = this.baseline;
+    }
+    if (!sameMapping(this.mapping, valid.value)) this.previousMapping = this.mapping;
+    this.approvedModels = [...set];
+    this.mapping = valid.value;
     this.candidate = null;
-    cycle.outcome = 'approved';
+    this.pendingMapping = null;
     this.recalibrating = false;
+    this.adding = false;
+    this.stepFallback = false;
     this.inputMode = 'gesture';
     this.enterPractice();
-    this.announce('Approved. Practice first: selections here are not spoken.');
+    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.`);
+  }
+
+  private usePrevious(): void {
+    const previous = this.previousMapping;
+    if (!previous || this.candidate) return;
+    const valid = validateMapping(this.approvedModels, previous.assignments);
+    if (!valid.ok) { this.announce('Your previous controls no longer match your movements.'); return; }
+    this.enterMappingConfirm({ ...valid.value, id: 'previous', label: describeMapping(this.approvedModels, valid.value) });
   }
 
   private keepCurrent(): void {
-    if (!this.approvedModel) return;
+    const select = this.selectModel();
+    if (!this.hasApproved || !select) return;
     this.closeOpenCycle();
     this.candidate = null;
     this.trials = [];
+    this.pendingMapping = null;
     this.baseline = this.approvedBaseline;
-    this.choice = { feature: this.approvedModel.feature, direction: this.approvedModel.direction, label: this.approvedModel.label };
+    this.choice = { feature: select.feature, direction: select.direction, label: select.label };
     this.recalibrating = false;
+    this.adding = false;
     this.enterCommunication();
     this.announce('Kept your current setup. Return to rest before selecting.');
+  }
+
+  /** A scanned or clicked setup choice: a decision id or a mapping proposal id. */
+  chooseSetupTarget(id: string): void {
+    if (Object.hasOwn(DECISION_LABELS, id)) { this.decide(id as DecisionId); return; }
+    if (id.startsWith('map:')) { this.chooseProposal(id); this.publish(); }
   }
 
   /** Setup decision from a scanned gesture or a conventional button; ignored if not offered now. */
@@ -446,19 +550,23 @@ export class MotifSession {
       case 'comfortable': this.enterMapping(); break;
       case 'record-again': if (this.choice) this.startTraining(this.choice); break;
       case 'another-movement': this.closeOpenCycle(); this.candidate = null; this.enterChoose(); break;
-      case 'approve': this.approve(); break;
+      case 'choose-different': this.enterMapping(); break;
+      case 'approve-mapping': this.approveMapping(); break;
+      case 'use-previous': this.usePrevious(); break;
       case 'reject': {
         const cycle = this.cycles[this.cycles.length - 1];
         if (cycle) cycle.outcome = 'rejected';
         this.fail('rejected', 'Movement not approved', ['You chose not to use this movement. Nothing was changed.']);
         break;
       }
-      case 'start-recalibration': this.recalibrating = true; this.beginBaseline(); break;
+      case 'start-recalibration': this.recalibrating = true; this.adding = false; this.beginBaseline(); break;
       case 'restart-recalibration': this.beginBaseline(); break;
       case 'keep-current': this.keepCurrent(); break;
-      case 'same-movement':
-        if (this.approvedModel) this.startTraining({ feature: this.approvedModel.feature, direction: this.approvedModel.direction, label: this.approvedModel.label });
+      case 'same-movement': {
+        const select = this.selectModel();
+        if (select) this.startTraining({ feature: select.feature, direction: select.direction, label: select.label });
         break;
+      }
     }
     this.publish();
   }
@@ -482,6 +590,11 @@ export class MotifSession {
 
   chooseMovement(choice: MovementChoice): void {
     if ((this.stage !== 'choose' && this.stage !== 'setup-failed') || !this.baseline) return;
+    if (this.adding && this.approvedModels.some((model) => model.feature === choice.feature && model.direction === choice.direction)) {
+      this.announce('That movement is already one of your controls. Choose a different movement.');
+      this.publish();
+      return;
+    }
     this.startTraining(choice);
     this.publish();
   }
@@ -495,8 +608,10 @@ export class MotifSession {
   useAssisted(): void {
     this.closeOpenCycle();
     this.candidate = null;
-    if (this.recalibrating) this.baseline = this.approvedBaseline;
+    this.pendingMapping = null;
+    if (this.recalibrating || this.adding) this.baseline = this.approvedBaseline;
     this.recalibrating = false;
+    this.adding = false;
     this.inputMode = 'assisted';
     this.enterCommunication();
     this.announce('Assisted input: press Space to select the highlighted item.');
@@ -504,7 +619,7 @@ export class MotifSession {
   }
 
   useGesture(): void {
-    if (!this.approvedModel) return;
+    if (!this.hasApproved) return;
     this.inputMode = 'gesture';
     this.enterCommunication();
     this.announce('Using your movement. Return to rest to begin.');
@@ -538,21 +653,28 @@ export class MotifSession {
     const targets: ScanTarget[] = [
       ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
       { id: 'finish-practice', label: CONTROL_LABELS['finish-practice']!, kind: 'control' },
+      ...this.decisionTargets(this.allowedDecisions()),
     ];
-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModel);
+    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
   private enterCommunication(): void {
     this.setStage('communication');
+    const speed = this.inputMode === 'assisted' || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
     const controls = this.inputMode === 'assisted'
-      ? ['speak', 'clear', 'pause', 'slower', 'faster', 'practice', this.approvedModel ? 'use-gesture' : 'setup-gesture']
-      : ['speak', 'clear', 'pause', 'slower', 'faster', 'practice', 'recalibrate'];
+      ? ['speak', 'clear', 'pause', ...speed, 'practice', this.hasApproved ? 'use-gesture' : 'setup-gesture']
+      : ['speak', 'clear', 'pause', ...speed, 'practice', 'change-controls',
+        ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
     const targets: ScanTarget[] = [
       ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
       ...controls.map((id) => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' as const })),
     ];
-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModel);
+    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
+
+  private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
+
+  private isStepping(): boolean { return this.scanDriver === 'gesture' && this.isRoutedStage() && this.scanMode() === 'step'; }
 
   private driveScanner(frame: FeatureFrame, nowMs: number): void {
     const scanner = this.scanner;
@@ -562,19 +684,52 @@ export class MotifSession {
       this.runtime?.invalidate();
       scanner.cancelSelection(nowMs);
       scanner.setSuspended(true, nowMs);
+      this.lastScanFrameTimestamp = undefined;
       return;
     }
     scanner.setSuspended(false, nowMs);
+    if (this.lastScanFrameTimestamp !== undefined) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
+    this.lastScanFrameTimestamp = frame.timestampMs;
     const update = this.runtime.step(frame, nowMs);
-    if (update.started) scanner.beginSelection(nowMs);
-    if (update.cancelled) scanner.cancelSelection(nowMs);
+    // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
+    const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
+    if (update.started) {
+      this.idleValidMs = 0;
+      if (actionOf(update.started) === 'select') scanner.beginSelection(nowMs);
+    }
+    if (update.cancelled && scanner.snapshot.latchedTarget !== undefined) scanner.cancelSelection(nowMs);
     if (update.event) {
-      if (scanner.snapshot.paused) { this.resumeScan(nowMs); return; }
-      const target = scanner.commitSelection(nowMs);
-      if (target) this.activate(target, nowMs);
+      this.idleValidMs = 0;
+      const action = actionOf(update.event.gestureId);
+      if (scanner.snapshot.paused) {
+        if (action === 'select' || action === 'pause') this.resumeScan(nowMs);
+        return;
+      }
+      switch (action) {
+        case 'select': { const target = scanner.commitSelection(nowMs); if (target) this.activate(target, nowMs); return; }
+        case 'next': scanner.move(1, nowMs); return;
+        case 'previous': scanner.move(-1, nowMs); return;
+        case 'pause': this.pauseScan(nowMs); return;
+        default: return; // Unmapped movement: its hold is consumed and discarded.
+      }
+    }
+    if (this.isStepping()) {
+      if (this.idleValidMs >= SESSION_LIMITS.stepIdleMs) this.fallBackToAutomatic();
       return;
     }
     scanner.tick(nowMs);
+  }
+
+  /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
+  private fallBackToAutomatic(): void {
+    this.stepFallback = true;
+    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
+    this.announce('No movement for a minute, so scanning is now automatic. Your select movement still selects; helpers can use the buttons.');
+  }
+
+  private pauseScan(nowMs: number): void {
+    this.scanner?.setPaused(true, nowMs);
+    this.announce(this.inputMode === 'assisted' ? 'Paused. Press Space to resume.' : 'Paused. Rest, then use your select or pause movement to resume.');
   }
 
   private resumeScan(nowMs: number): void {
@@ -583,7 +738,7 @@ export class MotifSession {
   }
 
   private activate(id: string, nowMs: number): void {
-    if (Object.hasOwn(DECISION_LABELS, id)) { this.decide(id as DecisionId); return; }
+    if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:')) { this.chooseSetupTarget(id); return; }
     const phrase = this.phraseFor(id);
     if (this.stage === 'practice') {
       if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
@@ -598,14 +753,19 @@ export class MotifSession {
     switch (id) {
       case 'speak': this.speakMessage(); break;
       case 'clear': this.message = []; this.announce('Message cleared.'); break;
-      case 'pause':
-        this.scanner?.setPaused(true, nowMs);
-        this.announce(this.inputMode === 'assisted' ? 'Paused. Press Space to resume.' : 'Paused. Make your movement to resume.');
-        break;
+      case 'pause': this.pauseScan(nowMs); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'practice': this.enterPractice(); this.announce('Practice: selections are not spoken.'); break;
-      case 'recalibrate': if (this.approvedModel && this.inputMode === 'gesture') this.enterRecalibrateConfirm(); break;
+      case 'change-controls': if (this.hasApproved && this.inputMode === 'gesture') this.enterMapping(); break;
+      case 'add-movement':
+        if (this.hasApproved && this.inputMode === 'gesture' && this.approvedModels.length < MAX_GESTURES) {
+          this.adding = true;
+          this.enterChoose();
+          this.announce('Add a movement: a helper chooses it on screen, or keep your current setup.');
+        }
+        break;
+      case 'recalibrate': if (this.hasApproved && this.inputMode === 'gesture') this.enterRecalibrateConfirm(); break;
       case 'use-gesture': this.useGesture(); break;
       case 'setup-gesture': this.setStage('welcome'); this.announce('Set up a movement: start the camera, then the rest check.'); break;
     }
@@ -654,7 +814,7 @@ export class MotifSession {
   private announce(text: string): void { this.announcement = text; }
 
   private captureStatus(): CaptureStatus | null {
-    const base = { interruptions: this.stageInterruptions, notice: this.notice };
+    const base = { interruptions: this.stageInterruptions, notice: this.notice, movement: null as string | null };
     if (this.stage === 'baseline' && this.baselineRecorder) {
       const progress = this.baselineRecorder.progress;
       return { ...base, kind: 'baseline', index: 1, total: 1, prompt: 'Rest', phaseProgress: progress, overallProgress: progress, validMs: this.baselineRecorder.elapsedMs };
@@ -663,9 +823,10 @@ export class MotifSession {
       const status = this.trialRecorder.status();
       const cycle = this.cycles[this.cycles.length - 1];
       const training = this.stage === 'training';
-      return { ...base, kind: training ? 'training' : 'verification',
-        index: (training ? this.trials.length : cycle?.heldOut.length ?? 0) + 1,
-        total: training ? SESSION_LIMITS.trainingTrials : SESSION_LIMITS.heldOutAttempts,
+      const done = training ? this.trials.length : cycle?.heldOut.length ?? 0;
+      const expected = training ? this.choice?.label ?? null : this.labelOf(this.verifyPlan[done] ?? '');
+      return { ...base, movement: expected, kind: training ? 'training' : 'verification', index: done + 1,
+        total: training ? SESSION_LIMITS.trainingTrials : this.verifyPlan.length,
         prompt: status.prompt, phaseProgress: status.phaseProgress, overallProgress: status.overallProgress, validMs: status.elapsedMs };
     }
     if (this.stage === 'negative' && this.negativeMonitor) {
@@ -682,10 +843,13 @@ export class MotifSession {
     this.snap = {
       stage: this.stage, camera: this.camera, cameraMessage: this.cameraMessage, tracking: this.tracking,
       frame: this.frame, frameIntervalMs: this.frameIntervalMs, hidden: this.hidden, baseline: this.baseline,
-      choice: this.choice, candidate: this.candidate, approvedModel: this.approvedModel, inputMode: this.inputMode,
+      choice: this.choice, candidate: this.candidate, approvedModel: this.selectModel(), approvedModels: [...this.approvedModels],
+      mapping: this.mapping, mappingLabel: this.mapping ? describeMapping(this.approvedModels, this.mapping) : null,
+      pendingMapping: this.pendingMapping, scanMode: this.scanMode(), stepFallback: this.stepFallback, adding: this.adding,
+      inputMode: this.inputMode,
       recalibrating: this.recalibrating, capture: this.captureStatus(),
       cycles: this.cycles.map((cycle) => ({ ...cycle, heldOut: [...cycle.heldOut] })),
-      failure: this.failure, decisions: this.decisionTargets(this.allowedDecisions()),
+      failure: this.failure, decisions: this.setupTargets(),
       scan: scanner ? { targets: this.scanTargets, index: scanner.index, latched: scanner.latchedTarget ?? null, paused: scanner.paused,
         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,

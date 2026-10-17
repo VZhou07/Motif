@@ -75,7 +75,8 @@ describe('Motif app', () => {
     expect(current?.textContent).toBe('Yes, this movement is comfortable');
     act(() => h.selectByGesture('comfortable'));
     expect(document.querySelector('.mapping-explainer')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
-    act(() => h.selectByGesture('approve'));
+    act(() => h.selectByGesture('map:0'));
+    act(() => h.selectByGesture('approve-mapping'));
     expect(screen.getByText(/NOTHING IS SPOKEN/)).toBeTruthy();
   });
 
