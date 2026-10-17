@@ -40,6 +40,14 @@ Every delegation must provide the canonical skill path, `AGENTS.md`, `plan.md`, 
 
 ## Handoff and agent failure
 
+### Concurrent caregiver workstreams
+
+For the selected four-branch caregiver build, use [docs/caregiver-demo-plan.md](docs/caregiver-demo-plan.md) and [docs/agent-prompts.md](docs/agent-prompts.md). Each teammate works in a separate clone/worktree. The backend/integration owner alone edits shared contracts, root planning/status documents, app routing/session integration, global privacy/network policy, profile schema and dependency manifests/lockfiles.
+
+Feature owners still read the root plan/reasoning/progress and canonical skill, but record their own designs, independent review verdicts, progress, tests and resume instructions in `docs/workstreams/<workstream>/reasoning.md` and `progress.md`. These per-feature documents satisfy the reasoning/handoff-writing requirement for that worker; the integrator summarizes them in root documents. Use `participant-requests`, `caregiver-dashboard`, `request-relay` or `browser-access` as the workstream directory. Do not have four agents edit the root journals. Existing communication files transfer only to the communication teammate or after an explicit owner handoff.
+
+Commit shared versioned contracts on an agreed passing base before dependent implementation. Other workers may inspect/design while that gate is pending; do not invent incompatible contracts. Report the base/contract commit IDs so the human teammates can share them; never push automatically. Integrate feature commits on the integration owner's isolated branch after independent review/checks, preserving active checkouts. Do not merge over a teammate's ongoing work. A missing subagent tool or unavailable hardware check must be recorded honestly.
+
 - Treat `progress.md` as the durable handoff record. Update it before each implementation chunk, after every review/checkpoint, and before stopping or handing off. Keep the current reasoning revision and exact next action visible.
 - Every active work item must name its owner/subagent, allowed files, dependencies, acceptance tests, and state (`planned`, `reviewing`, `implementing`, `testing`, `blocked`, or `reached`). Give parallel workers disjoint file ownership; transfer ownership explicitly before another agent edits those files.
 - Record the last passing checkpoint, Git base commit, changed/new files and their purpose, completed versus partial behavior, exact commands/results, known failures, pending manual checks, relevant running command/session identifiers, and a small ordered resume checklist. Never store credentials, private recordings, or environment secrets in handoff files.

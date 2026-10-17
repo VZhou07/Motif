@@ -1,5 +1,9 @@
 # Motif technical handoff
 
+## Latest handoff preparation — four agent prompts
+
+User requested a prompt for each teammate/branch. Coordinator wrote docs/agent-prompts.md, linked it from the selected plan, and added the concurrent-workstream journal rule to AGENTS.md. No application code/branches/workers/services were started. Agent 3 prepares the reconciled base and shared contracts first; other agents may inspect/design in parallel. Feature agents own their workstream reasoning/progress documents; integration owner alone edits shared/root files. Independent conflict_reasoning reviewed the actual prompts and rule/plan diff: PASS, no blockers; independently executed whitespace/local-link/mandatory-path checks with zero issues. No app tests rerun for documentation-only changes. Deliver four copy-ready prompts to the user; the human team shares/pushes commits.
+
 ## Latest selected plan — connected caregiver demo and four branches
 
 User selected **caregiver requests plus a limited browser companion prototype**, with real two-device request delivery while camera/calibration data stays local. Event is Hack the Valley. Coordinator wrote docs/caregiver-demo-plan.md and linked it from plan.md; no application files/services/deployments changed. Four bounded roles: existing communication teammate on participant requests, caregiver dashboard, relay/backend plus sole shared integration ownership, and browser adapter. State: selected product scope; technical implementation reviews/contracts/base reconciliation still pending. No new build Goal or implementation workers started. First next action: reconcile wink/conflict/current teammate changes on an agreed passing base, freeze contracts, get bounded implementation designs reviewed, then distribute the four branches. Do not ask again whether this selected scope/networking is desired. Original checkout and other workers remain untouched; keep the existing isolated preview running.

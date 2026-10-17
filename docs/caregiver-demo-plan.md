@@ -22,6 +22,8 @@ First real demo: person A selects Send water request; caregiver on another devic
 
 ## Four concurrent owners
 
+Copy-ready assignments are in [agent-prompts.md](agent-prompts.md). The integration owner prepares the shared passing base/contracts first; other teammates may inspect/design concurrently before those contracts are ready. Per-workstream reasoning/progress files avoid four writers in root journals; see AGENTS.md.
+
 | Owner / branch | Owned files and deliverable | Required acceptance |
 | --- | --- | --- |
 | 1: participant interface — `feature/participant-requests` | Existing communication teammate owns communication changes; new `src/features/participant-requests/` view/tests. Use the shared request client; keep recognition unchanged. Request choices, truthful delivery state, cancel, acknowledgment, existing gesture/Space operability. | One deliberate gesture selection creates one request; long holds do not duplicate it. Offline is not shown as Sent. Correct acknowledgment/cancel shown. Local communication remains available. |
