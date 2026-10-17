@@ -253,4 +253,23 @@ describe('Motif app', () => {
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.pendingMapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow!.id]: 'pause' });
   });
+
+  it('finds movements from free exploration and lists them as suggestions', () => {
+    const h = new Harness();
+    h.session.setCamera('running');
+    h.session.startBaseline();
+    h.run(10_500);
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Not sure? Find my movements' }));
+    expect(screen.getByText('FINDING YOUR MOVEMENTS')).toBeTruthy();
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Try what feels/);
+    const start = h.now;
+    act(() => h.run(20_500, (now) => ((now - start - 500) % 4_000 >= 0 && (now - start - 500) % 4_000 < 1_000 ? MOUTH : REST)));
+    const list = screen.getByRole('list', { name: 'Noticed movements' });
+    expect(list.textContent).toMatch(/Open mouth — seen 5 times/);
+    expect(screen.getByText(/not proof of what you meant/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open mouth' }));
+    expect(h.snap.stage).toBe('training');
+    expect(h.snap.choice?.feature).toBe('jawOpen');
+  });
 });
