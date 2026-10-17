@@ -41,56 +41,11 @@ export function actionLabel(snapshot: SessionSnapshot, id: string): string {
 
 const runtimeLabels = { unarmed: 'waiting for rest', neutral: 'resting', armed: 'ready', pending: 'confirming movement', held: 'release to rest' } as const;
 
-export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, compact, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
+/** The live measurement list; shown in the side panel in setup and inside the Helper panel while communicating. */
+export function SignalDashboard({ snapshot }: { snapshot: SessionSnapshot }) {
   const [open, setOpen] = useState(false);
-  const running = snapshot.camera === 'running';
-  const tracked = running && snapshot.tracking === 'tracked';
-  const model = snapshot.approvedModel;
-  const models = snapshot.approvedModels;
   return (
-    <aside className="camera-sidebar" aria-label="Camera and movement feedback">
-      <div className="camera-card">
-        <div className="camera-card-header">
-          <span className="eyebrow">YOUR CAMERA</span>
-          <span className={`tracking-pill ${tracked ? 'tracking-good' : ''}`}><span />{running ? 'Live · local' : snapshot.camera === 'loading' ? 'Starting' : 'Off'}</span>
-        </div>
-        <div className={`camera-preview ${running ? 'camera-running' : ''}`}>
-          <video ref={videoRef} muted playsInline aria-label="Mirrored local camera preview" />
-          <div className="camera-placeholder" aria-hidden="true">
-            <svg viewBox="0 0 160 160" fill="none"><path d="M80 21c-29 0-43 21-43 52 0 36 17 65 43 65s43-29 43-65c0-31-14-52-43-52Z" stroke="currentColor" strokeWidth="2" strokeDasharray="5 6" /><path d="M57 70h9m28 0h9M79 74l-3 18h8m-20 16c9 7 23 7 32 0" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
-            <span>{snapshot.camera === 'loading' ? 'Getting things ready…' : 'A space for your movement'}</span>
-          </div>
-          {running && <span className="preview-caption">Mirrored preview · left and right mean your own sides</span>}
-        </div>
-        {!compact && <CameraDiagnostics snapshot={snapshot} />}
-        {!compact && <div className="camera-status"><span className={`status-dot ${tracked ? 'status-good' : ''}`} /><strong>{trackingLabel(snapshot)}</strong></div>}
-        <p className="camera-help">{running
-          ? 'Keep only the calibrated person in view. When tracking is unclear, controls safely wait.'
-          : 'Video is processed on this device. It is never uploaded or saved.'}</p>
-        {snapshot.cameraMessage && <p className="camera-help">{snapshot.cameraMessage}</p>}
-        <div className="camera-actions">
-          {running
-            ? <button type="button" className="button button-quiet" onClick={onStop}>Stop camera</button>
-            : hideStart ? null : <button type="button" className="button button-quiet" disabled={snapshot.camera === 'loading'} onClick={onStart}>
-                {snapshot.camera === 'loading' ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Start camera'}</button>}
-        </div>
-        {onCuesEnabled && !compact && <label className="camera-help" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
-          <input type="checkbox" style={{ width: 22, minHeight: 22 }} checked={cueStatus?.enabled ?? true}
-            disabled={cueStatus?.available === false} onChange={(event) => onCuesEnabled(event.target.checked)} />
-          Rest/Action beeps {cueStatus?.available === false ? '(unavailable in this browser)' : cueStatus?.ready ? '' : '(play after you start the camera)'}
-        </label>}
-        {children}
-      </div>
-      {model && (
-        <div className="learned-controls">
-          <h2>{models.length === 1 ? 'Your movement' : 'Your movements'}</h2>
-          {models.map((approved) => (
-            <div key={approved.id}><span>{approved.label}</span><strong>{actionLabel(snapshot, approved.id)}</strong></div>
-          ))}
-          {snapshot.runtime && <div><span>Recognizer</span><strong>{runtimeLabels[snapshot.runtime.phase]}</strong></div>}
-        </div>
-      )}
-      {!compact && <section className="signal-dashboard">
+    <section className="signal-dashboard">
         <button type="button" className="dashboard-toggle" aria-expanded={open} aria-controls="signal-panel" onClick={() => setOpen(!open)}>
           <span>Movement signal dashboard</span><span aria-hidden="true">{open ? '−' : '+'}</span>
         </button>
@@ -115,7 +70,68 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, co
               {snapshot.runtime ? ` Recognizer: ${runtimeLabels[snapshot.runtime.phase]}.` : ''}</p>
           </div>
         )}
-      </section>}
+      </section>
+  );
+}
+
+export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, compact, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
+  // While communicating the side panel stays quiet: diagnostics and beeps live in the Helper panel.
+  const quiet = snapshot.stage === 'communication' || snapshot.stage === 'practice';
+  const slim = !!compact || quiet;
+  const running = snapshot.camera === 'running';
+  const tracked = running && snapshot.tracking === 'tracked';
+  const model = snapshot.approvedModel;
+  const models = snapshot.approvedModels;
+  return (
+    <aside className="camera-sidebar" aria-label="Camera and movement feedback">
+      <div className="camera-card">
+        <div className="camera-card-header">
+          <span className="eyebrow">YOUR CAMERA</span>
+          <span className={`tracking-pill ${tracked ? 'tracking-good' : ''}`}><span />{running ? 'Live · local' : snapshot.camera === 'loading' ? 'Starting' : 'Off'}</span>
+        </div>
+        <div className={`camera-preview ${running ? 'camera-running' : ''}`}>
+          <video ref={videoRef} muted playsInline aria-label="Mirrored local camera preview" />
+          <div className="camera-placeholder" aria-hidden="true">
+            <svg viewBox="0 0 160 160" fill="none"><path d="M80 21c-29 0-43 21-43 52 0 36 17 65 43 65s43-29 43-65c0-31-14-52-43-52Z" stroke="currentColor" strokeWidth="2" strokeDasharray="5 6" /><path d="M57 70h9m28 0h9M79 74l-3 18h8m-20 16c9 7 23 7 32 0" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
+            <span>{snapshot.camera === 'loading' ? 'Getting things ready…' : 'A space for your movement'}</span>
+          </div>
+          {running && <span className="preview-caption">Mirrored preview · left and right mean your own sides</span>}
+        </div>
+        {!slim && <CameraDiagnostics snapshot={snapshot} />}
+        {!compact && <div className="camera-status"><span className={`status-dot ${tracked ? 'status-good' : ''}`} /><strong>{trackingLabel(snapshot)}</strong></div>}
+        <p className="camera-help">{running
+          ? 'Keep only the calibrated person in view. When tracking is unclear, controls safely wait.'
+          : 'Video is processed on this device. It is never uploaded or saved.'}</p>
+        {snapshot.cameraMessage && <p className="camera-help">{snapshot.cameraMessage}</p>}
+        <div className="camera-actions">
+          {running
+            ? <button type="button" className="button button-quiet" onClick={onStop}>Stop camera</button>
+            : hideStart ? null : <button type="button" className="button button-quiet" disabled={snapshot.camera === 'loading'} onClick={onStart}>
+                {snapshot.camera === 'loading' ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Start camera'}</button>}
+        </div>
+        {quiet && snapshot.inputMode === 'gesture' && (
+          <div className={`seencard ${snapshot.movementSeen ? 'seen-on' : ''}`} role="status" aria-live="off" aria-label="Movement seen indicator">
+            <span className="seen-dot" aria-hidden="true" />
+            <strong>{snapshot.movementSeen ? 'Movement seen' : 'Ready for your movement'}</strong>
+          </div>
+        )}
+        {onCuesEnabled && !slim && <label className="camera-help" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
+          <input type="checkbox" style={{ width: 22, minHeight: 22 }} checked={cueStatus?.enabled ?? true}
+            disabled={cueStatus?.available === false} onChange={(event) => onCuesEnabled(event.target.checked)} />
+          Rest/Action beeps {cueStatus?.available === false ? '(unavailable in this browser)' : cueStatus?.ready ? '' : '(play after you start the camera)'}
+        </label>}
+        {children}
+      </div>
+      {model && (
+        <div className="learned-controls">
+          <h2>{models.length === 1 ? 'Your movement' : 'Your movements'}</h2>
+          {models.map((approved) => (
+            <div key={approved.id}><span>{approved.label}</span><strong>{actionLabel(snapshot, approved.id)}</strong></div>
+          ))}
+          {snapshot.runtime && <div><span>Recognizer</span><strong>{runtimeLabels[snapshot.runtime.phase]}</strong></div>}
+        </div>
+      )}
+      {!slim && <SignalDashboard snapshot={snapshot} />}
     </aside>
   );
 }
