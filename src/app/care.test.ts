@@ -7,6 +7,16 @@ const READY = { VITE_SUPABASE_URL: 'https://abcdefghij.supabase.co', VITE_SUPABA
 afterEach(async () => { await resetSharedCareClientForTests(); });
 
 describe('sharedCareClient', () => {
+  it('creates nothing at import: a fresh module still has no client to reset', async () => {
+    vi.resetModules();
+    const factory = vi.fn();
+    vi.doMock('../care', async (original) => ({ ...(await original<typeof import('../care')>()), createSupabaseCareClient: factory }));
+    await import('./care');
+    await import('../Root');
+    expect(factory).not.toHaveBeenCalled();
+    vi.doUnmock('../care');
+  });
+
   it('creates no client and makes no request when networking is not configured', () => {
     const fetch = vi.spyOn(globalThis, 'fetch');
     expect(sharedCareClient({})).toEqual({ status: 'not-configured' });
@@ -31,7 +41,7 @@ describe('sharedCareClient', () => {
   it('refuses a second project in the same page instead of creating another identity', () => {
     expect(sharedCareClient(READY).status).toBe('ready');
     const other = sharedCareClient({ ...READY, VITE_SUPABASE_URL: 'https://zyxwvutsrq.supabase.co' });
-    expect(other.status).toBe('invalid');
+    expect(other).toEqual({ status: 'invalid', message: 'The care connection could not start. Reload the page and try again.' });
   });
 
   it('can be created again after reset (hot reload) because the old client was disposed', async () => {
