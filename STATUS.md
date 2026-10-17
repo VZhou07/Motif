@@ -1,11 +1,13 @@
 # Motif build update
 
-**Branch `ux-setup-flow`, slice 1 done (software):** the start screen now has one big **Get started** button. It turns the camera on and begins the rest check by itself. With a saved setup, **Continue** stays the main button and **Set up again** is the small one. Text on this screen is now at least 14px, and the old "repeats the rest check" wording is fixed.
+**Branch `ux-setup-flow`, slices 1 and 2 done (software):** one **Get started** button starts the camera and the rest check by itself. After your movement passes its checks, one screen shows what will turn on, with **Approve and practice**. The mapping and confirm screens are skipped for a first movement. From launch to practice a new user now needs 4 selections instead of 8.
 
-**Checked (automated + browser, camera covered):** typecheck, build and 387 tests pass. QA broke the double-click and "left before camera started" protections on purpose and the tests caught it.
+**Checked (automated + browser, camera covered):** typecheck, build and 412 tests pass. QA broke key protections on purpose; the important ones were caught.
 
-**Needs you (one check):** click **Get started** with the real camera. Your browser should ask for camera permission, then the 10-second rest check should start without another click. Tell me if it doesn't, or if the start screen feels unclear.
+**Needs you (two checks):**
+1. Click **Get started** with the real camera. It should ask for permission, then start the rest check with no further click.
+2. After a movement passes, read the approve screen. Does it make clear what Approve turns on?
 
-**Not checked:** the start screen at a 1280-wide window (the tool could not resize).
+**Not checked:** a 1280-wide window.
 
-**Next:** slice 2 (pick a movement = start recording) and slice 3 (one approve screen). Nothing is pushed.
+**Now building:** slice 3 (click a movement to record it; rename it on the approve screen). Nothing is pushed.

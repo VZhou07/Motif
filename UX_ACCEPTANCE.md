@@ -41,3 +41,21 @@ Software verified: 1.1-1.8, 1.9, 1.10 TEST PASS (24 acceptance tests; suite 387/
 | 2.12 | TEST | The new decisions are scanned after "Record again" (not first), and the preview text is in a region referenced by `aria-describedby` on the decision list. |
 | 2.8 | TEST | tsc, full vitest and build pass; Baseline for this slice: 387 tests. |
 | 2.H | HUMAN | A helper reading the comfort screen understands exactly what "Approve and practice" will turn on. |
+
+### Slice 2 result (round 1 of 3)
+Software verified: 2.1-2.7, 2.9-2.12 PASS (25 acceptance tests), 2.8 PASS (tsc, 412 tests, build). Mutation checks: scan-order and adding/recalibrating guards are caught; the verified-cycle check and effort-independence mutants survive as equivalent (unreachable from the comfort stage; with one movement select-only is the only valid mapping), kept as defence in depth. Note: 2.3 "runtime not armed" is not asserted because the recognizer is armed on the comfort screen so decisions can be scanned; observable state and an accidental first movement approving nothing are asserted instead.
+**Human acceptance pending:** 2.H (a helper reading the comfort screen understands what "Approve and practice" turns on).
+
+## Slice 3: click a movement to record it; rename on the approve screen
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| 3.1 | TEST | Clicking a movement tile starts training immediately (stage `training`). The choose screen has no "Record this movement" button and no name field. |
+| 3.2 | TEST | Tiles are disabled while the camera is not running; movements already in use stay disabled while adding. |
+| 3.3 | TEST | The comfort screen for a first movement has a "Name this movement" field prefilled with the default label. Editing it and approving stores that label in `approvedModels`, the controls label and the autosaved profile. |
+| 3.4 | TEST | A blank name or one over 60 characters is refused with a plain message and the default is kept; renaming is refused outside the comfort stage, when restoring, and never approves anything. |
+| 3.5 | TEST | "Record again" keeps the chosen name. |
+| 3.6 | TEST | Counting selections with a synthetic stream: Get started, pick movement, Approve = 3 to reach practice. |
+| 3.7 | TEST | The discovery path (choosing a noticed movement) and adding a second movement still start training and approve as before. |
+| 3.8 | TEST | tsc, full vitest and build pass; baseline for this slice: 412 tests. |
+| 3.H | HUMAN | A helper can pick a movement with one click and finds where to rename it. |
