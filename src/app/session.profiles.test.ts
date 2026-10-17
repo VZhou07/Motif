@@ -105,6 +105,29 @@ describe('saving a profile: guards (R7)', () => {
 });
 
 describe('restoring a profile (R7)', () => {
+  it('says so when restoring replaces favourites made in this session (R14)', () => {
+    const { storage } = savedPersonA();
+    const h = new Harness({ profiles: storeFor(storage).store });
+    expect(h.session.editVocabulary({ kind: 'add-phrase', group: 'favourites', text: 'Call my sister' }).ok).toBe(true);
+    h.session.setCamera('running');
+    expect(h.session.restoreProfile('Person A')).toBe(true);
+    recheck(h);
+    h.selectByGesture('comfortable', MOUTH);
+    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.vocabulary.groups[0]!.phrases).toEqual([]);
+    expect(h.snap.announcement).toMatch(/Favourites from this session were replaced by the saved profile’s\.$/);
+  });
+
+  it('does not mention favourites when none are lost', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('comfortable', MOUTH);
+    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(h.snap.announcement).not.toMatch(/Favourites/);
+  });
+
   it('re-checks a two-movement profile while disarmed and arms only after approval', () => {
     const { storage } = savedPersonA();
     const h = restoreOn(storage);
