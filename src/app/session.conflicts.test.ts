@@ -16,7 +16,7 @@ function mouthSetup(): Harness {
   h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', MOUTH);
   expect(h.snap.stage).toBe('negative');
   h.run(11_000);
-  for (const id of ['comfortable', 'map:0', 'approve-mapping', 'finish-practice']) h.selectByGesture(id, MOUTH);
+  for (const id of ['approve-comfortable', 'finish-practice']) h.selectByGesture(id, MOUTH);
   expect(h.snap.stage).toBe('communication');
   return h;
 }
