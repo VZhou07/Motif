@@ -81,8 +81,9 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           <summary className="field-label">Edit phrases (helper)</summary>
           {paused
             ? <>
-                <p className="helper-copy">{snapshot.approvedModels.length
+                <p className="helper-copy">{snapshot.approvedModels.length && snapshot.profiles.available
                   ? 'Changes are kept on this device automatically, with Last setup.'
+                  : snapshot.approvedModels.length ? 'This browser cannot keep changes; they last until this page closes.'
                   : 'Changes are kept on this device only once a movement setup is approved.'}</p>
                 <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
               </>
