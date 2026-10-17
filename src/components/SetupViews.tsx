@@ -3,6 +3,7 @@ import { liveDeviation, MOVEMENT_OPTIONS, type MovementOption } from '../app/mov
 import type { MotifSession } from '../app/session';
 import type { CapturePrompt, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
+import { AUTO_PROFILE_NAME } from '../app/profiles';
 import { SavedProfiles } from './ProfileViews';
 import { DecisionList } from './ScanBoard';
 
@@ -16,19 +17,21 @@ const percent = (value: number) => Math.round(Math.max(0, Math.min(1, Number.isF
 
 export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { onStartCamera: () => Promise<boolean> | void }) {
   const running = snapshot.camera === 'running';
+  // A saved setup makes Continue the main action; a new setup stays available but is secondary.
+  const hasSaved = snapshot.profiles.names.includes(AUTO_PROFILE_NAME);
   return (
     <>
       <Heading eyebrow="A LITTLE MOVEMENT. A WORLD OF POSSIBILITY." title={<>Your movement.<br /><em>Your voice.</em></>}
         lead="A personal way to communicate, built around a movement that feels comfortable to you. No particular smile, blink or head movement is required." />
+      <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
       <div className="button-row welcome-actions">
         {running
-          ? <button type="button" className="button button-primary" onClick={() => session.startBaseline()}>Start the rest check<Icon name="arrow" /></button>
-          : <button type="button" className="button button-primary" disabled={snapshot.camera === 'loading'} onClick={() => void onStartCamera()}>
+          ? <button type="button" className={`button ${hasSaved ? '' : 'button-primary'}`} onClick={() => session.startBaseline()}>Start the rest check<Icon name="arrow" /></button>
+          : <button type="button" className={`button ${hasSaved ? '' : 'button-primary'}`} disabled={snapshot.camera === 'loading'} onClick={() => void onStartCamera()}>
               <Icon name="camera" />{snapshot.camera === 'loading' ? 'Starting camera…' : 'Start camera'}<Icon name="arrow" /></button>}
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch) instead</button>
       </div>
       <p className="helper-copy">A helper may assist with camera permission and setup. After your movement is verified and approved, communication, pause, speed and recalibration all work with that movement alone.</p>
-      <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
       <SetupOptions snapshot={snapshot} session={session} />
       <div className="journey-cards">
         {[['01', 'Settle in', 'Ten quiet seconds so Motif learns your own resting variation.'],
