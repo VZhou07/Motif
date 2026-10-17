@@ -35,6 +35,9 @@ export interface CaptureStatus {
   feature: FeatureId | null;
   direction: 1 | -1 | null;
   modelId: string | null;
+  /** Preparation only. Does not change the current recording's evidence/index. */
+  nextMovement?: string | null;
+  nextModelId?: string | null;
 }
 
 export interface AttemptEvidence {

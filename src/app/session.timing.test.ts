@@ -33,9 +33,9 @@ function followWithJitter(h: Harness, done: (snap: SessionSnapshot) => boolean, 
 describe('natural guided pacing (R11)', () => {
   it('speaks each real phase once across all five attempts, ending directly with everyday activity', () => {
     const h = training(true);
-    expect(h.spoken).toEqual(['Rest']);
+    expect(h.spoken).toEqual(['Rest. Next Action: Brow.']);
     h.followPrompts((snap) => snap.stage === 'negative');
-    expect(h.spoken).toEqual(['Rest', ...Array.from({ length: 5 }, () => ['Action', 'Rest']).flat(), 'Everyday activity']);
+    expect(h.spoken).toEqual(['Rest. Next Action: Brow.', ...Array.from({ length: 4 }, () => ['Action', 'Rest. Next Action: Brow.']).flat(), 'Action', 'Rest', 'Everyday activity']);
     expect(h.snap.capture?.prompt).toBe('Everyday activity');
     expect(h.snap.capture?.remainingMs).toBe(10_000);
   });
@@ -47,7 +47,7 @@ describe('natural guided pacing (R11)', () => {
     h.run(450, BROW);
     h.step(REST, 'missing');
     expect(cancel).toHaveBeenCalledOnce();
-    expect(h.spoken.at(-1)).toBe('Rest');
+    expect(h.spoken.at(-1)).toBe('Rest. Next Action: Brow.');
     expect(h.snap.capture).toMatchObject({ prompt: 'Rest', remainingMs: 5_000, index: 1, validMs: 0, interruptions: 1 });
     h.step();
     expect(h.snap.capture?.remainingMs).toBe(5_000);
@@ -63,7 +63,7 @@ describe('natural guided pacing (R11)', () => {
       h.followPrompts((snap) => snap.capture?.prompt === 'Action');
       const before = h.spoken.length;
       h.step(REST, 'missing');
-      expect(h.spoken.slice(before)).toEqual(attempt < 4 ? ['Rest'] : []);
+      expect(h.spoken.slice(before)).toEqual(attempt < 4 ? ['Rest. Next Action: Brow.'] : []);
     }
     expect(cancel.mock.calls.length).toBeGreaterThanOrEqual(5);
     expect(h.snap.stage).toBe('setup-failed');
@@ -117,6 +117,6 @@ describe('natural guided pacing (R11)', () => {
     expect(h.snap.stage).toBe('setup-failed');
     expect(h.snap.failure?.kind).toBe('training');
     expect(h.snap.candidate).toBeNull();
-    expect(h.spoken).toEqual(['Rest', ...Array.from({ length: 3 }, () => ['Action', 'Rest']).flat()]);
+    expect(h.spoken).toEqual(['Rest. Next Action: Brow.', ...Array.from({ length: 3 }, () => ['Action', 'Rest. Next Action: Brow.']).flat()]);
   });
 });
