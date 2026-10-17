@@ -323,3 +323,52 @@ Pure (`profiles.test.ts`): round trip; each rejection above (including `null` th
 | --- | --- | --- | --- |
 | R7 revision 1 | r7_review | B1 restore had no typed state/approval gate (approveMapping only gated candidates; mappingSet empty; captureTrial needed choice); B2 no exit at mapping/mapping-confirm, dead record-again in comfort; B3 dwell bounds contradicted `isGestureModel`; B4 Save could silently drop unreadable entries. Rest-compatibility rule and revalidation plan judged correct/adequate. All resolved in revision 2. | CHANGES REQUIRED |
 | R7 revision 2 | r7_review (re-review) | B1–B4 resolved against current code; no new blockers. Non-blocking: edit stale revision-1 lines, separate failure kind for profile mismatch, spell out evidence type changes, Delete-all hint, storage-unavailable restore test; adopted. | APPROVED |
+
+## R8 — W7b: observed evidence, effort and mapping recommendations (revision 1)
+
+Status: DRAFT, awaiting independent reasoning review before any code. Owner: Claude Code coordinator (session 3). Builds on approved R4–R7.
+
+### Goal and limits
+
+Show each person what was actually observed for each of their movements, ask how much effort each takes, and recommend an editable control mapping from that evidence. Recommendations only reorder and pre-fill choices; nothing changes until the existing `mapping-confirm` Approve. All numbers are counts with their denominators from this session's setup and use. No percentages, accuracy, reliability or medical claims, and no population comparisons.
+
+### Evidence model (pure, `src/app/scoring.ts`)
+
+- `AttemptEvidence` gains `expectedId` (the model id), so attempts are attributed by id, not by label (two movements may share a name).
+- `MovementEvidence` for an approved model, from the session's cycles plus live use:
+  - `checks: { passed, total }` — every held-out, cross-check and re-check attempt whose `expectedId` is this model (all cycles, including failed ones still holding this id).
+  - `everyday: { events, armedMs, windows }` — summed over negative windows of cycles whose `verifiedIds` (or, for failed cycles, whose set at the time) included this model. Shown as "0 accidental activations in 21.4 s over 2 checks".
+  - `separation` — from the frozen thresholds alone: `fitGesture` sets release = c + 0.25m and activation = c + 0.65m (c = rest ceiling, m = margin), so m = (activation − release)/0.4, c = release − 0.25m and the weakest practice attempt sat at (c + m)/c × the person's resting variation. Shown as "weakest practice attempt: 3.2× your resting variation". Restored models have the same thresholds, so the value is the one from the day they were trained (labelled as such).
+  - `effort: 'easy' | 'effort' | 'unknown'` and `tiringReports: number` (see below).
+  - `use: { completed, unfinished }` — in `practice`/`communication` with the gesture driver only: `completed` counts runtime events of this model; `unfinished` counts dwells of this model that started and were cancelled (a hold that began but was not completed). Invalid tracking cancellations are not counted against the movement (the runtime invalidation is not a movement outcome).
+- No derived rates are displayed; the UI shows the raw counts and denominators. The panel keeps the statement "Observations from this session only — not a measure of future or general accuracy."
+
+### Effort and fatigue (gesture-operable)
+
+- `comfort` (new movement, not restore) offers `comfortable` → "Comfortable and easy" and new `comfortable-effort` → "Comfortable, but it takes effort", then the existing record-again / another-movement / keep-current. Both continue to `mapping`; the answer is stored per model id. Restored profiles keep `unknown` effort (the v1 profile schema does not store effort; no schema change in W7b).
+- Communication (gesture mode) gains a scanned control `tiring` → "This movement is tiring". It adds a tiring report to the movement with the most `completed` events this session (ties → the select movement), announces which one, and: with two or more approved movements opens `mapping` (recommendation recomputed, Keep current controls still first); with one movement it announces options only ("Slower scanning, Pause, or Recalibrate with another movement") and changes nothing. Nothing is applied without Approve. Worst-case communication target count becomes 16 (~32 s cycle at 2 s), documented.
+
+### Recommendation (pure)
+
+`recommendMapping(models, evidence): { assignments, mode, reasons: string[] } | null` (null for zero models).
+- Rank movements by, in order: fewer tiring reports; effort easy < unknown < effort; fewer failed checks (total − passed); fewer everyday activations; fewer unfinished holds relative to completed (compare `unfinished × other.completed+1` cross-products, so no rates are formed); larger separation; earlier approval order. Deterministic.
+- The best movement selects. Remaining movements with effort `easy`/`unknown` and no tiring reports take next, previous, pause in rank order; movements marked `effort` or reported tiring are left unmapped ("left unused to save effort; it still makes simultaneous movements wait"). If no movement takes `next`, the mode is automatic scanning (validateMapping already derives it).
+- Reasons are short plain sentences built only from the counts ("Raise left outer eyebrow selects: easiest for you and 4 of 4 checks passed").
+- In `mapping`, the recommendation appears as `map:recommended` directly after `Keep current controls` (if it duplicates an existing proposal, that proposal is moved up and relabelled instead), labelled "Recommended: …". It opens `mapping-confirm` like any proposal.
+
+### Editable mapping (caregiver, conventional)
+
+`MappingView` gains a helper form: one action select per movement (none / select / next / previous / pause). `session.proposeCustom(assignments)` validates with `validateMapping` for the current mapping set; invalid → announced reasons, stage unchanged; valid → `mapping-confirm` with label "Custom: …". Gesture users choose among the scanned proposals (including the recommendation); the custom form is the conventional path for arbitrary combinations.
+
+### Failure modes
+
+Mislabelled attribution (fixed by `expectedId`); counting setup holds as use (only routed stages count); counting tracking loss as an unfinished movement (excluded); a tiring report silently remapping (never: needs Approve); recommending an effortful movement for frequent actions (left unmapped); single-movement users (recommendation = that movement selects, automatic); restored cycles (effort unknown, separation from saved thresholds).
+
+### Tests before advancing
+
+Pure (`scoring.test.ts`): check/everyday denominators per id across held-out/cross-check/recheck and failed cycles; separation formula against `fitGesture` output on a synthetic fit; each ranking key in isolation and the tie-break; effort/tiring movements left unmapped and auto mode when no next remains; one movement; deterministic output; no percentage text in reasons. Session: comfort effort choices recorded and both continue; use counters only in practice/communication, `unfinished` on cancel, tracking loss not counted; mapping lists `map:recommended` second with its reasons; choosing it needs confirmation; `tiring` targets the most-used movement and opens mapping (2+) or only announces (1), mapping unchanged until Approve; `proposeCustom` invalid/valid paths. RTL: evidence summary shows counts with denominators per movement; recommended label/reasons; custom editor submits to confirmation. Then typecheck, build, browser check, independent testing review.
+
+### R8 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
