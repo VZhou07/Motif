@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLocalProfileStore, createMemoryStorage, parseProfile, PROFILE_KEY, type ProfileStore, type StorageLike, type StoredProfile } from './profiles';
 import { BROW, HEAD_WOBBLE, Harness, MOUTH, REST, type Values } from './session.test-support';
+import { defaultVocabulary } from './vocabulary';
 
 const BROW_LABEL = 'Raise left outer eyebrow';
 const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
@@ -25,6 +26,17 @@ function savedPersonA() {
   h.click('phrase:g2:0'); // a message that must never be saved
   expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
   return { storage, store, original: h };
+}
+
+/**
+ * R19 seeds a new page's phrases from Last setup. Resetting Last setup's phrases to the defaults lets the
+ * restore tests still prove that a named profile's phrases apply only on approval.
+ */
+function lastSetupWithDefaultPhrases(storage: ReturnType<typeof createMemoryStorage>): void {
+  const store = storeFor(storage).store;
+  const last = store.get('Last setup');
+  if (!last) throw new Error('fixture: no Last setup');
+  expect(store.save({ ...last, vocabulary: defaultVocabulary() }, true)).toEqual({ ok: true });
 }
 
 /** A fresh page (new session) on the same device, camera running, restore started. */
@@ -551,7 +563,7 @@ describe('saving a profile: guards (R7)', () => {
 });
 
 describe('restoring a profile (R7)', () => {
-  it('says so when restoring replaces favourites made in this session (R14)', () => {
+  it('says so when restoring replaces the phrases in use (R14/R19)', () => {
     const { storage } = savedPersonA();
     const h = new Harness({ profiles: storeFor(storage).store });
     expect(h.session.editVocabulary({ kind: 'add-phrase', group: 'favourites', text: 'Call my sister' }).ok).toBe(true);
@@ -562,20 +574,21 @@ describe('restoring a profile (R7)', () => {
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual([]);
-    expect(h.snap.announcement).toMatch(/Favourites from this session were replaced by the saved profile’s\.$/);
+    expect(h.snap.announcement).toMatch(/Your phrases were replaced by the ones saved with “Person A”\.$/);
   });
 
-  it('does not mention favourites when none are lost', () => {
+  it('does not mention phrases when nothing is replaced', () => {
     const { storage } = savedPersonA();
     const h = restoreOn(storage);
     recheck(h);
     h.selectByGesture('comfortable', MOUTH);
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
-    expect(h.snap.announcement).not.toMatch(/Favourites/);
+    expect(h.snap.announcement).not.toMatch(/phrases were replaced/);
   });
 
   it('re-checks a two-movement profile while disarmed and arms only after approval', () => {
     const { storage } = savedPersonA();
+    lastSetupWithDefaultPhrases(storage);
     const h = restoreOn(storage);
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.restoring).toBe('Person A');
@@ -637,6 +650,7 @@ describe('restoring a profile (R7)', () => {
 
   it('“Do not use this profile” works by gesture in mapping and applies nothing', () => {
     const { storage } = savedPersonA();
+    lastSetupWithDefaultPhrases(storage);
     const h = restoreOn(storage);
     recheck(h);
     h.selectByGesture('comfortable');
@@ -704,6 +718,7 @@ describe('restoring a profile (R7)', () => {
 
   it('cancel and assisted input clear the restore without applying anything', () => {
     const { storage } = savedPersonA();
+    lastSetupWithDefaultPhrases(storage);
     const cancelled = restoreOn(storage);
     cancelled.run(3_000);
     cancelled.session.cancel();

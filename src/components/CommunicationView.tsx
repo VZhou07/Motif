@@ -80,7 +80,12 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
         <details className="settings-card">
           <summary className="field-label">Edit phrases (helper)</summary>
           {paused
-            ? <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
+            ? <>
+                <p className="helper-copy">{snapshot.approvedModels.length
+                  ? 'Changes are kept on this device automatically, with Last setup.'
+                  : 'Changes are kept on this device only once a movement setup is approved.'}</p>
+                <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
+              </>
             : <p>Pause scanning first, so nothing can be selected while phrases change. Resume then starts from the main list if anything changed.</p>}
         </details>
       )}

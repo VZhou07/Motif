@@ -62,6 +62,7 @@ export function SetupOptions({ snapshot, session }: ViewProps) {
         Speak setup prompts aloud {snapshot.speech.available ? `(local voice: ${snapshot.speech.voiceName})` : '(no local voice available on this device)'}
       </label>
       <h2 className="field-label">Phrase groups</h2>
+      <p className="helper-copy">Phrases are kept on this device with Last setup once a movement setup is approved. Continue uses the phrases saved with that setup.</p>
       <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
     </details>
   );

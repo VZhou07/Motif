@@ -79,7 +79,7 @@ describe('undo and say again', () => {
 });
 
 describe('save to Favourites', () => {
-  it('asks first with Save, Cancel and Pause; saving copies the message, keeps it, and writes nothing to storage', () => {
+  it('asks first with Save, Cancel and Pause; saving copies the message and keeps it in Last setup (R19)', () => {
     const { store, writes, storage } = spiedStore();
     const h = ready({ profiles: store });
     const before = writes();
@@ -90,26 +90,30 @@ describe('save to Favourites', () => {
     expect(ids(h)).toEqual(['confirm-favourite', 'cancel-favourite', 'pause']);
     expect(h.snap.scan!.targets[0]!.label).toBe('Save “Yes. Thank you” to Favourites');
     expect(favourites(h)).toEqual([]);
+    expect(writes()).toBe(before); // opening the confirmation writes nothing
     h.selectByGesture('confirm-favourite');
     expect(favourites(h)).toEqual(['Yes. Thank you']);
     expect(h.snap.message).toEqual(['Yes', 'Thank you']);
     expect(h.snap.level?.kind).toBe('top');
-    expect(h.snap.announcement).toBe('Saved to Favourites for this session. Save your profile to keep it.');
+    // R19 (intentional change from C1): with an approved setup the favourite is kept in Last setup at once.
+    expect(h.snap.announcement).toBe('Saved to Favourites. It is kept on this device with Last setup.');
+    expect(writes()).toBe(before + 1);
+    const lastSetup = () => JSON.parse(storage.data.get(PROFILE_KEY)!).profiles.find((profile: { name: string }) => profile.name === 'Last setup');
+    expect(lastSetup().vocabulary.groups[0].phrases).toEqual(['Yes. Thank you']);
     expect(h.snap.scan!.targets.find((target) => target.id === 'group:favourites')?.label).toBe('Open Favourites, 1 phrase');
-    expect(h.snap.profiles.unsaved).toBe(true);
-    // Undo, Say again, a cancelled save: still nothing written.
+    // Undo, Say again, a cancelled save: nothing more written.
     h.selectByGesture('undo');
     h.selectByGesture('say-again');
     h.selectByGesture('save-favourite');
     h.selectByGesture('cancel-favourite');
     expect(h.snap.announcement).toBe('Not saved.');
-    expect(writes()).toBe(before);
+    expect(writes()).toBe(before + 1);
     // The favourite is reachable and adds to the message like any phrase.
     h.selectByGesture('phrase:favourites:0');
     expect(h.snap.message).toEqual(['Yes', 'Yes. Thank you']);
-    // Only the explicit profile Save writes, and it says how many favourites it kept.
+    // The named Save (API only since main removed its panel) still counts favourites.
     expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
-    expect(writes()).toBe(before + 1);
+    expect(writes()).toBe(before + 2);
     expect(h.snap.announcement).toMatch(/including 1 favourite\./);
     const raw = storage.data.get(PROFILE_KEY)!;
     const named = JSON.parse(raw).profiles.find((profile: { name: string }) => profile.name === 'Person A');
@@ -126,7 +130,7 @@ describe('save to Favourites', () => {
     h.click('clear');
     askToSave(h, 'phrase:g1:0');
     h.click('confirm-favourite');
-    expect(h.snap.announcement).toBe('Saved to Favourites until this page is closed.');
+    expect(h.snap.announcement).toBe('Saved to Favourites. It is kept on this device only once a movement setup is approved.');
     h.click('save-favourite'); // same message again
     expect(h.snap.announcement).toBe('“Yes” is already in Favourites.');
     expect(h.snap.level?.kind).toBe('more');

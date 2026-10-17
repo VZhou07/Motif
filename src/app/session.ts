@@ -175,7 +175,16 @@ export class MotifSession {
     this.store = options.profiles ?? createMemoryProfileStore();
     this.cues = options.cues ?? null;
     this.refreshProfiles();
+    this.vocabulary = this.savedVocabulary();
     this.publish();
+  }
+
+  /**
+   * R19 B1: phrases come from the readable Last setup (first readable entry, as `get`), so a fresh setup
+   * after a reload never overwrites saved favourites with the defaults. Defaults when there is none.
+   */
+  private savedVocabulary(): Vocabulary {
+    return this.profileList.profiles.find((profile) => sameName(profile.name, AUTO_PROFILE_NAME))?.vocabulary ?? defaultVocabulary();
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -635,7 +644,8 @@ export class MotifSession {
     const valid = validateMapping(set, pending.assignments);
     if (!valid.ok) { this.enterMapping(); this.announce(valid.reasons[0] ?? 'Those controls are not valid.'); return; }
     const restored = this.restoring;
-    let replacedFavourites = false;
+    let replacedPhrases = false;
+    const restoredName = this.restoring?.profile.name ?? '';
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
@@ -644,8 +654,7 @@ export class MotifSession {
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
-      const kept = restored.profile.vocabulary.groups[0]?.phrases ?? [];
-      replacedFavourites = (this.vocabulary.groups[0]?.phrases ?? []).some((phrase) => !kept.some((entry) => sameName(entry, phrase)));
+      replacedPhrases = JSON.stringify(this.vocabulary) !== JSON.stringify(restored.profile.vocabulary);
       this.vocabulary = restored.profile.vocabulary;
       this.intervalMs = restored.profile.scanIntervalMs;
     } else if (this.candidate) {
@@ -677,7 +686,7 @@ export class MotifSession {
     this.autoSaveProfile();
     this.enterPractice();
     this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.${
-      replacedFavourites ? ' Favourites from this session were replaced by the saved profile’s.' : ''}`);
+      replacedPhrases ? ` Your phrases were replaced by the ones saved with “${restoredName}”.` : ''}`);
   }
 
   private usePrevious(): void {
@@ -842,7 +851,11 @@ export class MotifSession {
       return { ok: false, reasons: ['Phrases can be edited during setup, or while communication is paused.'] };
     }
     const result = applyEdit(this.vocabulary, edit);
-    if (result.ok) this.vocabulary = result.value;
+    if (result.ok) {
+      this.vocabulary = result.value;
+      // R19: one rule — while a movement setup is approved, every phrase change is kept in Last setup.
+      if (this.hasApproved) this.autoSaveProfile();
+    }
     this.publish();
     return result;
   }
@@ -1081,7 +1094,7 @@ export class MotifSession {
     this.recalibrating = false;
     this.cycles = [];
     this.failure = null;
-    this.vocabulary = defaultVocabulary();
+    // R19: phrases stay (they were just kept in Last setup), so Set up again never loses favourites.
     this.message = [];
     this.lastSpoken = null;
     this.practice = { selections: 0, last: null };
@@ -1102,6 +1115,7 @@ export class MotifSession {
     const result = this.store.remove(name);
     this.refreshProfiles();
     if (result.ok && this.activeProfile && sameName(this.activeProfile, name)) this.activeProfile = null;
+    if (result.ok && !this.hasApproved && sameName(name, AUTO_PROFILE_NAME)) this.vocabulary = defaultVocabulary();
     this.announce(result.ok ? `Deleted “${name}” from this device.` : result.reason);
     this.publish();
     return result;
@@ -1111,6 +1125,8 @@ export class MotifSession {
     const result = this.store.removeAll();
     this.refreshProfiles();
     if (result.ok) this.activeProfile = null;
+    // R19: deleted favourites must not be written back by a later approval.
+    if (result.ok && !this.hasApproved) this.vocabulary = defaultVocabulary();
     this.announce(result.ok ? 'All saved profiles were deleted from this device.' : result.reason);
     this.publish();
     return result;
@@ -1511,9 +1527,11 @@ export class MotifSession {
     if (result.ok) this.vocabulary = result.value;
     this.setLevel('top', nowMs);
     if (!result.ok) { this.announce(`Not saved: ${result.reasons[0] ?? 'this cannot be saved.'}`); return; }
-    this.announce(this.hasApproved
-      ? 'Saved to Favourites for this session. Save your profile to keep it.'
-      : 'Saved to Favourites until this page is closed.');
+    // R19: favourites persist only through the automatic Last setup, which needs an approved movement setup.
+    if (!this.hasApproved) { this.announce('Saved to Favourites. It is kept on this device only once a movement setup is approved.'); return; }
+    this.announce(this.autoSaveProfile()
+      ? 'Saved to Favourites. It is kept on this device with Last setup.'
+      : 'Saved to Favourites for now; this browser could not keep it, so it will be gone when this page closes.');
   }
 
   private speakMessage(): void {
