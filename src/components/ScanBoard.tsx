@@ -56,12 +56,12 @@ export function ScanHint({ snapshot }: { snapshot: SessionSnapshot }) {
 }
 
 /** Setup choices: decisions and mapping proposals. Each is scanned (when a movement exists) and clickable for helpers. */
-export function DecisionList({ snapshot, onChoose }: { snapshot: SessionSnapshot; onChoose: (id: string) => void }) {
+export function DecisionList({ snapshot, onChoose, describedBy }: { snapshot: SessionSnapshot; onChoose: (id: string) => void; describedBy?: string }) {
   if (!snapshot.decisions.length) return null;
   return (
     <>
       <ScanHint snapshot={snapshot} />
-      <div className="stacked-actions" role="group" aria-label="Choices">
+      <div className="stacked-actions" role="group" aria-label="Choices" aria-describedby={describedBy}>
         {snapshot.decisions.map((decision, index) => (
           <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} primary={index === 0}
             onActivate={onChoose}>{decision.label}</ScanButton>
