@@ -7,7 +7,8 @@ const seconds = (ms: number) => `${(ms / 1_000).toFixed(1)} s`;
 
 function cycleSummary(cycle: CycleEvidence): string[] {
   const lines = [`Training: ${cycle.training === null ? 'not finished' : cycle.training.ok ? 'learned from 3 attempts' : `not learned — ${cycle.training.reasons[0] ?? ''}`}`];
-  cycle.heldOut.forEach((attempt) => lines.push(`Check ${attempt.attempt}: ${attempt.passed ? 'passed' : 'did not pass'} — ${attempt.eventCount} recognition${attempt.eventCount === 1 ? '' : 's'}${attempt.passed ? '' : `; ${attempt.reasons[0] ?? ''}`}`));
+  cycle.heldOut.forEach((attempt) => lines.push(`Check ${attempt.attempt} (${attempt.kind === 'cross-check'
+    ? `cross-check: “${attempt.expected}” still works` : `new attempt: “${attempt.expected}”`}): ${attempt.passed ? 'passed' : 'did not pass'} — ${attempt.eventCount} recognition${attempt.eventCount === 1 ? '' : 's'}${attempt.passed ? '' : `; ${attempt.reasons[0] ?? ''}`}`));
   if (cycle.negative) {
     lines.push(`Everyday activity: ${cycle.negative.eventCount} accidental selection${cycle.negative.eventCount === 1 ? '' : 's'} in ${seconds(cycle.negative.validDurationMs)} armed; ${cycle.negative.restarts} restart${cycle.negative.restarts === 1 ? '' : 's'}`);
   }
@@ -67,6 +68,7 @@ export function ComfortView({ snapshot, session }: ViewProps) {
       </div>
       <h2 className="question-heading">Comfortable enough to repeat?</h2>
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      <EvidencePanel snapshot={snapshot} />
     </>
   );
 }

@@ -160,4 +160,21 @@ describe('Motif app', () => {
     expect(used.textContent).toMatch(/already in use/);
     expect((screen.getByRole('button', { name: /Raise right outer eyebrow/ }) as HTMLButtonElement).disabled).toBe(false);
   });
+
+  it('labels cross-checks in the evidence and scans the mapping proposals', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    h.addMovement(OPEN_MOUTH, (label) => (label === 'Open mouth' ? MOUTH : label ? BROW : REST));
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByText('Check 3 (cross-check: “Raise left outer eyebrow” still works): passed — 1 recognition')).toBeTruthy();
+    expect(screen.getByText('Check 1 (new attempt: “Open mouth”): passed — 1 recognition')).toBeTruthy();
+    act(() => h.selectByGesture('comfortable'));
+    const proposals = [...document.querySelectorAll('[data-scan-id^="map:"]')].map((node) => node.textContent);
+    expect(proposals).toHaveLength(4);
+    expect(proposals[0]).toMatch(/Raise left outer eyebrow selects · Open mouth moves next/);
+    act(() => { while (h.highlightedId() !== 'map:1') h.step(); });
+    expect(document.querySelector('[aria-current="true"]')?.getAttribute('data-scan-id')).toBe('map:1');
+    act(() => h.selectByGesture('map:1'));
+    expect(document.querySelector('[data-scan-id="approve-mapping"]')).toBeTruthy();
+  });
 });
