@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { liveDeviation, MOVEMENT_OPTIONS } from '../app/movements';
+import type { SetupProgress } from '../app/progress';
 import type { MotifSession } from '../app/session';
 import type { CapturePrompt, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
@@ -8,6 +9,18 @@ import { SavedProfiles } from './ProfileViews';
 import { DecisionList } from './ScanBoard';
 
 export interface ViewProps { snapshot: SessionSnapshot; session: MotifSession }
+
+/** One progress bar for every setup screen. Earlier segments are only "passed": a quick restore skips some, so nothing is claimed done. */
+export function SetupProgressBar({ progress }: { progress: SetupProgress }) {
+  return (
+    <ol className="setup-progress" aria-label="Setup progress">
+      {progress.segments.map((label, index) => (
+        <li key={label} aria-current={index === progress.current ? 'step' : undefined}
+          className={index === progress.current ? 'progress-current' : progress.current !== null && index < progress.current ? 'progress-passed' : ''}>{label}</li>
+      ))}
+    </ol>
+  );
+}
 
 export function Heading({ eyebrow, title, lead }: { eyebrow: string; title: ReactNode; lead: string }) {
   return <div className="stage-heading"><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p className="lead">{lead}</p></div>;

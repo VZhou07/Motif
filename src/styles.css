@@ -58,3 +58,9 @@
 .seen-on{background:#205e45;color:#fff;border-color:#205e45}.seen-on .seen-dot{background:#f2b179}
 @media(max-width:700px){.message-bar{flex-direction:column;align-items:stretch}.message-actions{justify-content:flex-start}.comm-screen .phrase-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .helper-toggle{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:44px;border:0;background:transparent;font-size:15px;font-weight:600;color:#163e33;text-align:left;cursor:pointer}
+
+/* Setup progress bar (UX simplify A): text 14px or larger. */
+.setup-progress{display:flex;flex-wrap:wrap;gap:8px;list-style:none;padding:0;margin:0 0 28px}
+.setup-progress li{font-size:14px;font-weight:600;padding:8px 14px;border-radius:20px;border:1px solid #cbd8cc;color:#3f5a4b;background:transparent}
+.setup-progress .progress-passed{background:#e9f0e4;border-color:#cbd8cc}
+.setup-progress .progress-current{background:#205e45;border-color:#205e45;color:#fff}
