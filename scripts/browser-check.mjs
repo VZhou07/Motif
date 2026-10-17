@@ -23,11 +23,13 @@ async function launch(extraArgs) {
 }
 
 /** A page that records external requests, console errors (MediaPipe's "INFO:" logs excepted), page errors and HTTP errors. */
-async function openPage(browser, { width = 1280, init } = {}) {
+async function openPage(browser, { width = 1280, init, origin = ORIGIN } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
   const log = { external: [], errors: [] };
+  // Counts Content-Security-Policy refusals: the in-app guard should block first, so this stays 0.
+  await page.addInitScript(() => { window.cspViolations = 0; document.addEventListener('securitypolicyviolation', () => { window.cspViolations += 1; }); });
   if (init) await page.addInitScript(init);
-  page.on('request', (request) => { const url = request.url(); if (!url.startsWith(ORIGIN) && !url.startsWith('data:') && !url.startsWith('blob:')) log.external.push(url); });
+  page.on('request', (request) => { const url = request.url(); if (!url.startsWith(origin) && !url.startsWith('data:') && !url.startsWith('blob:')) log.external.push(url); });
   page.on('console', (message) => { if (message.type() === 'error' && !/^INFO: /.test(message.text())) log.errors.push(message.text()); });
   page.on('pageerror', (error) => log.errors.push(`pageerror: ${error.message}`));
   page.on('response', (response) => { if (response.status() >= 400) log.errors.push(`HTTP ${response.status()} ${response.url()}`); });
@@ -176,6 +178,17 @@ try {
   await page.getByRole('button', { name: 'Movement signal dashboard' }).click();
   await page.getByText(/Tracking: missing\./).waitFor({ timeout: 20_000 });
   check('real inference runs and reports no face in the synthetic pattern', true);
+  // Stopping the camera closes the model, which flushes MediaPipe's built-in usage logger.
+  await page.getByRole('button', { name: 'Stop camera' }).click();
+  await page.waitForTimeout(1_500);
+  const offline = await page.evaluate(async () => {
+    const probe = await fetch('https://example.com/').then(() => 'sent', () => 'blocked');
+    return { blocked: window.motifBlockedRequests ?? 0, probe, csp: window.cspViolations };
+  });
+  check('usage logging and other outside requests are blocked inside the app', offline.blocked >= 2 && offline.probe === 'blocked' && offline.csp === 0
+    && log.external.length === 0, JSON.stringify(offline));
+  await page.getByRole('button', { name: /Start camera/ }).first().click();
+  await page.getByText('Live · local').waitFor({ timeout: 45_000 });
   await auditScreen(page, 'camera running, dashboard open');
   await page.getByRole('button', { name: /Start the rest check/ }).click();
   await page.waitForTimeout(3_000);
@@ -185,6 +198,10 @@ try {
   await page.screenshot({ path: 'test-results/browser-baseline-no-face.png', fullPage: true });
   await page.getByRole('button', { name: 'Stop setup' }).click();
   await page.getByRole('button', { name: /Use assisted input/ }).click();
+  await auditScreen(page, 'assisted communication, empty message 1280 px');
+  await page.setViewportSize({ width: 900, height: 900 });
+  await auditScreen(page, 'assisted communication, empty message 900 px');
+  await page.setViewportSize({ width: 1280, height: 900 });
   await page.keyboard.press('Space');
   const message = await page.getByRole('region', { name: 'Message' }).textContent();
   check('assisted Space adds the highlighted phrase', /Yes/.test(message ?? ''), message ?? '');
@@ -203,7 +220,8 @@ try {
   check('reload starts clean: no message, nothing stored', await page.getByRole('region', { name: 'Message' }).count() === 0
     && await page.evaluate(() => localStorage.length) === 0);
   await auditScreen(page, 'welcome 900 px');
-  check('no requests leave this device', log.external.length === 0, log.external.slice(0, 3).join(', '));
+  check('no requests leave this device', log.external.length === 0, log.external.slice(0, LIMIT).join(', '));
+  check('no Content-Security-Policy refusals were needed', await page.evaluate(() => window.cspViolations) === 0);
   check('no console or page errors', log.errors.length === 0, log.errors.slice(0, 2).join(' | '));
   await page.screenshot({ path: 'test-results/browser-assisted.png', fullPage: true });
 
@@ -234,8 +252,9 @@ try {
   const alert = deniedPage.getByRole('alert').first();
   await alert.waitFor({ timeout: 45_000 });
   const alertText = await alert.textContent();
-  check('camera denial is explained', /permission|camera/i.test(alertText ?? ''), alertText ?? '');
-  check('assisted input remains available after denial', await deniedPage.getByRole('button', { name: /assisted input/i }).isVisible());
+  // Headless prompt denial surfaces as an unusable camera; true permission refusal is stubbed below.
+  check('camera blocked by the browser is explained', /No usable camera|permission was not granted/.test(alertText ?? ''), alertText ?? '');
+  check('assisted input remains available after the camera is blocked', await deniedPage.getByRole('button', { name: /assisted input/i }).isVisible());
   await auditScreen(deniedPage, 'camera denied');
   await denied.close();
 
@@ -244,8 +263,9 @@ try {
   const scenarios = [
     { name: 'model file blocked', route: '**/models/*.task', expect: /face model could not load/ },
     { name: 'model runtime blocked', route: '**/mediapipe/wasm/**', expect: /face model could not load/ },
+    { name: 'camera permission refused', init: () => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('denied', 'NotAllowedError')); }, expect: /permission was not granted/ },
     { name: 'no camera device', init: () => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('none', 'NotFoundError')); }, expect: /No usable camera/ },
-    { name: 'camera in use elsewhere', init: () => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('busy', 'NotReadableError')); }, expect: /No usable camera/ },
+    { name: 'camera in use elsewhere', init: () => { navigator.mediaDevices.getUserMedia = () => Promise.reject(new DOMException('busy', 'NotReadableError')); }, expect: /in use by another app/ },
     { name: 'camera API unsupported', init: () => { Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true }); }, expect: /Chrome or Edge on localhost or HTTPS/ },
   ];
   for (const scenario of scenarios) {
@@ -256,8 +276,9 @@ try {
     const text = await failing.getByRole('alert').first().textContent({ timeout: 45_000 }).catch(() => '');
     const assisted = await failing.getByRole('button', { name: /assisted input/i }).first().isVisible();
     const pageErrors = failingLog.errors.filter((error) => error.startsWith('pageerror'));
-    check(`${scenario.name}: explained, assisted input available`, scenario.expect.test(text ?? '') && assisted && pageErrors.length === 0,
-      `${text ?? ''}${pageErrors.length ? ` | ${pageErrors[0]}` : ''}`);
+    check(`${scenario.name}: explained, assisted input available, nothing leaves the device`,
+      scenario.expect.test(text ?? '') && assisted && pageErrors.length === 0 && failingLog.external.length === 0,
+      `${text ?? ''}${pageErrors.length ? ` | ${pageErrors[0]}` : ''}${failingLog.external.length ? ` | external: ${failingLog.external[0]}` : ''}`);
     if (scenario.name === 'model file blocked') await auditScreen(failing, 'model load error');
     await failing.close();
   }
@@ -270,7 +291,8 @@ try {
   const heading = await blocked.getByRole('heading', { level: 1 }).textContent();
   await blocked.getByRole('button', { name: /Use assisted input/ }).click();
   await blocked.keyboard.press('Space');
-  check('blocked browser storage: the app loads and assisted input works', /Your movement/.test(heading ?? '')
+  const storageNotice = await blocked.getByText(/Saved profiles/).count();
+  check('blocked browser storage: the app loads, shows no saved-profile error, and assisted input works', /Your movement/.test(heading ?? '') && storageNotice === 0
     && /Yes/.test(await blocked.getByRole('region', { name: 'Message' }).textContent() ?? '') && blockedLog.errors.length === 0, blockedLog.errors.slice(0, 2).join(' | '));
   await blocked.close();
 
@@ -294,6 +316,22 @@ try {
       && silentLog.errors.length === 0);
   await silent.close();
   await failures.close();
+
+  // 7. Development server: the Content-Security-Policy does not break hot reload or model loading.
+  const dev = await createServer({ server: { port: PORT + 1, host: '127.0.0.1', strictPort: true }, logLevel: 'error' });
+  await dev.listen();
+  const devBrowser = await launch(['--use-fake-ui-for-media-stream']);
+  const { page: devPage, log: devLog } = await openPage(devBrowser, { origin: `http://127.0.0.1:${PORT + 1}` });
+  const connected = new Promise((resolve) => devPage.on('console', (message) => { if (/\[vite\] connected/.test(message.text())) resolve(true); }));
+  await devPage.goto(`http://127.0.0.1:${PORT + 1}`);
+  const hot = await Promise.race([connected, new Promise((resolve) => setTimeout(() => resolve(false), 20_000))]);
+  await devPage.getByRole('button', { name: /Start camera/ }).first().click();
+  await devPage.getByText('Live · local').waitFor({ timeout: 60_000 });
+  check('dev server: hot reload connects and the model loads under the security policy', hot === true
+    && await devPage.evaluate(() => window.cspViolations) === 0 && devLog.external.length === 0,
+    JSON.stringify({ hot, csp: await devPage.evaluate(() => window.cspViolations), external: devLog.external.slice(0, 2), errors: devLog.errors.slice(0, 2) }));
+  await devBrowser.close();
+  await dev.close();
 } catch (error) {
   failed = true;
   console.error('FAIL  browser check aborted —', error instanceof Error ? error.message : error);
