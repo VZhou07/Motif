@@ -5,16 +5,22 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 ## Resume first (next agent)
 
 1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R4–R6 matter most) and `.agents/skills/motif-checkpoint/SKILL.md`.
-2. Run `git status` and `git log --oneline -n 8`. Expected: clean tree; newest commit `Update build handoff` (docs only), directly on top of `e266183 Add mapping confirmation screen`. No processes or extra worktrees were left running (`git worktree list` shows only the main folder).
-3. Run the baseline checks below. All must pass before you change anything.
+2. Run `git status` and `git log --oneline -n 10`. Expected: clean tree; the last code commit is `e266183 Add mapping confirmation screen` and newer commits are docs only. No processes or extra worktrees were left running.
+3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with "Exact next work", step 1. Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Tip: `Update build handoff` (docs only) on top of `e266183 Add mapping confirmation screen`. Code state verified at `e266183`: `npx tsc --noEmit` PASS; `npx vitest run` 12 files/110 tests PASS; `npm run build` PASS; `node scripts/browser-check.mjs` (after build) 12/12 PASS.
+- Last code commit: `e266183 Add mapping confirmation screen` (newer commits are docs only). Verified there on the original Windows machine: `npx tsc --noEmit` PASS; `npx vitest run` 12 files/110 tests PASS; `npm run build` PASS; `node scripts/browser-check.mjs` (after build) 12/12 PASS.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
-## Baseline commands (Windows PowerShell, repo root)
+## Fresh clone setup (another computer)
+
+- Gitignored, so a clone lacks them: `node_modules`, the face model and WASM (`public/models`, `public/mediapipe`, `public/runtime-assets.json`), `.cache`, `dist`, `test-results`.
+- Use Node 22.12+ (24.13.1 was used). Run `npm ci`, then `npm run setup:assets` (downloads the public Face Landmarker model from storage.googleapis.com and copies the matching WASM from node_modules; no user data is sent). `npm run build` fails its asset check until this is done.
+- `scripts/browser-check.mjs` launches an installed Chrome or Edge through Playwright. If neither exists, run `npx playwright install chromium` and add a bundled-Chromium fallback to its `launch()` helper as its own small commit.
+
+## Baseline commands (repo root, any OS)
 
 - `npx tsc --noEmit` · `npx vitest run` · `npm run build` (also checks the local model/WASM assets) · `node scripts/browser-check.mjs` (run after build; uses Chrome's synthetic fake camera `--use-fake-device-for-media-stream`, never the real webcam; screenshots go to gitignored `test-results/`).
 - Dev server for manual use: `npm run dev` (http://127.0.0.1:5173).
@@ -49,10 +55,10 @@ Done and committed:
 
 - Head-direction labels (+yaw = person's left, +pitch = chin down, +roll = right shoulder) are derived mathematically; real-camera confirmation pending.
 - The 60 s baseline valid-time cap is effectively unreachable (the 5-interruption cap fires first); kept as defensive code.
-- `.cache/superseded/Workspace.tsx` (gitignored) is an earlier agent's unused UI draft; safe to ignore.
+- `.cache/superseded/Workspace.tsx` (gitignored, original machine only) is an earlier agent's unused UI draft; not needed.
 - Git prints LF→CRLF warnings on add; harmless. Do not change Git config.
 
-## Environment
+## Environment (original Windows machine; check your own)
 
 - Node 24.13.1, npm 11.8.0, Chrome and Edge installed. Pinned deps in `package.json`/lockfile (React 19.3.1, Vite 8.3.4, TS 7.0.2, Vitest 5.0.5, Tailwind 4.3.3, MediaPipe tasks-vision 1.1.1, Playwright 1.64.1, jsdom 26.1.0).
 - npm defaults to offline; network installs need native approval with command-local flags. No global config changes.
