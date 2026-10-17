@@ -255,6 +255,42 @@ describe('auto-return after two counted wraps', () => {
     expect(levelKind(h)).toBe('top');
   });
 
+  it('a helper shortcut starts a fresh count, including right after an auto-return', () => {
+    const h = new Harness();
+    h.session.useAssisted();
+    h.session.openGroup('g1');
+    waitUntil(h, h.now, 10_100); // one wrap counted in Quick
+    h.session.openGroup('g2');
+    let at = h.now;
+    waitUntil(h, at, 15_000); // a leftover count would return at the first g2 wrap (10 s)
+    expect(groupId(h)).toBe('g2');
+    waitUntil(h, at, 20_500);
+    expect(levelKind(h)).toBe('top');
+    h.session.openGroup('g1'); // just after an auto-return
+    at = h.now;
+    waitUntil(h, at, 15_000);
+    expect(groupId(h)).toBe('g1');
+    waitUntil(h, at, 20_500);
+    expect(levelKind(h)).toBe('top');
+  });
+
+  it('a selection that stays in the level (assisted Say again in More) starts a fresh count', () => {
+    const h = new Harness();
+    h.session.useAssisted();
+    h.switchTo('more');
+    expect(ids(h)).toHaveLength(9);
+    const at = h.now;
+    waitUntil(h, at, 18_100); // one full pass of More counted
+    h.switchTo('say-again');
+    const pressed = h.now;
+    expect(levelKind(h)).toBe('more');
+    // From Say again (3rd) the next wrap is 7 × 2 s = 14 s away; a leftover count would return there.
+    waitUntil(h, pressed, 20_000);
+    expect(levelKind(h)).toBe('more');
+    waitUntil(h, pressed, 33_000);
+    expect(levelKind(h)).toBe('top');
+  });
+
   it('hiding the tab inside a group resets the count in assisted mode', () => {
     const h = new Harness();
     h.session.useAssisted();
@@ -287,6 +323,18 @@ describe('step mode (select + next)', () => {
     expect(levelKind(h)).toBe('top');
     h.stepTo('phrase:g2:2');
     expect(h.snap.message).toEqual(['I am uncomfortable']);
+  });
+
+  it('the idle fallback from the Favourites confirmation means Cancel', () => {
+    const h = twoGestureStep();
+    h.stepTo('phrase:g1:0');
+    h.stepTo('save-favourite');
+    expect(levelKind(h)).toBe('confirm');
+    h.run(61_000);
+    expect(h.snap.stepFallback).toBe(true);
+    expect(levelKind(h)).toBe('top');
+    expect(h.snap.announcement).toMatch(/^Not saved\. No movement for a minute/);
+    expect(h.snap.vocabulary.groups[0]!.phrases).toEqual([]);
   });
 
   it('the idle fallback to automatic scanning starts again from the main list', () => {
