@@ -798,4 +798,79 @@ describe('multiple gestures (R6)', () => {
     // The old two-movement controls refer to movements that no longer exist.
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
   });
+
+  it('a paused step scan stays paused through a minute of rest and selects nothing', () => {
+    const h = twoGestureStep();
+    h.stepTo('pause');
+    expect(h.snap.scan!.paused).toBe(true);
+    h.run(61_000);
+    expect(h.snap.scan!.paused).toBe(true);
+    expect(h.snap.stepFallback).toBe(false);
+    h.run(600, MOUTH); h.run(600);
+    expect(h.snap.scan!.paused).toBe(true);
+    h.run(600, BROW); h.run(600); // select resumes, never selects
+    expect(h.snap.scan!.paused).toBe(false);
+    expect(h.snap.message).toEqual([]);
+  });
+
+  it('an old movement during the added movement\'s everyday check fails it (negative window over the set)', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    h.selectByGesture('add-movement');
+    h.session.chooseMovement(OPEN_MOUTH);
+    h.followPrompts((snap) => snap.stage === 'negative', (snap) => perform(snap.capture?.movement ?? null));
+    h.run(2_000);
+    h.run(800, BROW);
+    h.run(800);
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.cycles[1]!.negative).toMatchObject({ passed: false, eventCount: 1 });
+    expect(h.snap.approvedModels).toHaveLength(1);
+  });
+
+  it('only the select movement latches; a next or unmapped hold never freezes automatic scanning', () => {
+    const h = twoGestureStep();
+    h.run(61_000);
+    expect(h.snap.stepFallback).toBe(true);
+    h.run(600);
+    h.run(200, MOUTH); // next dwell in progress, before its event
+    expect(h.snap.scan!.latched).toBeNull();
+    h.run(600, MOUTH); h.run(600);
+
+    const one = new Harness();
+    one.setUpToCommunication();
+    addAndApprove(one, OPEN_MOUTH, 'map:2'); // brow alone selects; mouth unmapped
+    one.selectByGesture('finish-practice');
+    one.run(600);
+    one.run(200, MOUTH);
+    expect(one.snap.scan!.latched).toBeNull();
+    one.run(600, MOUTH);
+    one.run(400);
+    const index = one.snap.scan!.index;
+    one.run(one.snap.scan!.intervalMs + 100);
+    expect(one.snap.scan!.index).not.toBe(index);
+  });
+
+  it('the step fallback needs fresh neutral, a cancelled dwell resets the idle timer, and re-approval restores step mode', () => {
+    const h = twoGestureStep();
+    h.run(59_000);
+    h.run(150, MOUTH); // too short to emit: started, then cancelled
+    h.run(600);
+    h.run(59_000);
+    expect(h.snap.stepFallback).toBe(false);
+    h.run(2_000);
+    expect(h.snap.stepFallback).toBe(true);
+
+    const g = twoGestureStep();
+    g.run(57_000);
+    expect(g.snap.stepFallback).toBe(false);
+    for (let i = 0; i < 100 && !g.snap.stepFallback; i += 1) g.step(REST);
+    expect(g.snap.stepFallback).toBe(true);
+    expect(g.snap.runtime?.armed).toBe(false);
+
+    g.selectByGesture('change-controls');
+    g.selectByGesture('map:0');
+    g.selectByGesture('approve-mapping');
+    expect(g.snap.stepFallback).toBe(false);
+    expect(g.snap.scanMode).toBe('step');
+  });
 });
