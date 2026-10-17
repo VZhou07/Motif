@@ -63,6 +63,28 @@ describe('free movement discovery (R9)', () => {
     expect(mouth!.companions).toEqual([]);
   });
 
+  it('joins members only to the primary, never through another member', () => {
+    // Jaw [0, 1000) and pucker [300, 1300) share 700 ms (a group); the weaker cheek [700, 1300) lies inside pucker
+    // (so it would join through pucker) but shares only 300 ms of its 600 ms with jaw.
+    const at = combine(every(6_000, 1_000, { jawOpen: 0.7 }, 500), every(6_000, 1_000, { mouthPucker: 0.7 }, 800), every(6_000, 600, { cheekPuff: 0.5 }, 1_200));
+    const result = run(at, 24_000).candidates;
+    expect(result.map((candidate) => [candidate.label, candidate.companions.map((channel) => channel.label)])).toEqual([
+      ['Open mouth', ['Purse lips']], ['Puff cheeks', []],
+    ]);
+  });
+
+  it('ranks by episodes, then strength, with nested channels after independent ones', () => {
+    // More episodes wins over list order: brow (earlier in the list) moves 3 times, the mouth 5 times.
+    const more = combine((t) => (t < 12_000 ? every(4_000, 1_000, { browOuterUpLeft: 0.7 }, 2_500)(t) : {}), every(4_000, 1_000, MOUTH));
+    expect(labels(more)).toEqual(['Open mouth', 'Raise left outer eyebrow']);
+    // Equal episodes: the stronger movement ranks first even though it is later in the list.
+    expect(labels(combine(every(4_000, 1_000, { browOuterUpLeft: 0.3 }, 2_500), every(4_000, 1_000, MOUTH)))).toEqual(['Open mouth', 'Raise left outer eyebrow']);
+    // A channel entirely inside another's episodes ranks after an independent one, despite more episodes.
+    const nested = combine(every(4_000, 1_000, MOUTH), every(4_000, 500, { mouthPucker: 0.7 }, 700),
+      (t) => (t < 12_000 ? every(4_000, 1_000, { browOuterUpLeft: 0.7 }, 2_500)(t) : {}));
+    expect(labels(nested)).toEqual(['Open mouth', 'Raise left outer eyebrow', 'Purse lips']);
+  });
+
   it('never groups head turns to the left and right, even with a shared companion', () => {
     const at = combine(every(4_000, 1_000, { headYaw: 12, browInnerUp: 0.6 }), every(4_000, 1_000, { headYaw: -12, browInnerUp: 0.6 }, 2_500));
     const found = labels(at);
@@ -137,14 +159,27 @@ describe('free movement discovery (R9)', () => {
     expect(candidate?.alsoMoves.map((channel) => channel.label)).toEqual(['Raise left outer eyebrow']);
   });
 
-  it('offers at most four candidates, deterministically', () => {
-    const at = combine(
-      every(10_000, 800, { browOuterUpLeft: 0.7 }, 0), every(10_000, 800, { jawOpen: 0.7 }, 2_000), every(10_000, 800, { cheekPuff: 0.7 }, 4_000),
-      every(10_000, 800, { mouthPucker: 0.7 }, 6_000), every(10_000, 800, { headRoll: 12 }, 8_000),
-    );
-    const segments = [segment(0, 30_000, (t) => at(t + 500))];
+  it('offers at most four candidates — the four seen most often — deterministically', () => {
+    // Five independent movements seen 2, 3, 4, 5 and 6 times.
+    const counts: Array<[Values, number]> = [[{ browOuterUpLeft: 0.7 }, 2], [{ jawOpen: 0.7 }, 3], [{ cheekPuff: 0.7 }, 4], [{ mouthPucker: 0.7 }, 5], [{ headRoll: 12 }, 6]];
+    const at = (t: number): Values => {
+      const cycle = Math.floor(t / 10_000);
+      const slot = Math.floor((t % 10_000) / 2_000);
+      const [values, times] = counts[slot]!;
+      return cycle < times && t % 2_000 >= 500 && t % 2_000 < 1_300 ? values : {};
+    };
+    const segments = [segment(0, 60_000, at)];
     const first = discoverCandidates(baseline, segments);
-    expect(first.candidates).toHaveLength(DISCOVERY.maxCandidates);
+    expect(first.candidates.map((candidate) => [candidate.label, candidate.episodes])).toEqual([
+      ['Tilt head toward your right shoulder', 6], ['Purse lips', 5], ['Puff cheeks', 4], ['Open mouth', 3],
+    ]);
     expect(discoverCandidates(baseline, segments)).toEqual(first);
+  });
+
+  it('marks an approved movement that is grouped as a companion', () => {
+    const brow = { feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' } as const;
+    const at = every(4_000, 1_000, { jawOpen: 0.7, browOuterUpLeft: 0.3 });
+    const [candidate] = discoverCandidates(baseline, [segment(0, 20_000, at)], [brow]).candidates;
+    expect(candidate).toMatchObject({ label: 'Open mouth', companions: [brow], interferesWith: ['Raise left outer eyebrow'] });
   });
 });
