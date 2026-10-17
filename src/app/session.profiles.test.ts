@@ -85,6 +85,234 @@ describe('saving a profile (R7)', () => {
   });
 });
 
+const MINUTE = 60_000;
+
+/** Brow at t0, then (after `gapMs`) the mouth is added (which cross-checks the brow), saved as "Person A". */
+function savedWithGap(gapMs: number) {
+  const { storage, store } = storeFor();
+  const h = new Harness({ profiles: store });
+  h.setUpToCommunication();
+  h.now += gapMs;
+  h.run(2_000);
+  h.addMovement(OPEN_MOUTH, perform);
+  h.selectByGesture('comfortable');
+  h.selectByGesture('map:0');
+  h.selectByGesture('approve-mapping');
+  h.stepTo('finish-practice');
+  expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
+  return { storage, store, h };
+}
+
+function approveSaved(h: Harness): void {
+  h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+  expect(h.snap.stage).toBe('practice');
+}
+
+/** A full restore after the hour with the exact clock times of its rest check and movement checks; then Back to start. */
+function withKnownTimes() {
+  const { storage, original: h } = savedPersonA();
+  h.session.returnToStart();
+  h.now += 61 * MINUTE;
+  h.session.restoreProfile('Person A');
+  while (h.snap.stage === 'baseline') h.run(1);
+  const restAt = h.now;
+  h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
+  while (h.snap.stage === 'negative') h.run(1, HEAD_WOBBLE);
+  const movedAt = h.now;
+  expect(h.snap.stage).toBe('comfort');
+  h.selectByGesture('comfortable', MOUTH);
+  approveSaved(h);
+  expect(h.session.returnToStart()).toBe(true);
+  return { h, storage, restAt, movedAt };
+}
+
+describe('back to start after saving', () => {
+  it('ends the session in place, keeps the camera, and clears the setup', () => {
+    const { original: h } = savedPersonA();
+    expect(h.session.returnToStart()).toBe(true);
+    expect(h.snap).toMatchObject({ stage: 'welcome', camera: 'running', approvedModels: [], mapping: null, scan: null,
+      message: [], cycles: [], inputMode: 'gesture', profiles: { names: ['Person A'], active: null, unsaved: false } });
+    expect(h.snap.phrases[0]).toBe('Yes');
+  });
+
+  it('refuses while the current setup is unsaved or changed since saving', () => {
+    const { store } = storeFor();
+    const h = new Harness({ profiles: store });
+    h.setUpToCommunication();
+    expect(h.session.returnToStart()).toBe(false);
+    expect(h.session.saveProfile('Sam')).toEqual({ ok: true });
+    h.selectByGesture('slower');
+    expect(h.snap.profiles.unsaved).toBe(true);
+    expect(h.session.returnToStart()).toBe(false);
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.approvedModels).toHaveLength(1);
+  });
+});
+
+describe('restoring within an hour of the checks (R14)', () => {
+  it('skips the rest check and movement re-checks but still needs approval, disarmed until neutral', () => {
+    const { original: h } = savedPersonA();
+    h.session.returnToStart();
+    h.now += 30 * MINUTE;
+    expect(h.session.restoreProfile('Person A')).toBe(true);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.pendingMapping?.id).toBe('saved');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping', 'reject-profile']);
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.runtime?.armed).not.toBe(true);
+    h.session.selectTarget('phrase:0');
+    expect(h.snap.message).toEqual([]);
+    const cycle = h.snap.cycles.at(-1)!;
+    expect(cycle).toMatchObject({ source: 'restored', heldOut: [], negative: null, outcome: 'verified' });
+    expect(cycle.movement).toMatch(/no attempts or everyday check this time/);
+    approveSaved(h);
+    expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
+    expect(h.snap.phrases[0]).toBe('Hello');
+    expect(h.snap.profiles).toMatchObject({ active: 'Person A', unsaved: false });
+  });
+
+  it('repeats everything at exactly one hour', () => {
+    const { original: h } = savedPersonA();
+    h.session.returnToStart();
+    h.now += 60 * MINUTE;
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('baseline');
+    recheck(h);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.cycles.at(-1)!.heldOut).toHaveLength(4);
+  });
+
+  it('repeats an old rest check but not movements checked within the hour', () => {
+    const { h } = savedWithGap(50 * MINUTE); // rest at t0; both movements checked at t0+50 (mouth trained, brow cross-checked)
+    h.session.returnToStart();
+    h.now += 15 * MINUTE; // rest is 65 minutes old, movements about 15
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('baseline');
+    h.run(10_500);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.cycles.at(-1)!.heldOut).toEqual([]);
+    approveSaved(h);
+  });
+
+  it('a skipped check keeps its original time, so it is repeated an hour after it really ran', () => {
+    const { h } = savedWithGap(50 * MINUTE);
+    h.session.returnToStart();
+    h.now += 15 * MINUTE;
+    h.session.restoreProfile('Person A');
+    h.run(10_500); // new rest check at about t0+65; movements skipped, still dated t0+50
+    approveSaved(h);
+    expect(h.session.returnToStart()).toBe(true);
+    h.now += 45 * MINUTE; // rest about 45 minutes old, movements about 61
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('verify');
+    h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
+    expect(h.snap.stage).toBe('negative');
+    h.run(11_000, HEAD_WOBBLE);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.cycles.at(-1)!.heldOut).toHaveLength(4);
+  });
+
+  it('forgets the recent checks after another rest check or for another profile', () => {
+    const { original: h } = savedPersonA();
+    expect(h.session.saveProfile('Person B')).toEqual({ ok: true });
+    h.session.returnToStart();
+    h.session.restoreProfile('Person A'); // another profile than the one just left
+    expect(h.snap.stage).toBe('baseline');
+
+    const { original: other } = savedPersonA();
+    other.session.returnToStart();
+    other.session.startBaseline(); // someone else's rest check in between
+    other.session.cancel();
+    expect(other.snap.stage).toBe('setup-failed');
+    other.session.restoreProfile('Person A');
+    expect(other.snap.stage).toBe('baseline');
+  });
+
+  it('a movement-only reuse needs the same profile: another name re-checks every movement after its rest', () => {
+    const { original: h } = savedPersonA();
+    expect(h.session.saveProfile('Person B')).toEqual({ ok: true });
+    h.session.returnToStart();
+    h.session.restoreProfile('Person A');
+    h.run(10_500);
+    expect(h.snap.stage).toBe('verify');
+    h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
+    expect(h.snap.cycles.at(-1)!.heldOut).toHaveLength(4);
+  });
+
+  it('assisted input in between forgets the recent checks', () => {
+    const { original: h } = savedPersonA();
+    h.session.returnToStart();
+    h.session.useAssisted();
+    h.session.selectTarget('setup-gesture');
+    expect(h.snap.stage).toBe('welcome');
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('baseline');
+  });
+
+  it('a reused rest that does not fit a changed saved movement still fails as a mismatch', () => {
+    const { storage, original: h } = savedPersonA();
+    h.session.returnToStart();
+    const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
+    raw.profiles[0].models[0].baselineCenter += 1;
+    storage.setItem(PROFILE_KEY, JSON.stringify(raw));
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.failure?.kind).toBe('profile-mismatch');
+  });
+
+  it('the hour is exact: 59:59.999 after the rest check skips, 60:00 repeats', () => {
+    const early = withKnownTimes();
+    early.h.now = early.restAt + 60 * MINUTE - 1;
+    early.h.session.restoreProfile('Person A');
+    expect(early.h.snap.stage).toBe('mapping-confirm');
+    const late = withKnownTimes();
+    late.h.now = late.restAt + 60 * MINUTE;
+    late.h.session.restoreProfile('Person A');
+    expect(late.h.snap.stage).toBe('baseline');
+  });
+
+  it('a reused rest check keeps its original time', () => {
+    const { h, restAt } = withKnownTimes();
+    h.now = restAt + 30 * MINUTE;
+    h.session.restoreProfile('Person A');
+    approveSaved(h);
+    expect(h.session.returnToStart()).toBe(true);
+    h.now = restAt + 61 * MINUTE;
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('baseline');
+  });
+
+  it('stamps only the movement re-checked in a partial restore; the skipped one is due an hour after its real check', () => {
+    const { h, storage, movedAt } = withKnownTimes();
+    // Edit the saved mouth label so only that movement no longer matches a recent check.
+    const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
+    const mouth = raw.profiles[0].models.find((model: { feature: string }) => model.feature === 'jawOpen');
+    mouth.label = 'Open mouth wide';
+    storage.setItem(PROFILE_KEY, JSON.stringify(raw));
+    const wide = (label: string | null): Values => (label?.startsWith('Open mouth') ? MOUTH : perform(label));
+    h.now += 5 * MINUTE;
+    h.session.restoreProfile('Person A');
+    expect(h.snap.stage).toBe('verify'); // rest reused, brow skipped, mouth due
+    h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => wide(snap.capture?.movement ?? null));
+    h.run(11_000, HEAD_WOBBLE);
+    expect(h.snap.cycles.at(-1)!.heldOut.map((attempt) => attempt.expected)).toEqual(['Open mouth wide', 'Open mouth wide']);
+    h.selectByGesture('comfortable', MOUTH);
+    approveSaved(h);
+    expect(h.session.returnToStart()).toBe(true);
+    h.now = movedAt + 60 * MINUTE + 1; // brow's real check is now an hour old; the mouth's is not
+    h.session.restoreProfile('Person A');
+    h.run(10_500);
+    expect(h.snap.stage).toBe('verify');
+    h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => wide(snap.capture?.movement ?? null));
+    expect(h.snap.cycles.at(-1)!.heldOut.map((attempt) => attempt.expected)).toEqual([BROW_LABEL, BROW_LABEL]);
+  });
+
+  it('a new page (reload) always repeats the checks', () => {
+    const { storage } = savedPersonA();
+    expect(restoreOn(storage).snap.stage).toBe('baseline');
+  });
+});
+
 describe('saving a profile: guards (R7)', () => {
   it('refuses to save during recalibration capture', () => {
     const { original } = savedPersonA();
