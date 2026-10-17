@@ -275,7 +275,7 @@ try {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => localStorage.setItem('motif.profiles', '{not json'));
   await page.reload();
-  check('a corrupted saved payload is reported as unreadable', await page.getByText(/could not be read/).first().isVisible());
+  check('a corrupted saved payload is reported as unreadable', await page.getByText(/The saved setup on this device could not be read/).isVisible());
   await page.evaluate((value) => localStorage.setItem('motif.profiles', value), seeded);
   await page.reload();
   // The seeded Last setup is a version 1 entry; offering Continue means it migrated on read (R18/R19).
