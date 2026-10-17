@@ -57,8 +57,8 @@ describe('effort and observed use (R8)', () => {
     for (let i = 0; i < 4; i += 1) h.step(REST, 'missing'); // tracking loss mid-dwell
     h.run(600);
     expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 1, unfinished: 1 });
-    h.selectByGesture('phrase:g1:0');
-    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 2, unfinished: 1 });
+    h.selectByGesture('phrase:g1:0'); // two holds: open Quick, then Yes (R14)
+    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 3, unfinished: 1 });
   });
 
   it('does not count a hold cancelled by another movement joining', () => {
@@ -116,8 +116,10 @@ describe('reporting a tiring movement (R8)', () => {
   it('is offered only with two or more movements', () => {
     const one = new Harness();
     one.setUpToCommunication();
+    one.selectByGesture('more');
     expect(one.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring');
     const two = twoStep();
+    two.stepTo('more');
     expect(two.snap.scan?.targets.map((target) => target.id)).toContain('tiring');
   });
 

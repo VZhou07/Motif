@@ -9,12 +9,12 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { CONTROL_LABELS } from './navigation';
+import { buildLevel, effectiveLevel, isConfirmLevel, isGroupLevel, type Level, type LevelContext } from './navigation';
 import { applyEdit, defaultVocabulary, type Vocabulary, type VocabularyEdit } from './vocabulary';
 import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
-  type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
+  type InputMode, type LevelView, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
 } from './types';
 
 export const SESSION_LIMITS = {
@@ -144,6 +144,12 @@ export class MotifSession {
 
   private scanner: ScanController | null = null;
   private scanTargets: ScanTarget[] = [];
+  /** Communication/practice scan level (R14); reset to top on every stage entry. */
+  private level: Level = 'top';
+  /** Counted scanner wraps (via tick) in a sub-level with nothing in between; two return to top. */
+  private idleWraps = 0;
+  /** The vocabulary when the scan was paused, so Resume can tell whether it changed. */
+  private pausedVocabulary: Vocabulary | null = null;
   private runtime: GestureRuntime | null = null;
   private scanDriver: 'gesture' | 'assisted' | 'none' = 'none';
   private intervalMs: number = SESSION_LIMITS.scanDefaultMs;
@@ -230,6 +236,7 @@ export class MotifSession {
       const before = this.scanner.snapshot.index;
       this.scanner.tick(nowMs);
       changed ||= this.scanner.snapshot.index !== before;
+      this.afterTick(before, nowMs);
     }
     if (changed) this.publish();
   }
@@ -238,7 +245,7 @@ export class MotifSession {
     if (this.hidden === hidden) return;
     this.hidden = hidden;
     if (hidden) { this.cues?.stop(); this.failClosed(nowMs, 'stale'); }
-    if (this.scanner && this.scanDriver === 'assisted') this.scanner.setSuspended(hidden, nowMs);
+    if (this.scanner && this.scanDriver === 'assisted') this.setScanSuspended(hidden, nowMs);
     this.publish();
   }
 
@@ -414,6 +421,9 @@ export class MotifSession {
     this.runtime = null;
     this.scanner = null;
     this.scanTargets = [];
+    this.level = 'top';
+    this.idleWraps = 0;
+    this.pausedVocabulary = null;
     this.scanDriver = 'none';
     this.baselineRecorder = null;
     this.trialRecorder = null;
@@ -989,34 +999,100 @@ export class MotifSession {
     return match ? this.vocabulary.groups.find((group) => group.id === match[1])?.phrases[Number(match[2])] : undefined;
   }
 
-  private phraseTargets(): ScanTarget[] {
-    return this.vocabulary.groups.flatMap((group) => group.phrases.map((label, index) =>
-      ({ id: `phrase:${group.id}:${index}`, label, kind: 'phrase' as const })));
+  private levelContext(): LevelContext {
+    return {
+      stage: this.stage === 'practice' ? 'practice' : 'communication',
+      inputMode: this.inputMode,
+      timed: this.inputMode === 'assisted' || this.scanMode() === 'auto',
+      movements: this.approvedModels.length,
+      hasApproved: this.hasApproved,
+      decisions: this.stage === 'practice' ? this.decisionTargets(this.allowedDecisions()) : [],
+    };
+  }
+
+  private levelTargets(): ScanTarget[] {
+    const context = this.levelContext();
+    this.level = effectiveLevel(this.level, this.vocabulary, context.stage);
+    return buildLevel(this.level, this.vocabulary, context);
   }
 
   private enterPractice(): void {
     this.setStage('practice');
     this.practice = { selections: 0, last: null };
-    const targets: ScanTarget[] = [
-      ...this.phraseTargets(),
-      { id: 'finish-practice', label: CONTROL_LABELS['finish-practice']!, kind: 'control' },
-      ...this.decisionTargets(this.allowedDecisions()),
-    ];
-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+    this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
   private enterCommunication(): void {
     this.setStage('communication');
-    const speed = this.inputMode === 'assisted' || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
-    const controls = this.inputMode === 'assisted'
-      ? ['speak', 'clear', 'pause', ...speed, 'practice', this.hasApproved ? 'use-gesture' : 'setup-gesture']
-      : ['speak', 'clear', 'pause', ...speed, 'practice', 'change-controls', ...(this.approvedModels.length > 1 ? ['tiring'] : []),
-        ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
-    const targets: ScanTarget[] = [
-      ...this.phraseTargets(),
-      ...controls.map((id) => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' as const })),
-    ];
-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+    this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+  }
+
+  /**
+   * Swaps the scanned list in place (R14): the same scanner and gesture runtime, so one action per hold
+   * and neutral rearming are untouched. `setTargets` puts the highlight on the first target and cancels any latch.
+   */
+  private setLevel(level: Level, nowMs: number): void {
+    if (!this.scanner || !this.isRoutedStage()) return;
+    this.level = level;
+    this.scanTargets = this.levelTargets();
+    this.scanner.setTargets(this.scanTargets.map((target) => target.id), nowMs);
+    this.idleWraps = 0;
+  }
+
+  /** Called after BOTH tick sites: two wraps from the last target to the first return a sub-level to top. */
+  private afterTick(beforeIndex: number, nowMs: number): void {
+    const scanner = this.scanner;
+    if (!scanner || !this.isRoutedStage() || this.level === 'top') return;
+    if (beforeIndex !== this.scanTargets.length - 1 || scanner.snapshot.index !== 0) return;
+    this.idleWraps += 1;
+    if (this.idleWraps < 2) return;
+    const confirming = isConfirmLevel(this.level);
+    this.setLevel('top', nowMs);
+    this.announce(confirming ? 'Not saved. Back to the main list.' : 'Back to the main list.');
+    this.publish();
+  }
+
+  /** Suspension changes reset the auto-return count only when the value actually flips. */
+  private setScanSuspended(value: boolean, nowMs: number): void {
+    const scanner = this.scanner;
+    if (!scanner) return;
+    if (scanner.snapshot.suspended !== value) this.idleWraps = 0;
+    scanner.setSuspended(value, nowMs);
+  }
+
+  /** Opens a group tile; an empty group only announces, so the list the user has learned never shifts. */
+  private openLevel(groupId: string, nowMs: number): void {
+    const group = this.vocabulary.groups.find((entry) => entry.id === groupId);
+    if (!group) return;
+    if (!group.phrases.length) {
+      this.idleWraps = 0;
+      this.announce(group.id === 'favourites' ? 'No favourites yet. Use More, then Save message to Favourites.' : `${group.name} has no phrases yet.`);
+      return;
+    }
+    this.setLevel({ group: group.id }, nowMs);
+    this.announce(`${group.name}: ${group.phrases.length} phrase${group.phrases.length === 1 ? '' : 's'}.`);
+  }
+
+  /**
+   * Helper (conventional input) shortcut to a group or the main list from any level while not paused.
+   * A gesture dwell in progress is cancelled with no action. Gesture and Space input never use this.
+   */
+  openGroup(id: string | 'top'): void {
+    const scanner = this.scanner;
+    if (!scanner || !this.isRoutedStage() || scanner.snapshot.paused) return;
+    const nowMs = this.clock();
+    const confirming = isConfirmLevel(this.level);
+    if (id === 'top') {
+      this.setLevel('top', nowMs);
+      this.announce(confirming ? 'Not saved. Main list.' : 'Main list.');
+    } else {
+      const group = this.vocabulary.groups.find((entry) => entry.id === id);
+      if (!group) return;
+      if (!group.phrases.length) { this.openLevel(id, nowMs); this.publish(); return; }
+      this.setLevel({ group: id }, nowMs);
+      this.announce(`${confirming ? 'Not saved. ' : ''}${group.name}: ${group.phrases.length} phrase${group.phrases.length === 1 ? '' : 's'}.`);
+    }
+    this.publish();
   }
 
   private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
@@ -1030,11 +1106,11 @@ export class MotifSession {
       // Fail closed: discard any pending dwell and latch, freeze timing, and require fresh neutral later.
       this.runtime?.invalidate();
       scanner.cancelSelection(nowMs);
-      scanner.setSuspended(true, nowMs);
+      this.setScanSuspended(true, nowMs);
       this.lastScanFrameTimestamp = undefined;
       return;
     }
-    scanner.setSuspended(false, nowMs);
+    this.setScanSuspended(false, nowMs);
     // A paused scan never counts toward the step fallback, which would otherwise rebuild an unpaused scanner.
     if (this.lastScanFrameTimestamp !== undefined && !scanner.snapshot.paused) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
     this.lastScanFrameTimestamp = frame.timestampMs;
@@ -1044,6 +1120,7 @@ export class MotifSession {
     const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
     if (update.started) {
       this.idleValidMs = 0;
+      this.idleWraps = 0;
       if (actionOf(update.started) === 'select') scanner.beginSelection(nowMs);
     }
     if (update.cancelled && scanner.snapshot.latchedTarget !== undefined) scanner.cancelSelection(nowMs);
@@ -1066,45 +1143,60 @@ export class MotifSession {
       if (this.idleValidMs >= SESSION_LIMITS.stepIdleMs) this.fallBackToAutomatic();
       return;
     }
+    const before = scanner.snapshot.index;
     scanner.tick(nowMs);
+    this.afterTick(before, nowMs);
   }
 
   /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
   private fallBackToAutomatic(): void {
     this.stepFallback = true;
     if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
-    this.announce('No movement for a minute, so scanning is now automatic. Your select movement still selects; helpers can use the buttons.');
+    this.announce('No movement for a minute, so scanning is now automatic, starting from the main list. Your select movement still selects; helpers can use the buttons.');
   }
 
   private pauseScan(nowMs: number): void {
     this.idleValidMs = 0;
+    this.idleWraps = 0;
+    if (!this.scanner?.snapshot.paused) this.pausedVocabulary = this.vocabulary;
     this.scanner?.setPaused(true, nowMs);
     this.announce(this.inputMode === 'assisted' ? 'Paused. Press Space to resume.' : 'Paused. Rest, then use your select or pause movement to resume.');
   }
 
+  /** One Resume rule (R14): same level from its first target, or the main list if phrases changed while paused. */
   private resumeScan(nowMs: number): void {
     this.idleValidMs = 0;
     this.scanner?.setPaused(false, nowMs);
-    this.announce('Resumed.');
+    const changed = this.pausedVocabulary !== null && this.pausedVocabulary !== this.vocabulary;
+    this.pausedVocabulary = null;
+    this.setLevel(changed ? 'top' : this.level, nowMs);
+    this.announce(changed ? 'Resumed at the main list because the phrases changed.' : 'Resumed.');
   }
 
   private activate(id: string, nowMs: number): void {
     if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:') || id.startsWith('tiring:') || id.startsWith('discovered:')) { this.chooseSetupTarget(id); return; }
+    if (!this.isRoutedStage()) return;
+    this.idleWraps = 0;
     const phrase = this.phraseFor(id);
+    // Navigation and Pause work the same in practice and communication (R14 M2).
+    if (id.startsWith('group:')) { this.openLevel(id.slice('group:'.length), nowMs); return; }
+    if (id === 'back') { this.setLevel('top', nowMs); this.announce('Main list.'); return; }
+    if (id === 'pause') { this.pauseScan(nowMs); return; }
     if (this.stage === 'practice') {
       if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
       if (phrase) {
         this.practice = { selections: this.practice.selections + 1, last: phrase };
-        this.announce(`Practice: selected "${phrase}".`);
+        this.setLevel('top', nowMs);
+        this.announce(`Practice: selected "${phrase}". Back to the main list.`);
       }
       return;
     }
-    if (this.stage !== 'communication') return;
-    if (phrase) { this.message = [...this.message, phrase]; this.announce(`Added "${phrase}".`); return; }
+    // A phrase goes into the message and the highlight returns to Speak, the likely next step: one announcement.
+    if (phrase) { this.message = [...this.message, phrase]; this.setLevel('top', nowMs); this.announce(`Added "${phrase}". Back to the main list.`); return; }
     switch (id) {
+      case 'more': this.setLevel('more', nowMs); this.announce('More options.'); break;
       case 'speak': this.speakMessage(); break;
       case 'clear': this.message = []; this.announce('Message cleared.'); break;
-      case 'pause': this.pauseScan(nowMs); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'practice': this.enterPractice(); this.announce('Practice: selections are not spoken.'); break;
@@ -1131,6 +1223,7 @@ export class MotifSession {
 
   private changeInterval(delta: number, nowMs: number): void {
     this.intervalMs = Math.max(SESSION_LIMITS.scanMinMs, Math.min(SESSION_LIMITS.scanMaxMs, this.intervalMs + delta));
+    this.idleWraps = 0;
     this.scanner?.setInterval(this.intervalMs, nowMs);
     this.announce(`Scanning every ${(this.intervalMs / 1_000).toFixed(1)} seconds.`);
   }
@@ -1170,6 +1263,17 @@ export class MotifSession {
   // ── Snapshot ─────────────────────────────────────────────────────────────
 
   private announce(text: string): void { this.announcement = text; }
+
+  private levelView(): LevelView | null {
+    if (!this.isRoutedStage() || !this.scanner) return null;
+    const level = this.level;
+    if (isGroupLevel(level)) {
+      const group = this.vocabulary.groups.find((entry) => entry.id === level.group);
+      return { kind: 'group', group: group ? { id: group.id, name: group.name, phrases: group.phrases.length } : null, confirm: null };
+    }
+    if (isConfirmLevel(level)) return { kind: 'confirm', group: null, confirm: level.confirm };
+    return { kind: level, group: null, confirm: null };
+  }
 
   private captureStatus(): CaptureStatus | null {
     const base = { interruptions: this.stageInterruptions, notice: this.notice, movement: null as string | null,
@@ -1225,7 +1329,7 @@ export class MotifSession {
       scan: scanner ? { targets: this.scanTargets, index: scanner.index, latched: scanner.latchedTarget ?? null, paused: scanner.paused,
         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,
-      vocabulary: this.vocabulary, message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
+      level: this.levelView(), vocabulary: this.vocabulary, message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
       spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],

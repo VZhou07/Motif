@@ -16,3 +16,6 @@
 .profile-list li { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .movement-evidence { padding-left: 18px; font-size: 12px; line-height: 1.7; margin-bottom: 16px; }
 .movement-evidence ul { padding-left: 18px; }
+
+/* R14: which scan level is showing (main list, a group, More, or the Favourites confirmation). */
+.level-heading { font-size: 14px; font-weight: 650; letter-spacing: .01em; color: #2f5a40; margin: 0 0 14px; }

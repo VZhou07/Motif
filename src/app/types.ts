@@ -115,6 +115,8 @@ export interface SessionSnapshot {
   decisions: ScanTarget[];
   scan: ScanView | null;
   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
+  /** Current communication/practice scan level; null outside those stages (R14). */
+  level: LevelView | null;
   /** Phrase groups (Favourites first); deliberately saved settings, never message history (R14). */
   vocabulary: Vocabulary;
   message: string[];
@@ -135,6 +137,13 @@ export interface SessionSnapshot {
   recommendation: { id: string; reasons: string[] } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
+}
+
+export interface LevelView {
+  kind: 'top' | 'more' | 'group' | 'confirm';
+  group: { id: string; name: string; phrases: number } | null;
+  /** The message text waiting for Save to Favourites confirmation. */
+  confirm: string | null;
 }
 
 export interface ProfilesView {

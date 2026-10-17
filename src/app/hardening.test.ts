@@ -106,7 +106,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     // Zero gestures: assisted Space only.
     const helper = new Harness({ profiles: store() });
     helper.session.useAssisted();
-    helper.session.switchPress(helper.now);
+    helper.switchTo('phrase:g1:0');
     expect(helper.snap.message).toEqual(['Yes']);
   });
 });
@@ -124,7 +124,7 @@ describe('noise, lighting and flicker (R10)', () => {
       expect(used(h)).toBe(before);
       for (let i = 0; i < 3; i += 1) h.selectByGesture('phrase:g1:0');
       expect(h.snap.message).toEqual(['Yes', 'Yes', 'Yes']);
-      expect(used(h)).toBe(before + 3);
+      expect(used(h)).toBe(before + 6); // each phrase is two holds now: open Quick, then Yes (R14)
     });
 
   it('heavy jitter on the chosen feature is rejected as overlapping rest', () => {

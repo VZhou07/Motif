@@ -215,14 +215,18 @@ describe('communication safety', () => {
 
   it('selects the target latched at dwell onset even when the dwell spans a scan boundary', () => {
     const h = ready();
+    h.selectByGesture('group:g1');
     let since = h.now;
     let index = h.snap.scan!.index;
     while (!(h.highlightedId() === 'phrase:g1:1' && h.now - since >= 1_850 && h.snap.runtime?.armed)) {
       h.step(REST);
       if (h.snap.scan!.index !== index) { index = h.snap.scan!.index; since = h.now; }
     }
-    h.run(600, BROW);
+    h.run(200, BROW);
+    // The dwell has crossed the scan deadline; the latched target holds the highlight in place.
+    expect(h.snap.scan?.latched).toBe('phrase:g1:1');
     expect(h.highlightedId()).toBe('phrase:g1:1');
+    h.run(400, BROW);
     h.run(600);
     expect(h.snap.message).toEqual(['No']);
   });
@@ -231,16 +235,21 @@ describe('communication safety', () => {
     const h = ready();
     h.selectByGesture('phrase:g1:0', BROW, 60_000, 8_000, 0);
     expect(h.snap.message).toEqual(['Yes']);
+    // Completed holds are counted whatever target is highlighted, so this stays exact at any level (R14).
+    const completed = () => h.snap.evidence[0]!.use.completed;
+    const after = completed();
     h.run(600, { browOuterUpLeft: 0.3 });
     h.run(600, BROW);
+    expect(completed()).toBe(after);
     expect(h.snap.message).toEqual(['Yes']);
     h.run(600);
     h.run(600, BROW);
-    expect(h.snap.message).toHaveLength(2);
+    expect(completed()).toBe(after + 1);
   });
 
   it('pauses by gesture, resumes by gesture after neutral, and never selects while paused', () => {
     const h = ready();
+    h.selectByGesture('group:g1');
     h.selectByGesture('pause');
     expect(h.snap.scan?.paused).toBe(true);
     const index = h.snap.scan!.index;
@@ -338,7 +347,7 @@ describe('assisted input (clearly labeled zero-gesture path)', () => {
     h.session.useAssisted();
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.scan?.driver).toBe('assisted');
-    h.session.switchPress(h.now);
+    h.switchTo('phrase:g1:0');
     expect(h.snap.message).toEqual(['Yes']);
     h.session.setCamera('running');
     h.run(5_000, (t) => (t % 2_000 < 1_000 ? BROW : REST));
@@ -350,7 +359,7 @@ describe('assisted input (clearly labeled zero-gesture path)', () => {
   it('Space pauses and resumes without selecting, and does nothing in gesture mode', () => {
     const h = new Harness();
     h.session.useAssisted();
-    for (let i = 0; i < 8; i += 1) h.stall(2_000);
+    for (let i = 0; i < 5; i += 1) h.stall(2_000); // Pause is sixth on the main list (R14)
     expect(h.highlightedId()).toBe('pause');
     h.session.switchPress(h.now);
     expect(h.snap.scan?.paused).toBe(true);
@@ -377,6 +386,7 @@ describe('honest limits and setup settings', () => {
     h.session.useAssisted();
     expect(edit(1, 'Changed during use')).toBe(false);
     expect(h.session.editVocabulary({ kind: 'add-group', name: 'Late' }).ok).toBe(false);
+    h.switchTo('group:g1');
     expect(h.snap.scan?.targets[0]?.label).toBe('Hello there');
     h.session.switchPress(h.now);
     expect(h.snap.message).toEqual(['Hello there']);
@@ -462,6 +472,7 @@ describe('multiple gestures (R6)', () => {
   it('adds a second movement with held-out, cross-check and negative evidence over the whole set', () => {
     const h = new Harness();
     h.setUpToCommunication();
+    h.selectByGesture('more');
     expect(h.snap.scan?.targets.map((target) => target.id)).toContain('add-movement');
     h.addMovement(OPEN_MOUTH, perform);
     expect(h.snap.stage).toBe('comfort');
@@ -651,6 +662,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.mapping?.assignments).toEqual({ [h.snap.approvedModels[0]!.id]: 'select' });
     expect(h.snap.scanMode).toBe('auto');
     h.selectByGesture('finish-practice');
+    h.selectByGesture('group:g1');
     h.selectByGesture('phrase:g1:0', MOUTH);
     expect(h.snap.message).toEqual([]);
     expect(h.snap.stage).toBe('communication');
@@ -710,13 +722,25 @@ describe('multiple gestures (R6)', () => {
     h.stepTo('finish-practice');
     addAndApprove(h, PUFF_CHEEKS);
     h.stepTo('finish-practice');
-    const ids = h.snap.scan!.targets.map((target) => target.id);
-    expect(ids).toEqual(['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2',
-      'speak', 'clear', 'pause', 'practice', 'change-controls', 'tiring', 'recalibrate']);
-    const seen = new Set<string>();
-    h.run(600);
-    for (let i = 0; i < ids.length; i += 1) { seen.add(h.highlightedId()!); h.run(600, MOUTH); h.run(600); }
-    expect([...seen].sort()).toEqual([...ids].sort());
+    // Every level (R14): each target is reached by Next alone, and the level list is exactly as designed.
+    const walk = (expected: string[]) => {
+      const ids = h.snap.scan!.targets.map((target) => target.id);
+      expect(ids).toEqual(expected);
+      const seen = new Set<string>();
+      h.run(600);
+      for (let i = 0; i < ids.length; i += 1) { seen.add(h.highlightedId()!); h.run(600, MOUTH); h.run(600); }
+      expect([...seen].sort()).toEqual([...ids].sort());
+    };
+    walk(['speak', 'undo', 'group:favourites', 'group:g1', 'group:g2', 'pause', 'more']);
+    h.stepTo('group:g1');
+    walk(['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'back', 'pause']);
+    h.stepTo('back');
+    h.stepTo('group:g2');
+    walk(['phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'back', 'pause']);
+    h.stepTo('back');
+    h.stepTo('more');
+    walk(['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'tiring', 'recalibrate', 'back', 'pause']);
+    h.stepTo('back');
     h.stepTo('phrase:g1:2');
     h.stepTo('speak');
     expect(h.spoken).toEqual(['Thank you']);
@@ -742,6 +766,7 @@ describe('multiple gestures (R6)', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS, 'map:3'); // brow alone selects
     h.selectByGesture('finish-practice');
+    h.selectByGesture('more');
     const ids = h.snap.scan!.targets.map((target) => target.id);
     expect(ids).toEqual(expect.arrayContaining(['slower', 'faster', 'add-movement', 'change-controls', 'recalibrate', 'pause']));
     h.selectByGesture('slower');
@@ -757,6 +782,8 @@ describe('multiple gestures (R6)', () => {
     h.run(800, MOUTH); h.run(800);
     h.run(800, BROW); h.run(800);
     expect(h.snap.message).toEqual([]);
+    while (h.highlightedId() !== 'group:g1') h.step();
+    h.session.switchPress(h.now);
     while (h.highlightedId() !== 'phrase:g1:1') h.step();
     h.session.switchPress(h.now);
     expect(h.snap.message).toEqual(['No']);

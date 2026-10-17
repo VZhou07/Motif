@@ -147,6 +147,18 @@ async function focusWalk(page, label) {
   check(`Tab order completes without a trap: ${label}`, completed);
 }
 
+const highlighted = (page, text) => page.locator('[aria-current="true"]', { hasText: text }).waitFor({ timeout: 30_000 });
+
+/** Assisted Space through the R14 levels: wait for the Quick tile, open it, then add its first phrase ("Yes"). */
+async function addYesBySpace(page) {
+  await highlighted(page, 'Open Quick');
+  await page.keyboard.press('Space');
+  await highlighted(page, 'Yes');
+  const level = await page.locator('.level-heading').textContent();
+  await page.keyboard.press('Space');
+  return level;
+}
+
 /**
  * A saved profile in the version 1 entry format earlier builds wrote (six flat phrases), so the browser
  * exercises migration on read (R14). Built with the app's own validator, then turned back into version 1.
@@ -213,9 +225,9 @@ try {
   await page.setViewportSize({ width: 900, height: 900 });
   await auditScreen(page, 'assisted communication, empty message 900 px');
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.keyboard.press('Space');
+  const level = await addYesBySpace(page);
   const message = await page.getByRole('region', { name: 'Message' }).textContent();
-  check('assisted Space adds the highlighted phrase', /Yes/.test(message ?? ''), message ?? '');
+  check('assisted Space opens a group and adds its highlighted phrase', /Quick · 3 phrases/.test(level ?? '') && /Yes/.test(message ?? ''), `${level} / ${message}`);
   await auditScreen(page, 'assisted communication 1280 px');
   await focusWalk(page, 'assisted communication');
   const storage = await page.evaluate(async () => ({ local: localStorage.length, session: sessionStorage.length,
@@ -301,7 +313,7 @@ try {
   await blocked.goto(ORIGIN);
   const heading = await blocked.getByRole('heading', { level: 1 }).textContent();
   await blocked.getByRole('button', { name: /Use assisted input/ }).click();
-  await blocked.keyboard.press('Space');
+  await addYesBySpace(blocked);
   const storageNotice = await blocked.getByText(/Saved profiles/).count();
   check('blocked browser storage: the app loads, shows no saved-profile error, and assisted input works', /Your movement/.test(heading ?? '') && storageNotice === 0
     && /Yes/.test(await blocked.getByRole('region', { name: 'Message' }).textContent() ?? '') && blockedLog.errors.length === 0, blockedLog.errors.slice(0, 2).join(' | '));
@@ -319,7 +331,7 @@ try {
   });
   await silent.goto(ORIGIN);
   await silent.getByRole('button', { name: /Use assisted input/ }).click();
-  await silent.keyboard.press('Space');
+  await addYesBySpace(silent);
   await silent.getByRole('button', { name: 'Speak message' }).click();
   const shown = await silent.getByRole('region', { name: 'Message' }).textContent();
   check('no local voice: message stays on screen, limitation explained, no speech call',

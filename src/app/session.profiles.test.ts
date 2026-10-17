@@ -22,7 +22,7 @@ function savedPersonA() {
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
   h.stepTo('finish-practice');
-  h.session.selectTarget('phrase:g2:0'); // a message that must never be saved
+  h.click('phrase:g2:0'); // a message that must never be saved
   expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
   return { storage, store, original: h };
 }

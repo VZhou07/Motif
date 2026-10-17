@@ -9,8 +9,11 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
   const practice = snapshot.stage === 'practice';
   const paused = scan?.paused ?? false;
   const activate = (id: string) => session.selectTarget(id);
-  const phrases = scan?.targets.filter((target) => target.kind === 'phrase') ?? [];
-  const controls = scan?.targets.filter((target) => target.kind !== 'phrase') ?? [];
+  const tiles = scan?.targets.filter((target) => target.kind === 'phrase' || target.kind === 'group') ?? [];
+  const controls = scan?.targets.filter((target) => target.kind !== 'phrase' && target.kind !== 'group') ?? [];
+  const level = snapshot.level;
+  const where = level?.kind === 'group' && level.group ? `${level.group.name} · ${level.group.phrases} phrase${level.group.phrases === 1 ? '' : 's'}`
+    : level?.kind === 'more' ? 'More options' : level?.kind === 'confirm' ? 'Save to Favourites?' : 'Main list';
   const mode = snapshot.inputMode === 'assisted' ? 'Assisted Space switch' : 'Automatic scanning';
   return (
     <>
@@ -27,14 +30,18 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
             <button type="button" className="button button-primary" onClick={() => session.resume()}><Icon name="arrow" />Resume</button>
           </div>
         : <ScanHint snapshot={snapshot} />}
-      <div className="phrase-grid" role="group" aria-label={practice ? 'Practice phrases' : 'Phrases'}>
-        {phrases.map((target, index) => (
-          <ScanButton key={target.id} id={target.id} snapshot={snapshot} onActivate={activate} className="phrase-tile" disabled={paused}
-            label={practice ? `Practice: ${target.label}` : `Add “${target.label}” to message`}>
-            <span className="phrase-number">{String(index + 1).padStart(2, '0')}</span><span>{target.label}</span><Icon name="plus" size={18} />
-          </ScanButton>
-        ))}
-      </div>
+      <h2 className="level-heading">{where}</h2>
+      {tiles.length > 0 && (
+        <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : 'Phrase groups'}>
+          {tiles.map((target, index) => (
+            <ScanButton key={target.id} id={target.id} snapshot={snapshot} onActivate={activate} className="phrase-tile" disabled={paused}
+              label={target.kind === 'group' ? target.label : practice ? `Practice: ${target.label}` : `Add “${target.label}” to message`}>
+              <span className="phrase-number">{String(index + 1).padStart(2, '0')}</span><span>{target.label}</span>
+              <Icon name={target.kind === 'group' ? 'arrow' : 'plus'} size={18} />
+            </ScanButton>
+          ))}
+        </div>
+      )}
       {practice
         ? <p className="success-note"><Icon name="check" />{snapshot.practice.selections} practice selection{snapshot.practice.selections === 1 ? '' : 's'}{snapshot.practice.last ? ` · last: “${snapshot.practice.last}”` : ''}. Take your time.</p>
         : (
