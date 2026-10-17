@@ -1,17 +1,11 @@
 # Motif build update
 
-**Done (software):** everything approved for this build works in automated tests:
-- Find a comfortable movement, or let Motif suggest some after you move freely.
-- Each movement is practised and checked, including a check that ordinary moving doesn't trigger it, before you approve it.
-- With the approved movement you can build and speak messages, pause, change speed and recalibrate.
-- Up to four movements can work together.
-- A setup can be saved on this computer and restored after a quick re-check.
-- Plain counts show what Motif saw, it suggests controls, and you can say a movement is tiring.
-- A Space-bar mode helps people who can't use a face movement.
-- Two people can share one computer.
+**Changed:** calibration now follows a steady rhythm: 3 seconds to get ready, 3 seconds to make and hold your movement, then 3 seconds to relax. The screen previews what comes next. I fixed an extra prompt between attempts and made interrupted attempts restart their countdown clearly.
 
-**Privacy fix made today:** the face-tracking library had hidden usage reporting to Google. Motif now blocks it, so nothing leaves the computer.
+**Checked:** 294 automated tests, the production build and 67 browser checks pass. Independent review found no blocking issues. Tests include delayed reactions, lost tracking and accidental movements.
 
-**Still needs a person:** the camera was covered, so nobody has tried real face tracking, comfort, spoken audio or hands-free use yet. `ACCEPTANCE.md` lists exactly what to try and what should happen.
+The approved communication features, movement discovery, multiple movements, saved profiles and assisted Space-bar input remain available. Camera processing stays on this computer, and outside usage reporting is blocked.
 
-How to run it: `README.md`. Nothing has been pushed; all work is in small local commits.
+**Still needs a person:** real face tracking, the comfort of the new rhythm, audible prompts and hands-free use. The camera stayed covered during automated checks. See `ACCEPTANCE.md` for what to try and `README.md` to run it.
+
+The earlier overall build remains paused; this timing fix is finished in software. Nothing has been pushed.

@@ -2,16 +2,26 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Current focused task — calibration pacing (R11)
+
+- Latest user request: make the rest/action timing feel more natural. This authorizes only this fix; the existing overall build Goal remains paused.
+- State: **T1 software verified; human pacing/comfort pending.** R11 revision 1 explicitly APPROVED by timing_review; independent implementation/testing verdict PASS from timing_tests. Base `9d23802`; working tree was clean. Current-machine baseline: 22 files/277 tests PASS. Sandbox launch failed EPERM; native launch works.
+- Ownership: all worker file ownership released to coordinator; no agents editing. Coordinator integrated recorder/session/types and tests; timing_review implemented SetupViews.tsx + SetupViews.test.tsx after reasoning approval; timing_tests independently reviewed/executed checks. All read canonical skill and four project docs.
+- Design: fixed 3/3/3 ready/move/relax rhythm, preview next cue, authoritative countdown, remove spurious completion Rest and stale spoken cue on interruption. Keep all training/held-out/negative safety gates unchanged.
+- Coordinator checks: `npm test -- --reporter=dot` → 25 files/294 PASS; `npm run typecheck` → PASS; `npm run build` → assets/typecheck/production PASS; `node scripts/browser-check.mjs` → 67/67 PASS (synthetic camera). Independent timing_tests ran focused 68 tests, full 294 tests, typecheck and build itself, all PASS. UI implementer independently ran 6 UI tests + typecheck PASS. Coverage includes exact boundaries, jitter, interrupted countdowns, five-attempt speech, final/failing transitions, frozen models, 700/950 ms onset and release in both directions, early/brief rejection, frame stalls, previews and accessible countdowns.
+- Remaining: human pacing/comfort, audible speech alignment and actual webcam use (ACCEPTANCE.md 3.2). Saved-profile exact speech sequence was code-reviewed/shared logic, not a new dedicated assertion. Do not open the real camera unattended. No decisions, observed failures or unrelated software work remain for this request. No commands remain running after browser cleanup.
+- Local commits: `b6cea2b Smooth calibration timing` (app/UI), `ffab538 Test calibration timing` (recorder/session tests), `a055bf9 Test calibration prompts` (six UI tests), followed by this documentation handoff. All code/tests independently verified together; no pushes. No partial code remains. Next: await the user's real-person feedback. Preserve the earlier overall Goal's paused status.
+
 ## Resume first (next agent)
 
-1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R4–R6 matter most) and `.agents/skills/motif-checkpoint/SKILL.md`.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R11 is the latest timing change) and `.agents/skills/motif-checkpoint/SKILL.md`.
 2. Run `git status` and `git log --oneline -n 10`. Expected: clean tree; compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last code commit: `5303081 Test security policy meta` (Linux, session 3); docs after it. At `e40adc9`: tsc PASS; vitest 22 files/277 PASS; build PASS; browser-check 67/67 PASS. Earlier: `e266183` verified on the original Windows machine (110 tests).
+- Last passing code/test commit: `a055bf9 Test calibration prompts` (Windows); documentation follows. Current checks: typecheck PASS; vitest 25 files/294 PASS; build PASS; browser-check 67/67 PASS; independent timing_tests PASS. Prior baseline at `e40adc9`: 277 tests/typecheck/build/browser67 PASS on Linux.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)
