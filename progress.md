@@ -92,3 +92,9 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 - Coordinator: Claude Code (session 3). Commits from `f1291e7 Add bundled Chromium fallback` onward.
 
 - **User-directed change (2026-10-17, branch `fix-record-movement`):** one automatic profile ("Last setup", reserved name, no naming UI) saved on approval and scan-speed change; Continue restores it using saved resting summary numbers (no rest check, no movement re-checks, controls still need approval). This was done at the user's request without a separate reasoning review; independent review of the quick-restore path is still pending. Real-camera behaviour untested (camera covered).
+
+## UX build loop (branch ux-setup-flow off fix-record-movement `2040095`, started 2026-10-17)
+- Plan: `/Users/vivianyang/.claude/plans/pasted-content-id-2ddb-you-are-goofy-dragonfly.md`; criteria `UX_ACCEPTANCE.md`; design `reasoning.md` (UX slice 1).
+- Baseline: tsc clean, vitest 363/363 (31 files), build OK.
+- Slice 1 state: reviewing design; QA writes `src/app/ux-setup.acceptance.test.ts`; developer waits for review verdict. Round 0 of 3.
+- Next: implement slice 1, QA verify, commit small, then slice 2 (click-to-record) and slice 3 (merged approve screen).
