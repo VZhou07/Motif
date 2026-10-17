@@ -1,18 +1,20 @@
 import type { Baseline, FeatureFrame, FeatureId, GestureModel, RuntimePhase, TrackingState } from '../domain/types';
 import type { Mapping, MappingProposal, ScanMode } from './mapping';
+import type { DiscoveryResult } from './discovery';
 import type { MovementEvidence } from './scoring';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
-  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm' | 'tiring';
+  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm' | 'tiring'
+  | 'discover' | 'discover-results';
 
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
 /** `assisted` is the clearly labeled Space/mouse path; it never produces calibration evidence. */
 export type InputMode = 'gesture' | 'assisted';
-export type CapturePrompt = 'Rest' | 'Move' | 'Return to rest' | 'Everyday activity';
+export type CapturePrompt = 'Rest' | 'Move' | 'Return to rest' | 'Everyday activity' | 'Explore freely';
 
 export interface CaptureStatus {
-  kind: 'baseline' | 'training' | 'verification' | 'negative';
+  kind: 'baseline' | 'training' | 'verification' | 'negative' | 'discovery';
   /** 1-based trial or attempt number. */
   index: number;
   total: number;
@@ -49,7 +51,7 @@ export interface CycleEvidence {
   profile?: string;
 }
 
-export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch';
+export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch' | 'discovery';
 export interface Failure { kind: FailureKind; title: string; reasons: string[] }
 
 export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' }
@@ -110,6 +112,8 @@ export interface SessionSnapshot {
   profiles: ProfilesView;
   /** Per-movement observations (counts with denominators) for approved movements and any in setup (R8). */
   evidence: MovementEvidence[];
+  /** Free-exploration results in `discover-results`: candidates only, never models (R9). */
+  discovery: DiscoveryResult | null;
   /** Movements the mapping stages choose controls for (approved set, a candidate being added, or a restored set). */
   setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */

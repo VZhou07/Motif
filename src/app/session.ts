@@ -6,6 +6,7 @@ import { ScanController } from '../engine/scanner';
 import { evaluatePositiveAttempt } from '../engine/verification';
 import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from './capture';
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
+import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
 import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
@@ -43,6 +44,9 @@ export const DECISION_LABELS = {
   'restart-recalibration': 'Restart recalibration',
   'reject-profile': 'Do not use this profile',
   'never-mind': 'Never mind',
+  discover: 'Find my movements',
+  'discover-again': 'Look again',
+  'full-list': 'Choose from the full list',
 } as const;
 export type DecisionId = keyof typeof DECISION_LABELS;
 
@@ -54,7 +58,7 @@ const CONTROL_LABELS: Record<string, string> = {
 };
 
 const silentSpeech: SpeechPort = { status: () => ({ available: false, voiceName: null }), speak: () => false, cancel: () => {} };
-const CAPTURE_STAGES: readonly Stage[] = ['baseline', 'training', 'verify', 'negative'];
+const CAPTURE_STAGES: readonly Stage[] = ['baseline', 'training', 'verify', 'negative', 'discover'];
 
 export interface SessionOptions { speech?: SpeechPort; clock?: () => number; profiles?: ProfileStore }
 
@@ -100,6 +104,10 @@ export class MotifSession {
   private recommendation: { id: string; reasons: string[] } | null = null;
   /** Self-reported effort and tiring reports, and observed use, per model id (R8). */
   private notes: Record<string, MovementNotes> = {};
+  /** Free-exploration frames, held only until analysed (R9); then only candidate summaries remain. */
+  private discoverSegments: FeatureFrame[][] = [];
+  private discoverValidMs = 0;
+  private discovery: DiscoveryResult | null = null;
   private use: Record<string, MovementUse> = {};
   /** True while a new movement is being added to an existing approved set. */
   private adding = false;
@@ -246,6 +254,7 @@ export class MotifSession {
       case 'training':
       case 'verify': this.captureTrial(frame); break;
       case 'negative': this.captureNegative(frame); break;
+      case 'discover': this.captureDiscovery(frame); break;
       default: this.driveScanner(frame, nowMs);
     }
   }
@@ -391,6 +400,9 @@ export class MotifSession {
     this.notice = null;
     this.lastPrompt = null;
     this.failure = null;
+    this.discoverSegments = [];
+    this.discoverValidMs = 0;
+    this.discovery = null;
   }
 
   private startScanner(targets: ScanTarget[], driver: 'gesture' | 'assisted', models: readonly GestureModel[]): void {
@@ -421,7 +433,8 @@ export class MotifSession {
       case 'mapping-confirm': return ['choose-different', 'approve-mapping', ...(this.restoring ? ['reject-profile' as const] : [])];
       case 'recalibrate-confirm': return ['start-recalibration', 'keep-current'];
       case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
-      case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'keep-current'] : [];
+      case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'discover', 'keep-current'] : [];
+      case 'discover-results': return ['discover-again', 'full-list', ...(keep ? ['keep-current' as const] : [])];
       case 'setup-failed': {
         const kind = this.failure?.kind;
         const list: DecisionId[] = [];
@@ -438,6 +451,13 @@ export class MotifSession {
   /** Setup choices in scan order. The mapping stage lists Keep current first, then proposals, then Reject. */
   private setupTargets(): ScanTarget[] {
     const decisions = this.decisionTargets(this.allowedDecisions());
+    if (this.stage === 'discover-results') {
+      const found = (this.discovery?.candidates ?? []).flatMap((candidate, index) => [
+        { id: `discovered:${index}`, label: candidate.label, kind: 'decision' as const },
+        ...candidate.companions.map((companion, member) => ({ id: `discovered:${index}:${member}`, label: `Use “${companion.label}” instead`, kind: 'decision' as const })),
+      ]);
+      return [...found, ...decisions];
+    }
     if (this.stage === 'tiring') {
       return [...this.approvedModels.map((model) => ({ id: `tiring:${model.id}`, label: `“${model.label}” is tiring`, kind: 'decision' as const })), ...decisions];
     }
@@ -593,6 +613,7 @@ export class MotifSession {
     if (Object.hasOwn(DECISION_LABELS, id)) { this.decide(id as DecisionId); return; }
     if (id.startsWith('map:')) { this.chooseProposal(id); this.publish(); }
     if (id.startsWith('tiring:')) { this.reportTiring(id.slice('tiring:'.length)); this.publish(); }
+    if (id.startsWith('discovered:')) { this.chooseDiscovered(id); this.publish(); }
   }
 
   /** Setup decision from a scanned gesture or a conventional button; ignored if not offered now. */
@@ -602,6 +623,8 @@ export class MotifSession {
       case 'comfortable': this.noteEffort('easy'); if (this.restoring) this.offerSavedControls(); else this.enterMapping(); break;
       case 'comfortable-effort': this.noteEffort('effort'); this.enterMapping(); break;
       case 'never-mind': this.enterCommunication(); this.announce('Nothing changed. Return to rest before selecting.'); break;
+      case 'discover': case 'discover-again': this.beginDiscovery(); break;
+      case 'full-list': this.enterChoose(); break;
       case 'record-again': if (this.choice) this.startTraining(this.choice); break;
       case 'another-movement': this.closeOpenCycle(); this.candidate = null; this.restoring = null; this.enterChoose(); break;
       case 'choose-different': this.enterMapping(); break;
@@ -650,7 +673,7 @@ export class MotifSession {
   }
 
   chooseMovement(choice: MovementChoice): void {
-    if ((this.stage !== 'choose' && this.stage !== 'setup-failed') || !this.baseline) return;
+    if (!['choose', 'setup-failed', 'discover-results'].includes(this.stage) || !this.baseline) return;
     if (this.adding && this.approvedModels.some((model) => model.feature === choice.feature && model.direction === choice.direction)) {
       this.announce('That movement is already one of your controls. Choose a different movement.');
       this.publish();
@@ -700,6 +723,61 @@ export class MotifSession {
   setSpokenPrompts(enabled: boolean): void {
     this.spokenPrompts = enabled;
     this.publish();
+  }
+
+  // ── Free movement discovery (R9) ─────────────────────────────────────────
+
+  /** Helper button or scanned decision: explore freely so candidates can be proposed. Never creates a model. */
+  startDiscovery(): void {
+    if (!['choose', 'discover-results'].includes(this.stage) && !(this.stage === 'setup-failed' && this.failure?.kind === 'discovery')) return;
+    this.beginDiscovery();
+    this.publish();
+  }
+
+  private beginDiscovery(): void {
+    if (!this.baseline) return;
+    if (this.camera !== 'running') { this.announce('Start the camera first.'); return; }
+    this.closeOpenCycle();
+    this.candidate = null;
+    this.choice = null;
+    this.setStage('discover');
+    this.announce('Try any movements you can comfortably make, a few times each, resting in between.');
+    this.cue('Explore freely');
+  }
+
+  private captureDiscovery(frame: FeatureFrame): void {
+    const segment = this.discoverSegments[this.discoverSegments.length - 1];
+    if (frame.tracking !== 'tracked') {
+      if (segment?.length) {
+        this.discoverSegments.push([]);
+        this.interrupted('Tracking was interrupted. Exploring continues when your face is clear again.', 'discovery');
+      }
+      return;
+    }
+    const last = segment?.[segment.length - 1];
+    if (!segment || (last && frame.timestampMs - last.timestampMs > MAX_FRAME_GAP_MS)) this.discoverSegments.push([frame]);
+    else {
+      if (last) this.discoverValidMs += frame.timestampMs - last.timestampMs;
+      segment.push(frame);
+    }
+    if (this.discoverValidMs < DISCOVERY.captureMs || !this.baseline) return;
+    const approved: Channel[] = this.adding ? this.approvedModels.map((model) => ({ feature: model.feature, direction: model.direction, label: model.label })) : [];
+    const result = discoverCandidates(this.baseline, this.discoverSegments.filter((part) => part.length > 1), approved);
+    this.setStage('discover-results');
+    this.discovery = result;
+    if ((this.recalibrating || this.adding) && this.hasApproved) this.restrictedScanner(this.approvedModels);
+    this.announce(result.candidates.length
+      ? `Noticed ${result.candidates.length} movement${result.candidates.length === 1 ? '' : 's'}. Choosing one starts the usual practice and checks.`
+      : result.reason ?? 'No movement was found.');
+  }
+
+  private chooseDiscovered(id: string): void {
+    const match = /^discovered:(\d+)(?::(\d+))?$/.exec(id);
+    const candidate = match ? this.discovery?.candidates[Number(match[1])] : undefined;
+    if (this.stage !== 'discover-results' || !candidate || !match) return;
+    const channel = match[2] === undefined ? candidate : candidate.companions[Number(match[2])];
+    if (!channel) return;
+    this.chooseMovement({ feature: channel.feature, direction: channel.direction, label: channel.label });
   }
 
   // ── Evidence, effort and recommendations (R8) ────────────────────────────
@@ -967,7 +1045,7 @@ export class MotifSession {
   }
 
   private activate(id: string, nowMs: number): void {
-    if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:') || id.startsWith('tiring:')) { this.chooseSetupTarget(id); return; }
+    if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:') || id.startsWith('tiring:') || id.startsWith('discovered:')) { this.chooseSetupTarget(id); return; }
     const phrase = this.phraseFor(id);
     if (this.stage === 'practice') {
       if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
@@ -1065,6 +1143,10 @@ export class MotifSession {
         total: training ? SESSION_LIMITS.trainingTrials : this.verifyPlan.length,
         prompt: status.prompt, phaseProgress: status.phaseProgress, overallProgress: status.overallProgress, validMs: status.elapsedMs };
     }
+    if (this.stage === 'discover') {
+      const progress = Math.min(1, this.discoverValidMs / DISCOVERY.captureMs);
+      return { ...base, kind: 'discovery', index: 1, total: 1, prompt: 'Explore freely', phaseProgress: progress, overallProgress: progress, validMs: this.discoverValidMs };
+    }
     if (this.stage === 'negative' && this.negativeMonitor) {
       const progress = Math.min(1, this.negativeMonitor.armedMs / CAPTURE_TIMING.negativeMs);
       return { ...base, kind: 'negative', index: 1, total: 1, prompt: 'Everyday activity', phaseProgress: progress,
@@ -1093,6 +1175,7 @@ export class MotifSession {
       spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
+      discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
     };
     for (const listener of this.listeners) listener();

@@ -516,7 +516,7 @@ describe('multiple gestures (R6)', () => {
     h.setUpToCommunication();
     h.selectByGesture('add-movement');
     expect(h.snap.stage).toBe('choose');
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current']);
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['discover', 'keep-current']);
     h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow again' });
     expect(h.snap.stage).toBe('choose');
     expect(h.snap.announcement).toMatch(/already one of your controls/);
