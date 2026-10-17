@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { FaceTracker, TrackerError } from '../tracker';
+import { createLocalProfileStore } from './profiles';
 import { MotifSession } from './session';
 import { createLocalSpeech, type LocalSpeech } from './speech';
 
@@ -20,7 +21,9 @@ export function useMotif(runtime?: Partial<Runtime>) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [{ session, tracker, speech }] = useState<Runtime>(() => {
     const speech = runtime?.speech ?? createLocalSpeech();
-    return { speech, session: runtime?.session ?? new MotifSession({ speech }), tracker: runtime?.tracker ?? new FaceTracker() };
+    // Profiles live in this browser's storage and are written only by an explicit Save (R7).
+    const profiles = createLocalProfileStore(() => window.localStorage);
+    return { speech, session: runtime?.session ?? new MotifSession({ speech, profiles }), tracker: runtime?.tracker ?? new FaceTracker() };
   });
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
 

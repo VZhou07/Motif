@@ -1,14 +1,18 @@
 import type { CycleEvidence, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
+import { SavedProfiles } from './ProfileViews';
 import { DecisionList } from './ScanBoard';
 import { Heading, type ViewProps } from './SetupViews';
 
 const seconds = (ms: number) => `${(ms / 1_000).toFixed(1)} s`;
 
 function cycleSummary(cycle: CycleEvidence): string[] {
-  const lines = [`Training: ${cycle.training === null ? 'not finished' : cycle.training.ok ? 'learned from 3 attempts' : `not learned — ${cycle.training.reasons[0] ?? ''}`}`];
-  cycle.heldOut.forEach((attempt) => lines.push(`Check ${attempt.attempt} (${attempt.kind === 'cross-check'
-    ? `cross-check: “${attempt.expected}” still works` : `new attempt: “${attempt.expected}”`}): ${attempt.passed ? 'passed' : 'did not pass'} — ${attempt.eventCount} recognition${attempt.eventCount === 1 ? '' : 's'}${attempt.passed ? '' : `; ${attempt.reasons[0] ?? ''}`}`));
+  const lines = [cycle.source === 'restored'
+    ? 'Training: none — saved movements are re-checked unchanged'
+    : `Training: ${cycle.training === null ? 'not finished' : cycle.training.ok ? 'learned from 3 attempts' : `not learned — ${cycle.training.reasons[0] ?? ''}`}`];
+  const kinds = { 'cross-check': (label: string) => `cross-check: “${label}” still works`, 'held-out': (label: string) => `new attempt: “${label}”`,
+    recheck: (label: string) => `re-check of saved “${label}”` };
+  cycle.heldOut.forEach((attempt) => lines.push(`Check ${attempt.attempt} (${kinds[attempt.kind](attempt.expected)}): ${attempt.passed ? 'passed' : 'did not pass'} — ${attempt.eventCount} recognition${attempt.eventCount === 1 ? '' : 's'}${attempt.passed ? '' : `; ${attempt.reasons[0] ?? ''}`}`));
   if (cycle.negative) {
     lines.push(`Everyday activity: ${cycle.negative.eventCount} accidental selection${cycle.negative.eventCount === 1 ? '' : 's'} in ${seconds(cycle.negative.validDurationMs)} armed; ${cycle.negative.restarts} restart${cycle.negative.restarts === 1 ? '' : 's'}`);
   }
@@ -46,6 +50,7 @@ export function FailedView({ snapshot, session }: ViewProps) {
         <button type="button" className="button" onClick={() => session.startBaseline()}><Icon name="refresh" />Redo the rest check</button>
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch)</button>
       </div>
+      {!snapshot.approvedModels.length && <SavedProfiles snapshot={snapshot} session={session} />}
       <EvidencePanel snapshot={snapshot} />
     </>
   );
@@ -59,7 +64,7 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         lead="The computer checked the signal. You decide whether this is a movement you are comfortable repeating." />
       <div className="result-card">
         <span className="result-icon"><Icon name="check" size={26} /></span>
-        <h2>{snapshot.candidate?.label ?? 'Your movement'}</h2>
+        <h2>{snapshot.restoring ? `Saved profile “${snapshot.restoring}”` : snapshot.candidate?.label ?? 'Your movement'}</h2>
         <div className="evidence-grid">
           <div><strong>{cycle?.heldOut.filter((attempt) => attempt.passed).length ?? 0} / {cycle?.heldOut.length ?? 0}</strong><span>separate checks passed</span></div>
           <div><strong>{cycle?.negative?.eventCount ?? '—'}</strong><span>accidental selections in {cycle?.negative ? seconds(cycle.negative.validDurationMs) : '—'} of everyday activity</span></div>

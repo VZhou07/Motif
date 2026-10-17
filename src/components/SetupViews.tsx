@@ -4,6 +4,7 @@ import { liveDeviation, MOVEMENT_OPTIONS, type MovementOption } from '../app/mov
 import type { MotifSession } from '../app/session';
 import type { SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
+import { SavedProfiles } from './ProfileViews';
 import { DecisionList } from './ScanBoard';
 
 export interface ViewProps { snapshot: SessionSnapshot; session: MotifSession }
@@ -28,6 +29,7 @@ export function WelcomeView({ snapshot, session, onStartCamera }: ViewProps & { 
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch) instead</button>
       </div>
       <p className="helper-copy">A helper may assist with camera permission and setup. After your movement is verified and approved, communication, pause, speed and recalibration all work with that movement alone.</p>
+      <SavedProfiles snapshot={snapshot} session={session} />
       <SetupOptions snapshot={snapshot} session={session} />
       <div className="journey-cards">
         {[['01', 'Settle in', 'Ten quiet seconds so Motif learns your own resting variation.'],
