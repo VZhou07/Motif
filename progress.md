@@ -2,18 +2,29 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
-## Latest focused task — Back to start from assisted input (R15)
+## Latest focused task — merge of main into cat-features (R17)
 
-- User asked for the same "Done, back to start screen" button inside assisted input started from the start screen. State: **software verified; human check pending** (click it in the real app). R15 reasoning APPROVED with conditions; testing review FAIL → practice test added → PASS (374 tests, tsc, build). Committed locally after R14 commits; nothing pushed; no processes running.
+- User asked to resolve the merge of `main` (a0be7f0: wink channels, automatic Last setup, quick Continue) into `cat-features` (R15 one-hour reuse, R16 back to start). User decision: keep main's automatic saving and Continue, keep both back-to-start buttons, apply the one-hour rule to Continue (check times stored with the profile).
+- State: **software verified; human acceptance pending.** R17 revision 1 NOT APPROVED (B1 failed restore kept reusable times; B2 disclosures) → revision 2 APPROVED before code. Independent testing review PASS after one added disclosure test (tsc, vitest 31 files/393, build; 10 mutations caught; untestable equivalents noted). Merge committed locally; nothing pushed; no processes running.
+- Files: `src/app/session.ts`, `src/app/profiles.ts` (`checks`), `src/app/session.test-support.ts` (wallClock), `src/components/CommunicationView.tsx`, `ProfileViews.tsx`, `ReviewViews.tsx`, `src/App.test.tsx`, `src/app/session.profiles.test.ts`, docs. Pending person check: Continue within and after an hour with a real camera.
 
-## Latest focused task — save panel, Back to start, one-hour check reuse (R14)
+## Branch cat-features — Back to start from assisted input (R16, numbered R15 on that branch)
 
-- User (awake, 2026-10-17) asked: save panel should visibly finish; a button returns to the start screen after saving; restoring the same profile within an hour should not repeat the rest check or movement checks done within that hour. Base `ba15850`, uncommitted working tree.
-- State: **software verified; human acceptance pending.** R14 revision 1 NOT APPROVED (B1 skipped checks refreshed times; B2 stale memory after other activity) → revision 2 APPROVED by the independent reasoning reviewer before code. Independent testing review: first FAIL (5 untested rules: exact hour, partial stamping, reuse gate, assisted clear, reused-rest mismatch, reused rest time) → tests added → re-check PASS (tsc exit 0; vitest 31 files/370 PASS; build PASS; mutations M1–M10 each caught; M4 equivalent).
-- Files: `src/app/session.ts` (returnToStart, restore reuse, isRecent, stampChecks), `src/app/profiles.ts` (modelKey), `src/components/ProfileViews.tsx`, `src/App.test.tsx`, `src/app/session.profiles.test.ts`, docs. Committed as small local commits after `ba15850` (see `git log`); nothing pushed; no processes left running.
-- Pending person check: save → Done, back to start screen → restore within and after an hour with a real camera.
+- Same "Done, back to start screen" button inside assisted input started from the start screen. Software verified (374 tests then); human check pending.
 
-## Latest focused task — camera diagnostics and Rest / Action cues (R13)
+## Branch cat-features — save panel, Back to start, one-hour reuse (R15, numbered R14 on that branch)
+
+- Back to start after saving; one-hour in-memory check reuse. Superseded in the merge by R17 (main's automatic Last setup with stored check times). Independent reviews passed on that branch (370 tests).
+
+## Latest focused task — wink channels and peak hold (R14)
+
+User: blink affects close-one-eye; only Open mouth works well. **Software verified; real-user wink/hold pending.** R14 revision 2 independently APPROVED (wink_rereview) before code. Independent r14_testing BLOCKING (4× skip and density untested) → tests added → recheck PASS (tsc, vitest 364, build). Worker ownership released. No real webcam. Overall Goal paused.
+
+- Wink: `winkLeft/Right = clamp(ipsi blink − contra blink)` from raw blendshapes; chooser/discovery Close-eye uses wink only; wink `activationMs` 500, others 250. A two-eye blink is near 0 wink.
+- Peak hold: Action strength is the best dense ≥600 ms timestamp slice (q25), skipping internally spiky windows (q75 > 4× q25). Rest / R12 tails stay time-fixed. Old profiles refuse restore on the changed feature schema.
+- Next person step: refresh `npm run dev`, try Close one eye without blinking both, and try eyebrow/head/lips with a short hold. Overlay still explains Rest vs Action. Commit locally without a Co-authored-by trailer if you want this saved (`Add wink peak holds`, `Test wink peak holds`, `Record wink hold checks`). No real camera was opened here. Nothing pushed.
+
+## Previous focused task — camera diagnostics and Rest / Action cues (R13)
 
 - User reported calibration still fails; requested camera overlay, Rest↔Action beeps, Rest/Action only at five seconds each. Base `2ee25cf`. Focused task; overall Goal stays paused.
 - State: **software verified; real-user calibration/comfort/beep audibility pending.** R13 revision 1 and 2 independently APPROVED by overlay_review before the matching code. Independent r13_testing BLOCKING (pending-at-boundary fixture) → fixture fix → recheck PASS. Coordinator: tsc PASS; vitest 31 files/353 PASS; `npm run build` PASS; tester also ran browser-check 67/67 with a synthetic camera.
@@ -35,14 +46,14 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 
 ## Resume first (next agent)
 
-1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R13 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R14 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
 2. Run `git status` and `git log --oneline -n 10`. Expected: compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last passing code/test commits: `4b15c3b Add rest action diagnostics`, `ba253df Test rest action diagnostics`. Coordinator: typecheck PASS; vitest 31 files/353 PASS; build PASS. Independent r13_testing: tsc, 353 tests, build, browser 67/67, pending-at-boundary recheck PASS. Prior baseline `2ee25cf`.
+- Last passing **committed** code: `ba15850` (merge of debug-overlay) / `0a3a004 Move camera diagnostics aside`. R14 wink/peak-hold software is in the **working tree, not committed**: the environment's git wrapper injects `Co-authored-by: Cursor`, which this repo forbids. Coordinator: typecheck PASS; vitest 32 files/364 PASS; build PASS. Independent r14_testing recheck PASS. Prior R13 software: tsc, 353 tests, build, browser 67/67. Nothing pushed.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)
@@ -101,3 +112,5 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 
 - Linux x64, Node 24.18.0. `npm ci` + `npm run setup:assets` worked online. No Chrome/Edge installed: `scripts/browser-check.mjs` falls back to Playwright's bundled Chromium (revision 1248, already present in the default Playwright cache; otherwise `npx playwright install chromium`). Baseline at `c72dfd0`: tsc PASS, vitest 12 files/110 PASS, build PASS, browser-check 12/12 PASS.
 - Coordinator: Claude Code (session 3). Commits from `f1291e7 Add bundled Chromium fallback` onward.
+
+- **User-directed change (2026-10-17, branch `fix-record-movement`):** one automatic profile ("Last setup", reserved name, no naming UI) saved on approval and scan-speed change; Continue restores it using saved resting summary numbers (no rest check, no movement re-checks, controls still need approval). This was done at the user's request without a separate reasoning review; independent review of the quick-restore path is still pending. Real-camera behaviour untested (camera covered).

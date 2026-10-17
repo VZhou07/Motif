@@ -1,11 +1,13 @@
 # Motif build update
 
-**New for you:** after **Save on this device**, the panel closes and says "Saved". A **Done, back to start screen** button then ends the session and returns to the start screen, where the profile can be restored. Assisted input (Space switch) started from the start screen has the same button; it clears the message and saves nothing.
+**Changed for you:**
+- **Close left/right eye** now means one eye; a two-eye blink should not fire it.
+- Other movements learn from a clear hold of about **0.6 seconds**.
+- Your setup saves automatically. **Done, back to start screen** (on the message screen, and inside assisted input) ends the session.
+- **Continue with your last setup** skips only checks that passed within the last hour; older ones run again. **Continue and re-check my movement** always checks everything. A failed restore makes the next Continue check everything. Confirming the controls is always asked.
 
-**Faster restore:** restoring the same profile on the same page within an hour skips the rest check and any movement checks done in that hour. Older checks are repeated. Confirming the controls is always still asked. A page reload always does the full checks.
+**Checked (automated):** typecheck PASS; 393 tests PASS; production build PASS. Designs and the merge reviewed and tested independently.
 
-**Checked (automated):** typecheck PASS; 374 tests PASS; production build PASS. Design and tests reviewed independently and passed.
+Camera processing stays on this computer. Saved data: movement settings, controls, phrases, scan speed, resting summary numbers and when checks passed; never video or messages. Profiles saved before the eye change ask you to set up again.
 
-**Earlier:** 5-second Rest / Action calibration with beeps, camera diagnostics, multiple movements, saved profiles and assisted Space-bar input remain. Camera processing stays on this computer.
-
-**Still needs a person:** real face tracking, comfort, beep audibility, hands-free use, and trying save → back to start → restore with a real camera. Nothing has been pushed.
+**Still needs a person:** real face tracking, blink vs one-eye, short holds, comfort, beeps, hands-free use, and Continue within and after an hour. Nothing has been pushed.

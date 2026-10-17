@@ -9,7 +9,7 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName, modelKey } from './profiles';
+import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
   type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
@@ -69,7 +69,7 @@ function actionWindowOf(trial: TrainingTrial): ActionWindow {
   return { startMs: trial.movement[0]?.timestampMs ?? Number.NaN, endMs: trial.restAfter[0]?.timestampMs ?? Number.NaN };
 }
 
-export interface SessionOptions { speech?: SpeechPort; clock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'> }
+export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'> }
 
 /**
  * Browser-independent orchestrator (R5). React renders `getSnapshot()` and forwards input.
@@ -79,13 +79,15 @@ export interface SessionOptions { speech?: SpeechPort; clock?: () => number; pro
 export class MotifSession {
   private readonly speech: SpeechPort;
   private readonly clock: () => number;
+  /** R17: wall-clock time for check times stored with a profile; capture timing keeps the monotonic `clock`. */
+  private readonly wallClock: () => number;
   private readonly store: ProfileStore;
   private cues: Pick<CueAudio, 'play' | 'stop'> | null = null;
   private profileList: ProfileList = { profiles: [], rejected: 0, available: true, readable: true };
   private activeProfile: string | null = null;
   private activeSignature: string | null = null;
   /** A saved profile being re-checked (R7). Its models never act until its controls are approved. */
-  private restoring: { profile: StoredProfile; models: GestureModel[] } | null = null;
+  private restoring: { profile: StoredProfile; models: GestureModel[]; quick: boolean } | null = null;
   private readonly processor = new FeatureProcessor();
   private readonly listeners = new Set<() => void>();
   private snap!: SessionSnapshot;
@@ -103,13 +105,13 @@ export class MotifSession {
 
   private baseline: Baseline | null = null;
   private approvedBaseline: Baseline | null = null;
-  /** R14: clock time of the rest check behind `baseline` / `approvedBaseline`. */
+  /** R15/R17: wall-clock time of the rest check behind `baseline` / `approvedBaseline`. */
   private baselineAt: number | null = null;
   private approvedBaselineAt: number | null = null;
-  /** R14: last passing positive check per model (by modelKey). Memory only; survives Back to start, not a reload. */
+  /** R15/R17: wall-clock time of each approved model's last passing positive check (by modelKey); stored with the profile. */
   private readonly checkedAt = new Map<string, number>();
-  /** R14: the profile just left with Back to start, with its rest check; cleared by any other rest check or profile. */
-  private recent: { name: string; baseline: Baseline; baselineAt: number } | null = null;
+  /** R17 B1: profiles whose failed restore could not be rewritten without times; their times are never reused. */
+  private readonly noReuse = new Set<string>();
   private choice: MovementChoice | null = null;
   private calibrationReport: TrainingDiagnostics | null = null;
   /** Overlay-only copy; never enters mappingSet, runtime, approval, or profiles. */
@@ -166,6 +168,7 @@ export class MotifSession {
   constructor(options: SessionOptions = {}) {
     this.speech = options.speech ?? silentSpeech;
     this.clock = options.clock ?? (() => performance.now());
+    this.wallClock = options.wallClock ?? (() => Date.now());
     this.store = options.profiles ?? createMemoryProfileStore();
     this.cues = options.cues ?? null;
     this.refreshProfiles();
@@ -313,7 +316,7 @@ export class MotifSession {
     if (update.kind === 'complete') {
       if (!update.value.ok) { this.fail('baseline', 'The rest check could not be used', update.value.reasons); return; }
       this.baseline = update.value.value;
-      this.baselineAt = this.clock();
+      this.baselineAt = this.wallClock();
       this.announce('Rest check complete.');
       if (this.restoring) this.beginRecheck(); else this.enterChoose();
       return;
@@ -554,6 +557,7 @@ export class MotifSession {
     this.diagnosticModel = (expectedId ? fromSet.find((model) => model.id === expectedId) : undefined)
       ?? this.candidate ?? this.diagnosticModel;
     this.candidate = null;
+    if (this.restoring) this.forgetChecks(this.restoring.profile);
     this.restoring = null;
     this.setStage('setup-failed');
     this.failure = { kind, title, reasons };
@@ -600,8 +604,8 @@ export class MotifSession {
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
-      if (!cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified'
-        || cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index])) return;
+      if (!cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified') return;
+      if (!cycle.quick && (cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index]))) return;
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
@@ -626,12 +630,14 @@ export class MotifSession {
       this.previousMapping = null;
       this.restoring = null;
       this.choice = null;
+      this.noReuse.delete(restored.profile.name.trim().toLowerCase());
       const { profile } = restored;
       this.activeProfile = profile.name;
       // Compared with what was saved, so approving different controls marks the setup unsaved.
       this.activeSignature = this.signature(profile.models, profile.mapping.assignments, profile.phrases, profile.scanIntervalMs);
       this.refreshProfiles();
     }
+    this.autoSaveProfile();
     this.enterPractice();
     this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.`);
   }
@@ -723,7 +729,6 @@ export class MotifSession {
     this.restoring = null;
     this.diagnosticModel = null;
     this.calibrationReport = null;
-    this.recent = null;
     this.setStage('baseline');
     this.baselineRecorder = new BaselineRecorder(CAPTURE_TIMING.baselineMs);
     this.announce('Rest comfortably for ten seconds.');
@@ -752,7 +757,6 @@ export class MotifSession {
     this.restoring = null;
     this.pendingMapping = null;
     if (this.recalibrating || this.adding) { this.baseline = this.approvedBaseline; this.baselineAt = this.approvedBaselineAt; }
-    this.recent = null;
     this.recalibrating = false;
     this.adding = false;
     this.inputMode = 'assisted';
@@ -906,18 +910,45 @@ export class MotifSession {
     return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, phrases, intervalMs]);
   }
 
+  /** Keeps the approved setup under a reserved name; failures (blocked or full storage) are silent and never affect input. */
+  private autoSaveProfile(): boolean {
+    if (!this.hasApproved || !this.mapping) return false;
+    const built = buildProfile({ name: AUTO_PROFILE_NAME, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases,
+      scanIntervalMs: this.intervalMs, baseline: this.approvedBaseline, checks: this.storedChecks() });
+    const saved = built.ok && this.store.save(built.value, true).ok;
+    this.refreshProfiles();
+    return saved;
+  }
+
+  /** R17: the real times of the approved rest check and of each approved movement's last passing check. */
+  private storedChecks(): StoredChecks {
+    const movementAt: Record<string, number> = {};
+    for (const model of this.approvedModels) {
+      const at = this.checkedAt.get(modelKey(model));
+      if (at !== undefined) movementAt[model.id] = at;
+    }
+    return { ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
+  }
+
+  /** R17 B1: after a failed restore, never skip that profile's checks again until fresh ones pass. */
+  private forgetChecks(profile: StoredProfile): void {
+    const { checks: _forgotten, ...rest } = profile;
+    if (!this.store.save(rest, true).ok) this.noReuse.add(profile.name.trim().toLowerCase());
+    this.refreshProfiles();
+  }
+
   /** Explicit, caregiver-assisted Save of the approved setup. Never reachable from the scanner. */
   saveProfile(name: string, replace = false): StoreResult {
     const refuse = (reason: string): StoreResult => { this.announce(reason); this.publish(); return { ok: false, code: 'invalid', reason }; };
     if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from practice or communication.');
-    const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs });
+    const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs, checks: this.storedChecks() });
     if (!built.ok) return refuse(built.reasons[0] ?? 'This setup cannot be saved.');
     const result = this.store.save(built.value, replace);
     this.refreshProfiles();
     if (result.ok) {
       this.activeProfile = built.value.name;
       this.activeSignature = this.signature();
-      this.announce(`Saved “${built.value.name}” on this device. Only movement settings, controls, phrases and scan speed were saved.`);
+      this.announce(`Saved “${built.value.name}” on this device. Only movement settings, controls, phrases, scan speed and when your checks last passed were saved.`);
     } else this.announce(result.reason);
     this.publish();
     return result;
@@ -940,14 +971,14 @@ export class MotifSession {
       this.publish();
       return true;
     }
-    if (!this.isRoutedStage() || !this.hasApproved || !this.activeProfile || this.profilesView().unsaved) {
-      this.announce('Save this setup first; going to the start screen ends this session.');
+    if (!this.isRoutedStage() || !this.hasApproved || !this.autoSaveProfile()) {
+      this.announce(this.hasApproved && this.isRoutedStage()
+        ? 'This browser could not keep your setup, so going back to the start screen would lose it.'
+        : 'Going back to the start screen is available once your controls are approved.');
       this.publish();
       return false;
     }
-    const saved = this.activeProfile;
-    this.recent = this.approvedBaseline && this.approvedBaselineAt !== null
-      ? { name: saved, baseline: this.approvedBaseline, baselineAt: this.approvedBaselineAt } : null;
+    this.checkedAt.clear();
     this.speech.cancel();
     this.cues?.stop();
     this.restoring = null;
@@ -991,7 +1022,7 @@ export class MotifSession {
     this.intervalMs = SESSION_LIMITS.scanDefaultMs;
     this.setStage('welcome');
     this.refreshProfiles();
-    this.announce(`Session ended. “${saved}” is saved on this device; restore it here within an hour to skip checks already done.`);
+    this.announce('Session ended. Your setup is saved on this device: choose Continue to pick up again. Checks that passed within the last hour are not repeated.');
     this.publish();
     return true;
   }
@@ -1015,7 +1046,8 @@ export class MotifSession {
   }
 
   /** Disarmed restore: fresh rest check → rest fit → re-checks → everyday activity → comfort → approval (R7). */
-  restoreProfile(name: string): boolean {
+  /** `quick` skips the movement re-checks and everyday-activity window; rest must still fit and controls still need approval. */
+  restoreProfile(name: string, quick = false): boolean {
     const refuse = (reason: string) => { this.announce(reason); this.publish(); return false; };
     if (!['welcome', 'setup-failed'].includes(this.stage) || this.hasApproved) return refuse('A saved profile can be restored from the start screen before any setup is approved.');
     if (this.camera !== 'running') return refuse('Start the camera first.');
@@ -1024,25 +1056,34 @@ export class MotifSession {
     const profile = this.store.get(name);
     if (!profile) return refuse(`The saved profile “${name}” could not be found or read.`);
     this.choice = null;
-    const recent = this.recent && sameName(this.recent.name, profile.name) ? this.recent : null;
     const models = profile.models.map((model) => ({ ...model }));
-    if (recent && this.isRecent(recent.baselineAt)) {
-      // R14: reuse the rest check from the last hour; beginBaseline's resets without a new recording.
+    // R17: Continue reuses only times stored with this profile; Re-check and a forgotten profile reuse nothing.
+    const reuse = quick && !this.noReuse.has(profile.name.trim().toLowerCase());
+    this.checkedAt.clear();
+    if (reuse) {
+      for (const model of models) {
+        const at = profile.checks?.movementAt[model.id];
+        if (at !== undefined) this.checkedAt.set(modelKey(model), at);
+      }
+    }
+    const restAt = profile.checks?.restAt;
+    if (reuse && profile.baseline && restAt !== undefined && this.isRecent(restAt)) {
+      // The saved resting numbers from a rest check within the hour stand in for today's; the controls still need approval.
       this.closeOpenCycle();
       this.candidate = null;
       this.diagnosticModel = null;
       this.calibrationReport = null;
-      this.baseline = recent.baseline;
-      this.baselineAt = recent.baselineAt;
-      this.restoring = { profile, models };
+      this.baseline = profile.baseline;
+      this.baselineAt = restAt;
+      this.restoring = { profile, models, quick };
       this.announce(`Restoring “${profile.name}”: the rest check from the last hour is reused. Nothing is turned on until you approve.`);
       this.beginRecheck();
-    } else {
-      this.beginBaseline();
-      this.recent = recent; // Same profile: movements checked within the hour still need no repeat.
-      this.restoring = { profile, models };
-      this.announce(`Restoring “${profile.name}”: rest comfortably for ten seconds. Nothing is turned on until you approve.`);
+      this.publish();
+      return true;
     }
+    this.beginBaseline();
+    this.restoring = { profile, models, quick };
+    this.announce(`Restoring “${profile.name}”: rest comfortably for ten seconds. Nothing is turned on until you approve.`);
     this.publish();
     return true;
   }
@@ -1066,22 +1107,20 @@ export class MotifSession {
     const { profile, models } = restoring;
     const assignments = profile.mapping.assignments;
     const ordered = [...models].sort((a, b) => Number(assignments[b.id] === 'select') - Number(assignments[a.id] === 'select'));
-    const reuse = this.recent !== null && sameName(this.recent.name, profile.name);
-    const due = ordered.filter((model) => !(reuse && this.isRecent(this.checkedAt.get(modelKey(model)))));
+    const due = ordered.filter((model) => !(restoring.quick && this.isRecent(this.checkedAt.get(modelKey(model)))));
     const skipped = ordered.length - due.length;
     const note = !skipped ? '' : due.length
       ? ` (${skipped} movement${skipped === 1 ? '' : 's'} checked within the last hour; not repeated)`
       : ' (all checked within the last hour; no attempts or everyday check this time)';
-    this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
-      outcome: 'in-progress', source: 'restored', verifiedIds: [], profile: profile.name });
     if (!due.length) {
-      const cycle = this.cycles[this.cycles.length - 1]!;
-      cycle.outcome = 'verified';
-      cycle.verifiedIds = models.map((model) => model.id);
+      this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
+        outcome: 'verified', source: 'restored', verifiedIds: [], profile: profile.name, quick: true });
       this.offerSavedControls();
-      this.announce('Your movements were checked within the last hour. Review your saved controls; nothing is turned on until you approve.');
+      this.announce('Your movements were checked within the last hour. Review your saved controls, then approve; practice comes first and nothing is spoken.');
       return;
     }
+    this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
+      outcome: 'in-progress', source: 'restored', verifiedIds: [], profile: profile.name });
     this.verifyPlan = due.flatMap((model) => (assignments[model.id] ? [model.id, model.id] : [model.id]));
     this.diagnosticModel = due[0] ?? null;
     this.setStage('verify');
@@ -1098,16 +1137,16 @@ export class MotifSession {
     this.enterMappingConfirm({ ...valid.value, id: 'saved', label: `Saved controls: ${describeMapping(restoring.models, valid.value)}` });
   }
 
-  /** R14: true only for a finite, non-negative age under an hour. */
+  /** R15/R17: true only for a finite, non-negative wall-clock age under an hour (a future time is stale). */
   private isRecent(at: number | null | undefined): boolean {
     if (at === null || at === undefined) return false;
-    const age = this.clock() - at;
+    const age = this.wallClock() - at;
     return Number.isFinite(age) && age >= 0 && age < RECENT_CHECK_MS;
   }
 
-  /** R14: stamp only movements with a passing positive attempt in this verified cycle; skipped ones keep their time. */
+  /** R15 B1: stamp only movements with a passing positive attempt in this verified cycle; skipped ones keep their time. */
   private stampChecks(cycle: CycleEvidence): void {
-    const now = this.clock();
+    const now = this.wallClock();
     const set = this.mappingSet();
     for (const attempt of cycle.heldOut) {
       const model = set.find((candidate) => candidate.id === attempt.expectedId);
@@ -1268,6 +1307,7 @@ export class MotifSession {
   private changeInterval(delta: number, nowMs: number): void {
     this.intervalMs = Math.max(SESSION_LIMITS.scanMinMs, Math.min(SESSION_LIMITS.scanMaxMs, this.intervalMs + delta));
     this.scanner?.setInterval(this.intervalMs, nowMs);
+    this.autoSaveProfile();
     this.announce(`Scanning every ${(this.intervalMs / 1_000).toFixed(1)} seconds.`);
   }
 

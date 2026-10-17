@@ -1,5 +1,4 @@
 import { Icon } from './Icon';
-import { SaveProfile } from './ProfileViews';
 import { EvidencePanel } from './ReviewViews';
 import { ScanButton, ScanHint } from './ScanBoard';
 import type { ViewProps } from './SetupViews';
@@ -65,7 +64,13 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           <span className="helper-copy">This ends assisted input and clears the message. Nothing is saved.</span>
         </div>
       )}
-      {!practice && <SaveProfile snapshot={snapshot} session={session} />}
+      {!practice && snapshot.profiles.available && <p className="helper-copy">Your setup is saved on this device automatically: movement settings, controls, phrases, scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
+      {!practice && snapshot.profiles.available && snapshot.approvedModels.length > 0 && snapshot.mapping && (
+        <div className="button-row">
+          <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>
+          <span className="helper-copy">This ends the session. Continue from the start screen skips checks that passed within the last hour, so only the same person should continue.</span>
+        </div>
+      )}
       {!practice && <EvidencePanel snapshot={snapshot} />}
     </>
   );
