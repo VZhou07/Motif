@@ -1,4 +1,4 @@
-import { FEATURE_IDS, type GestureModel, type Result } from '../domain/types';
+import { FEATURE_IDS, type Baseline, type GestureModel, type Result } from '../domain/types';
 import { isGestureModel } from '../engine/recognition';
 import { validateMapping, type Assignments, type Mapping } from './mapping';
 import { STARTER_PHRASES } from './types';
@@ -27,6 +27,8 @@ export interface StoredProfile {
   mapping: { assignments: Assignments };
   phrases: string[];
   scanIntervalMs: number;
+  /** Summary numbers of the resting face (never frames), so Continue can skip the rest check. Absent in older profiles. */
+  baseline?: Baseline;
 }
 
 const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
@@ -46,11 +48,26 @@ export function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+const STATISTIC_KEYS = ['center', 'noise', 'low', 'high'];
+
+function isBaseline(value: unknown): value is Baseline {
+  if (!isRecord(value) || !hasExactKeys(value, ['durationMs', 'samples', 'statistics'])) return false;
+  if (!Number.isFinite(value.durationMs) || !Number.isFinite(value.samples)) return false;
+  const statistics = value.statistics;
+  if (!isRecord(statistics) || !hasExactKeys(statistics, FEATURE_IDS)) return false;
+  return FEATURE_IDS.every((feature) => {
+    const entry = statistics[feature];
+    return isRecord(entry) && hasExactKeys(entry, STATISTIC_KEYS) && STATISTIC_KEYS.every((key) => Number.isFinite(entry[key]))
+      && (entry.noise as number) > 0;
+  });
+}
+
 /** Strict validation of anything read from storage (R7 revision 2, B3). */
 export function parseProfile(value: unknown): Result<StoredProfile> {
   if (!isRecord(value)) return { ok: false, reasons: ['A saved profile is not readable.'] };
   if (value.version !== PROFILE_VERSION) return { ok: false, reasons: ['This profile was made by a different version of Motif.'] };
-  if (!hasExactKeys(value, PROFILE_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  const withBaseline = Object.hasOwn(value, 'baseline');
+  if (!hasExactKeys(value, withBaseline ? [...PROFILE_KEYS, 'baseline'] : PROFILE_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
   if (value.featureSchema !== FEATURE_SCHEMA) return { ok: false, reasons: ['This profile uses a different set of face measurements.'] };
   const reasons: string[] = [];
   const name = value.name;
@@ -80,6 +97,7 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
     || !phrases.every((phrase) => typeof phrase === 'string' && phrase.trim().length > 0 && phrase.length <= PHRASE_MAX)) {
     reasons.push(`A profile must hold exactly ${STARTER_PHRASES.length} phrases of 1–${PHRASE_MAX} characters.`);
   }
+  if (withBaseline && !isBaseline(value.baseline)) reasons.push('The saved resting numbers are not readable.');
   const interval = value.scanIntervalMs;
   if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < PROFILE_SCAN.minMs || interval > PROFILE_SCAN.maxMs || interval % PROFILE_SCAN.stepMs !== 0) {
     reasons.push('The saved scan speed is out of range.');
@@ -88,7 +106,18 @@ export function parseProfile(value: unknown): Result<StoredProfile> {
   return { ok: true, value: value as unknown as StoredProfile };
 }
 
-export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; phrases: readonly string[]; scanIntervalMs: number }
+export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; phrases: readonly string[]; scanIntervalMs: number; baseline?: Baseline | null }
+
+/** Explicit fields only, so nothing extra attached to a live baseline is ever stored. */
+function copyBaseline(baseline: Baseline): Baseline {
+  return {
+    durationMs: baseline.durationMs, samples: baseline.samples,
+    statistics: Object.fromEntries(FEATURE_IDS.map((feature) => {
+      const { center, noise, low, high } = baseline.statistics[feature];
+      return [feature, { center, noise, low, high }];
+    })) as Baseline['statistics'],
+  };
+}
 
 /** Builds a profile from explicit fields only, then validates it exactly as a stored one. */
 export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
@@ -100,6 +129,7 @@ export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
     mapping: { assignments: { ...fields.mapping.assignments } },
     phrases: [...fields.phrases],
     scanIntervalMs: fields.scanIntervalMs,
+    ...(fields.baseline ? { baseline: copyBaseline(fields.baseline) } : {}),
   });
 }
 

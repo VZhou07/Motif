@@ -893,7 +893,7 @@ export class MotifSession {
   /** Keeps the approved setup under a reserved name; failures (blocked or full storage) are silent and never affect input. */
   private autoSaveProfile(): void {
     if (!this.hasApproved || !this.mapping) return;
-    const built = buildProfile({ name: AUTO_PROFILE_NAME, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs });
+    const built = buildProfile({ name: AUTO_PROFILE_NAME, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs, baseline: this.approvedBaseline });
     if (built.ok) this.store.save(built.value, true);
     this.refreshProfiles();
   }
@@ -944,6 +944,18 @@ export class MotifSession {
     const profile = this.store.get(name);
     if (!profile) return refuse(`The saved profile “${name}” could not be found or read.`);
     this.choice = null;
+    if (quick && profile.baseline) {
+      // The saved resting numbers stand in for today's rest check; the controls still need approval.
+      this.closeOpenCycle();
+      this.candidate = null;
+      this.diagnosticModel = null;
+      this.calibrationReport = null;
+      this.baseline = profile.baseline;
+      this.restoring = { profile, models: profile.models.map((model) => ({ ...model })), quick };
+      this.beginRecheck();
+      this.publish();
+      return true;
+    }
     this.beginBaseline();
     this.restoring = { profile, models: profile.models.map((model) => ({ ...model })), quick };
     this.announce(`Restoring “${profile.name}”: rest comfortably for ten seconds. Nothing is turned on until you approve.`);
