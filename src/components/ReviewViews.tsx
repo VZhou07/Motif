@@ -57,6 +57,7 @@ export function FailedView({ snapshot, session }: ViewProps) {
       {failure && <div className="error-banner" role="alert"><strong>What we observed</strong>{failure.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>}
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
       <div className="button-row" style={{ marginTop: 16 }}>
+        {failure?.kind === 'discovery' && <button type="button" className="button" onClick={() => session.startDiscovery()}>Look for movements again</button>}
         <button type="button" className="button" onClick={() => session.startBaseline()}><Icon name="refresh" />Redo the rest check</button>
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch)</button>
       </div>
