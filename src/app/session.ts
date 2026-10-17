@@ -925,6 +925,21 @@ export class MotifSession {
 
   /** Helper-only: end this session and return to the start screen, where a saved profile can be restored. The camera stays on. */
   returnToStart(): boolean {
+    if (this.stage === 'communication' && this.inputMode === 'assisted' && !this.hasApproved) {
+      // R15: assisted input without a movement setup has nothing to save; phrases and scan speed are kept.
+      this.speech.cancel();
+      this.cues?.stop();
+      this.message = [];
+      this.lastSpoken = null;
+      this.candidate = null;
+      this.diagnosticModel = null;
+      this.calibrationReport = null;
+      this.inputMode = 'gesture';
+      this.setStage('welcome');
+      this.announce('Back at the start screen. Nothing was saved.');
+      this.publish();
+      return true;
+    }
     if (!this.isRoutedStage() || !this.hasApproved || !this.activeProfile || this.profilesView().unsaved) {
       this.announce('Save this setup first; going to the start screen ends this session.');
       this.publish();
