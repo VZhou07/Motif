@@ -386,3 +386,45 @@ Engine: `cancelCause` for released, band, conflict (including a different moveme
 | --- | --- | --- | --- |
 | R8 revision 1 | r8_review | B1 failed-check/everyday keys are constant for approved movements or misattribute failed cycles; B2 runtime `cancelled` cannot distinguish release from invalidation/conflict; B3 tiring guessed the movement; B4 separation unguarded for edited profiles. Separation derivation confirmed correct for `fitGesture`. All resolved in revision 2. | CHANGES REQUIRED |
 | R8 revision 2 | r8_review (re-review) | B1–B4 resolved against current code; no new blockers. Non-blocking: edit stale text, pending-id mismatch → `conflict`, `tiring` stage routing/types/view, keep message across `tiring`; adopted. | APPROVED |
+
+## R9 — W7c: free movement discovery (revision 1)
+
+Status: DRAFT, awaiting independent reasoning review before any code. Owner: Claude Code coordinator (session 3). Builds on approved R4–R8.
+
+### Goal and limits
+
+Help a person find movements they can make, without a list, by watching a short period of free exploration and proposing **candidates**. A candidate is only a pre-filled movement choice: it has no model, cannot act, and must go through the unchanged R5/R6 path (three training attempts → frozen fit → held-out (and cross-check) attempts → neutral-armed everyday window → comfort/effort → mapping → `mapping-confirm` Approve). Discovery output is descriptive ("seen 3 times"), never proof of intent and never a score.
+
+### Flow
+
+- `choose` gains `Find my movements` (conventional button; and, when a restricted scanner exists there — adding or recalibrating — a scanned decision `discover`). It needs the current rest baseline (as `choose` already does).
+- `discover` (capture stage, in `CAPTURE_STAGES`; communication impossible; any old approved model is not run, exactly like training): prompt "Try any movements you can comfortably make, a few times each, resting in between." It records 20 s of **valid** processed frames (tracked frames only; an invalid frame or a > 250 ms gap ends the current segment and starts a new one; segments are analysed separately, so no episode spans a gap). The interruption cap (5) and a 60 s valid-time cap fail honestly as in R5; Cancel is available. Raw frames stay in memory only for analysis and are dropped as soon as results exist.
+- `discover-results`: a list of up to four candidates, each with a plain label, "seen N times", and companions ("moves together with: Purse lips"). Choosing one calls the existing `chooseMovement({feature, direction, label})`, so training starts as if a helper had picked it. Also offered: `Look again` (new discover capture), and `Choose from the full list` (back to `choose`). When adding/recalibrating, the restricted scanner (approved models) offers `discovered:<n>` targets, `discover-again`, `keep-current`; otherwise buttons only (first-run setup is assisted per UA2). With no candidates the view says so plainly and offers Look again / the full list.
+- When adding, candidates equal (feature + direction) to an approved movement are not offered; a candidate whose companions include an approved movement's feature is labelled "may interfere with “X” — the cross-check will test this".
+
+### Detection (pure, `src/app/discovery.ts`)
+
+`discoverCandidates(baseline, segments: FeatureFrame[][]): DiscoveryResult` where `DiscoveryResult = { candidates: Candidate[]; validMs: number }` and `Candidate = { feature, direction, label, episodes, companions: { feature, direction, label }[] }`.
+
+1. **Channels.** Every feature × direction (±1); `label` from `movementLabel`. Per channel, signed deviation `d = direction × (value − center)`. Thresholds from this person's rest: `rest = max(|low − center|, |high − center|)`, `on = max(8 × noise, 2 × rest, featureNoiseFloor × 8)`, `off = on / 2` (hysteresis, so jitter around `on` is not counted twice).
+2. **Episodes.** Within each segment, an episode starts when `d ≥ on` and ends when `d < off`; kept only if it lasts ≥ 300 ms (a sustainable hold longer than the 250 ms activation dwell) and ends with `d < off` inside the segment (a hold cut by the segment end is not counted).
+3. **Movement, not posture.** A channel is a candidate only with ≥ 2 kept episodes and with `d ≥ off` for at most 50 % of the valid time (a sustained shift or drift is rejected as posture, not a repeatable movement).
+4. **Grouping correlated signals.** For candidate channels A, B: `overlap = time where both are in an episode / min(time A in episodes, time B in episodes)`; `overlap ≥ 0.6` links them (union–find; opposite directions of one feature are never linked). Each group yields one candidate: its primary channel is the one with the most episodes, then the highest median `d / on` during its episodes, then feature order; the others become `companions`.
+5. **Order and cap.** Groups sorted by episodes (desc), then median `d / on` (desc), then feature order; at most four. Deterministic. Fewer than 10 s of valid time → no candidates ("Not enough clear tracking to look for movements").
+
+### Why these choices
+
+Personal thresholds (rest spread and noise) follow R1/R4: no global expression threshold. `on ≥ 8 × noise` and `≥ 2 × rest` keep candidates within what `fitGesture` can separate (it needs the weakest movement ≥ rest ceiling + 3 × noise), so a discovered movement has a realistic chance of training; training can still reject it. Hysteresis and the minimum duration reject blinks of noise and single spikes; the 50 % rule rejects posture changes; grouping turns one physical motion seen by several blendshapes into one candidate.
+
+### Failure modes
+
+Noise spikes (rejected by duration/hysteresis), posture drift (50 % rule), a single accidental motion (≥ 2 episodes), tracking gaps creating fake episodes (segments analysed separately; episodes cut by segment ends discarded), a movement that duplicates an approved one (filtered when adding), co-moving features silently stealing an old movement (labelled; cross-check enforces), a discovered candidate acting without verification (impossible: no model exists until training, and approval still gates), frames retained (dropped after analysis; never stored).
+
+### Tests before advancing
+
+Pure (`discovery.test.ts`): rest only → none; a repeated mouth opening → one `jawOpen +1` candidate seen N times; jaw and pucker co-moving → one candidate with a companion; two independent movements → two candidates; a single episode → none; < 300 ms spikes → none; a hold cut by a segment end not counted; a gap inside a hold splits and is not counted as two; sustained drift (> 50 %) → none; head yaw left and right → two candidates (±, never grouped); hysteresis jitter around `on` counts once; < 10 s valid → none with the reason; cap 4; deterministic. Session: `choose` → discover → results; choosing a candidate enters `training` with that choice and nothing approved; discovery creates no model and communication stays impossible; cancel and interruption cap; when adding, approved movements filtered, scanned `discovered:<n>` selection by an approved movement, `keep-current` exits; frames dropped (snapshot holds only candidate summaries). RTL: results list, empty state. Then typecheck, build, browser check, independent testing review.
+
+### R9 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
