@@ -112,7 +112,8 @@ describe('save to Favourites', () => {
     expect(writes()).toBe(before + 1);
     expect(h.snap.announcement).toMatch(/including 1 favourite\./);
     const raw = storage.data.get(PROFILE_KEY)!;
-    expect(JSON.parse(raw).profiles[0].vocabulary.groups[0].phrases).toEqual(['Yes. Thank you']);
+    const named = JSON.parse(raw).profiles.find((profile: { name: string }) => profile.name === 'Person A');
+    expect(named.vocabulary.groups[0].phrases).toEqual(['Yes. Thank you']);
     expect(raw).not.toMatch(/lastSpoken|"message"/);
   });
 
@@ -236,9 +237,7 @@ describe('editing phrases while paused (R14)', () => {
   it('cannot edit during practice', () => {
     const h = new Harness();
     h.calibrate();
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
     expect(h.snap.stage).toBe('practice');
     h.selectByGesture('pause');
     expect(h.session.editVocabulary({ kind: 'add-group', name: 'Family' }).ok).toBe(false);

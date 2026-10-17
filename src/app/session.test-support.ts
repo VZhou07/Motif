@@ -1,4 +1,4 @@
-import { FEATURE_IDS, type FeatureFrame, type FeatureId } from '../domain/types';
+import { deriveWinks, FEATURE_IDS, type FeatureFrame, type FeatureId } from '../domain/types';
 import type { ProfileStore } from './profiles';
 import { MotifSession } from './session';
 import type { MovementChoice, SessionSnapshot, SpeechPort } from './types';
@@ -13,9 +13,11 @@ export const CHEEK: Values = { cheekPuff: 0.7 };
 export const HEAD_WOBBLE = (t: number): Values => ({ headYaw: 6 * Math.sin(t / 900) });
 
 export function frameAt(timestampMs: number, overrides: Values = {}): FeatureFrame {
-  return { timestampMs, tracking: 'tracked', values: {
+  const values = {
     ...Object.fromEntries(FEATURE_IDS.map((id) => [id, id.startsWith('head') ? 0 : 0.1])), ...overrides,
-  } };
+  };
+  Object.assign(values, deriveWinks(values.eyeBlinkLeft!, values.eyeBlinkRight!));
+  return { timestampMs, tracking: 'tracked', values };
 }
 
 /** Test-only driver: a fake clock plus a simulated person producing numeric frames. */
@@ -32,7 +34,7 @@ export class Harness {
   stepMs = 50;
 
   constructor(options: { profiles?: ProfileStore } = {}) {
-    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, profiles: options.profiles });
+    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles });
   }
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }
@@ -47,6 +49,7 @@ export class Harness {
       const added = this.noise(this.now);
       frame = { ...frame, values: { ...frame.values } };
       for (const [id, delta] of Object.entries(added) as Array<[FeatureId, number]>) frame.values[id] = frame.values[id]! + delta;
+      Object.assign(frame.values, deriveWinks(frame.values.eyeBlinkLeft!, frame.values.eyeBlinkRight!));
     }
     this.session.ingest(tracking === 'tracked' ? frame : { timestampMs: this.now, tracking, values: {} }, this.now);
     this.session.tick(this.now);
@@ -179,9 +182,7 @@ export class Harness {
   /** Full setup through comfort, mapping choice + approval and practice, all by gesture. */
   setUpToCommunication(): void {
     this.calibrate();
-    this.selectByGesture('comfortable');
-    this.selectByGesture('map:0');
-    this.selectByGesture('approve-mapping');
+    this.selectByGesture('approve-comfortable');
     this.selectByGesture('finish-practice');
   }
 }

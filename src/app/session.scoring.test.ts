@@ -32,13 +32,13 @@ describe('effort and observed use (R8)', () => {
   it('asks about effort, records it per movement and continues either way', () => {
     const h = new Harness();
     h.calibrate();
-    expect(decisionIds(h)).toEqual(['comfortable', 'comfortable-effort', 'record-again', 'another-movement']);
+    expect(decisionIds(h)).toEqual(['record-again', 'approve-comfortable', 'approve-effort', 'another-movement']);
     const easy = new Harness();
     easy.calibrate();
-    easy.selectByGesture('comfortable');
+    easy.selectByGesture('approve-comfortable');
     expect(evidenceOf(easy, BROW_LABEL).effort).toBe('easy');
-    h.selectByGesture('comfortable-effort');
-    expect(h.snap.stage).toBe('mapping');
+    h.selectByGesture('approve-effort');
+    expect(h.snap.stage).toBe('practice');
     expect(evidenceOf(h, BROW_LABEL).effort).toBe('effort');
     expect(evidenceOf(h, BROW_LABEL).checks).toEqual({ passed: 2, total: 2 });
     expect(evidenceOf(h, BROW_LABEL).everyday.windows).toBe(1);

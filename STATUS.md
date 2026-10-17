@@ -1,11 +1,13 @@
 # Motif build update
 
-**New for you (C1):** messages are quicker to reach. The main list is now short: **Speak · Undo · Favourites · Quick · Needs · Pause · More**. Pick a group, then a phrase; it goes into your message and the highlight returns to Speak. **More** has Clear, Save to Favourites, Say again, speed, Practice and Recalibrate. **Back** and **Pause** are in every list, and an open list returns to the main list by itself after two quiet passes.
+**Now:** merging the latest `main` into `ethan-features` (not committed yet). Nothing is pushed.
 
-**Favourites:** More → Save message to Favourites → Save. They are kept for this session, and saved for good only when you save your profile. Helpers can edit groups during setup or while paused. Older saved profiles still open.
+**From your branch (C1):** a short main list, **Speak · Undo · Favourites · Quick · Needs · Pause · More**. Pick a group, then a phrase. **More** has Clear, Save to Favourites, Say again, speed, Practice and Recalibrate. Back and Pause are in every list; an open list returns to the main list after two quiet passes. Helpers can edit phrase groups during setup or while paused.
 
-**Checked (automated):** typecheck PASS; 478 tests PASS; production build PASS; 83/83 fake-camera browser checks PASS. An independent reviewer asked for two more tests; they were added and it then passed.
+**From `main`:** one **Get started** button, click a movement, then **Approve and practice**. Your setup is saved automatically as "Last setup"; **Continue** reuses checks from the last hour. Close one eye ignores two-eye blinks. **Done, back to start screen**.
 
-**Still needs a person:** whether groups are actually faster and less tiring with a real movement, whether the auto-return timing feels right, and the earlier camera, comfort and beep checks. See `ACCEPTANCE.md` C1 and 3.6.
+**Being decided in review:** with the automatic save, favourites you confirm are kept on this device with Last setup (assisted input without a movement still keeps them only until the page closes).
 
-**Note:** someone added Supabase packages to `package.json` (not part of this work); left untouched. Nothing has been pushed.
+**Still needs a person:** real camera, comfort, beeps, whether groups are faster, Continue within and after an hour. See `ACCEPTANCE.md` and `UX_ACCEPTANCE.md`.
+
+**Note:** someone added Supabase packages to `package.json`; left untouched.

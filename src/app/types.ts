@@ -58,6 +58,8 @@ export interface CycleEvidence {
   /** Ids of every model the held-out/re-check attempts and negative window were run on, once verified. */
   verifiedIds: string[];
   profile?: string;
+  /** Restored without movement re-checks: only today's rest was compared with the saved thresholds. */
+  quick?: boolean;
 }
 
 export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch' | 'discovery';
@@ -135,6 +137,8 @@ export interface SessionSnapshot {
   setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */
   recommendation: { id: string; reasons: string[] } | null;
+  /** On the first-movement comfort screen: what Approve will turn on (null elsewhere). */
+  comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
 }
@@ -155,6 +159,8 @@ export interface ProfilesView {
   active: string | null;
   /** True when the approved setup differs from what was last saved (or was never saved). */
   unsaved: boolean;
+  /** True when the saved setup includes resting numbers (legacy saves may not). */
+  hasBaseline: boolean;
 }
 
 export interface SpeechPort {

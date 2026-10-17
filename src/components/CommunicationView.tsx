@@ -1,6 +1,5 @@
 import { Icon } from './Icon';
 import { PhraseEditor } from './PhraseEditor';
-import { SaveProfile } from './ProfileViews';
 import { EvidencePanel } from './ReviewViews';
 import { ScanButton, ScanHint } from './ScanBoard';
 import type { ViewProps } from './SetupViews';
@@ -8,6 +7,7 @@ import type { ViewProps } from './SetupViews';
 export function CommunicationView({ snapshot, session }: ViewProps) {
   const scan = snapshot.scan;
   const practice = snapshot.stage === 'practice';
+  const favouriteCount = snapshot.vocabulary.groups[0]?.phrases.length ?? 0;
   const paused = scan?.paused ?? false;
   const activate = (id: string) => session.selectTarget(id);
   const tiles = scan?.targets.filter((target) => target.kind === 'phrase' || target.kind === 'group') ?? [];
@@ -84,7 +84,19 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
             : <p>Pause scanning first, so nothing can be selected while phrases change. Resume then starts from the main list if anything changed.</p>}
         </details>
       )}
-      {!practice && <SaveProfile snapshot={snapshot} session={session} />}
+      {!practice && snapshot.inputMode === 'assisted' && !snapshot.approvedModels.length && (
+        <div className="button-row">
+          <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>
+          <span className="helper-copy">This ends assisted input and clears the message. Nothing is saved.</span>
+        </div>
+      )}
+      {!practice && snapshot.profiles.available && snapshot.approvedModels.length > 0 && <p className="helper-copy">Your setup is saved on this device automatically: movement settings, controls, phrase groups (including {favouriteCount} favourite{favouriteCount === 1 ? '' : 's'}), scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
+      {!practice && snapshot.profiles.available && snapshot.approvedModels.length > 0 && snapshot.mapping && (
+        <div className="button-row">
+          <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>
+          <span className="helper-copy">This ends the session. Continue from the start screen skips checks that passed within the last hour, so only the same person should continue.</span>
+        </div>
+      )}
       {!practice && <EvidencePanel snapshot={snapshot} />}
     </>
   );

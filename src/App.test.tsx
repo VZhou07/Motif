@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
@@ -48,7 +48,7 @@ describe('Motif app', () => {
     const h = new Harness();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Your movement/);
-    expect(screen.getAllByRole('button', { name: /Start camera/ }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Get started/ }).length).toBe(1);
     expect(screen.getByRole('button', { name: /assisted input/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Speak message/ })).toBeNull();
     expect(screen.getByText(/stays on this device/)).toBeTruthy();
@@ -63,7 +63,7 @@ describe('Motif app', () => {
       throw error;
     });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker }} />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Start camera/ })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /Get started/ }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.some((alert) => /could not load/.test(alert.textContent ?? ''))).toBe(true);
     expect(h.snap.camera).toBe('error');
@@ -96,11 +96,9 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('2 / 2')).toBeTruthy();
     const current = document.querySelector('[aria-current="true"]');
-    expect(current?.textContent).toBe('Yes, comfortable and easy');
-    act(() => h.selectByGesture('comfortable'));
-    expect(document.querySelector('.mapping-explainer')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
-    act(() => h.selectByGesture('map:0'));
-    act(() => h.selectByGesture('approve-mapping'));
+    expect(current?.textContent).toBe('Record this movement again');
+    expect(document.querySelector('.comfort-preview')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
+    act(() => h.selectByGesture('approve-comfortable'));
     expect(screen.getByText(/NOTHING IS SPOKEN/)).toBeTruthy();
   });
 
@@ -205,45 +203,72 @@ describe('Motif app', () => {
     expect(document.querySelector('.control-hint')?.textContent).toMatch(/scanning is automatic for now/);
   });
 
-  it('saves the approved setup from communication, offering Replace for an existing name', () => {
+  it('saves the one setup automatically with no name form', () => {
     const storage = createMemoryStorage();
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
     h.setUpToCommunication();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    expect(screen.getByText(/Never saved: video, camera images, your messages/)).toBeTruthy();
-    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Alex' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
-    expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
-    expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles[0].name).toBe('Alex');
-    fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
-    expect(screen.getByRole('status').textContent).toMatch(/already exists/);
-    fireEvent.click(screen.getByRole('button', { name: 'Replace “Alex”' }));
-    expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
+    expect(screen.getByText(/saved on this device automatically/)).toBeTruthy();
+    expect(screen.queryByLabelText('Profile name')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Save on this device' })).toBeNull();
+    expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles.map((profile: { name: string }) => profile.name)).toEqual(['Last setup']);
   });
 
-  it('lists saved profiles on the welcome screen with restore and confirmed delete', () => {
+  it('goes back to the start screen from communication, where Continue picks up the saved setup', () => {
+    const storage = createMemoryStorage();
+    const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    h.setUpToCommunication();
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByText(/when your checks last passed/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
+    expect(h.session.getSnapshot().stage).toBe('welcome');
+    expect(screen.getByText(/Reuses checks from the last hour/)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
+    expect(h.session.getSnapshot().stage).toBe('mapping-confirm');
+  });
+
+  it('offers back to start inside assisted input started from the start screen, but not in practice', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch)' }));
+    act(() => h.click('practice')); // in More since C1 (R18)
+    expect(h.session.getSnapshot().stage).toBe('practice');
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+    act(() => h.session.selectTarget('finish-practice'));
+    expect(h.session.getSnapshot().stage).toBe('communication');
+    fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
+    expect(h.session.getSnapshot()).toMatchObject({ stage: 'welcome', inputMode: 'gesture' });
+  });
+
+  it('hides back to start during practice with a movement setup', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    h.setUpToCommunication();
+    act(() => h.stepTo('practice'));
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(h.session.getSnapshot().stage).toBe('practice');
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+  });
+
+  it('offers Continue and a confirmed delete for the saved setup on the welcome screen', async () => {
     const storage = createMemoryStorage();
     const first = new Harness({ profiles: createLocalProfileStore(() => storage) });
     first.setUpToCommunication();
-    first.session.saveProfile('Alex');
-    first.session.saveProfile('Sam');
     const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
     storage.setItem(PROFILE_KEY, JSON.stringify({ ...raw, profiles: [...raw.profiles, { broken: true }] }));
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    h.now = first.now + 60_000; // a reload within the hour, so Continue skips the checks (R17)
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    expect(screen.getByText('1 saved profile could not be read and was ignored.')).toBeTruthy();
-    const restore = screen.getByRole('button', { name: 'Restore “Alex”' }) as HTMLButtonElement;
-    expect(restore.disabled).toBe(true);
-    fireEvent.click(screen.getByRole('button', { name: 'Delete “Sam”' }));
+    expect(screen.getByText('1 saved item could not be read and was ignored.')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Continue with your last setup' }) as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete saved setup' }));
     fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
-    expect(screen.getByRole('button', { name: 'Delete “Sam”' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete “Sam”' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete “Sam”' }));
-    expect(screen.queryByText('Sam')).toBeNull();
-    act(() => h.session.setCamera('running'));
-    fireEvent.click(screen.getByRole('button', { name: 'Restore “Alex”' }));
-    expect(h.snap.stage).toBe('baseline');
-    expect(h.snap.restoring).toBe('Alex');
+    expect(screen.getByRole('button', { name: 'Continue with your last setup' })).toBeTruthy();
+    // With the camera off, Continue starts it first, then begins the disarmed re-check.
+    fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
+    await waitFor(() => expect(h.snap.stage).toBe('mapping-confirm'));
+    expect(h.snap.camera).toBe('running');
+    expect(h.snap.restoring).toBe('Last setup');
+    expect(screen.queryByRole('button', { name: 'Continue with your last setup' })).toBeNull();
   });
 
   it('shows per-movement evidence with denominators in the evidence panel', () => {
@@ -322,14 +347,12 @@ describe('Motif app', () => {
       ['choose', () => h.run(9_000)],
       ['training', () => h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' })],
       ['comfort', () => { h.followPrompts((snap) => snap.stage === 'negative'); h.run(11_000, (t) => ({ headYaw: 6 * Math.sin(t / 900) })); }],
-      ['mapping', () => h.selectByGesture('comfortable')],
-      ['mapping confirm', () => h.selectByGesture('map:0')],
-      ['practice', () => h.selectByGesture('approve-mapping')],
+      ['practice', () => h.selectByGesture('approve-comfortable')],
       ['communication', () => h.selectByGesture('finish-practice')],
       ['recalibrate', () => h.selectByGesture('recalibrate')],
       ['assisted', () => { h.selectByGesture('keep-current'); h.session.useAssisted(); }],
     ];
-    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'mapping', 'mapping-confirm', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
+    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
     for (const [index, [name, go]] of screens.entries()) {
       act(go);
       expect([name, h.snap.stage]).toEqual([name, stages[index]]);
@@ -345,7 +368,6 @@ describe('Motif app', () => {
     const storage = createMemoryStorage();
     const saver = new Harness({ profiles: createLocalProfileStore(() => storage) });
     saver.setUpToCommunication();
-    saver.session.saveProfile('Alex');
     const h = twoMovements();
     const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     act(() => h.stepTo('tiring'));
@@ -354,7 +376,7 @@ describe('Motif app', () => {
 
     const d = new Harness({ profiles: createLocalProfileStore(() => storage) });
     const second = render(<App runtime={{ session: d.session, speech: localSpeech(d), tracker: fakeTracker() }} />);
-    expect([d.snap.profiles.names, unnamed()]).toEqual([['Alex'], []]);
+    expect([d.snap.profiles.names, unnamed()]).toEqual([['Last setup'], []]);
     act(() => { d.session.setCamera('running'); d.session.startBaseline(); d.run(10_500); d.session.startDiscovery(); });
     expect([d.snap.stage, unnamed()]).toEqual(['discover', []]);
     act(() => d.run(20_500));

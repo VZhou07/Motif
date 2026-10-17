@@ -1,9 +1,12 @@
-import { FEATURE_IDS, type FeatureFrame, type FeatureId, type GestureModel, type TrainingTrial } from '../domain/types'
+import { deriveWinks, FEATURE_IDS, type FeatureFrame, type FeatureId, type GestureModel, type TrainingTrial } from '../domain/types'
 
 export function makeFrame(timestampMs: number, overrides: Partial<Record<FeatureId, number>> = {}): FeatureFrame {
-  return { timestampMs, tracking: 'tracked', values: {
-    ...Object.fromEntries(FEATURE_IDS.map((id) => [id, id.startsWith('head') ? 0 : 0.1])), ...overrides,
-  } }
+  const values = {
+    ...Object.fromEntries(FEATURE_IDS.map((id) => [id, id.startsWith('head') ? 0 : 0.1])),
+    ...overrides,
+  }
+  Object.assign(values, deriveWinks(values.eyeBlinkLeft!, values.eyeBlinkRight!))
+  return { timestampMs, tracking: 'tracked', values }
 }
 
 export function stream(start: number, duration: number, overrides: Partial<Record<FeatureId, number>> = {}, step = 50): FeatureFrame[] {

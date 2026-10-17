@@ -160,9 +160,7 @@ describe('auto-return after two counted wraps', () => {
   it('practice follows the same rule and never adds or speaks', () => {
     const h = new Harness();
     h.calibrate();
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
     expect(h.snap.stage).toBe('practice');
     expect(ids(h)).toEqual(['finish-practice', 'group:favourites', 'group:g1', 'group:g2', 'pause']);
     h.selectByGesture('phrase:g2:0');

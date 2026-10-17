@@ -1,19 +1,23 @@
-import { FEATURE_IDS, type GestureModel, type Result } from '../domain/types';
+import { FEATURE_IDS, type Baseline, type GestureModel, type Result } from '../domain/types';
 import { isGestureModel } from '../engine/recognition';
 import { validateMapping, type Assignments, type Mapping } from './mapping';
 import { STARTER_PHRASES } from './types';
 import { FAVOURITES_ID, parseVocabulary, type Vocabulary } from './vocabulary';
 
 /**
- * Opt-in local profiles (R7). Only approved movement thresholds, controls, phrases and scan
- * speed are stored; never video, frames, baseline statistics, evidence or messages.
- * The storage wrapper and each entry carry separate versions (R14 B3): the wrapper stays 1 so older
- * builds can still open the store, and entries are 2 (phrase groups). Version 1 entries migrate on read.
+ * Local profiles (R7). Only approved movement thresholds, controls, phrase groups (including
+ * Favourites), scan speed, the automatic setup's resting summary numbers and the times its checks
+ * last passed (R17) are stored; never video, frames, evidence or messages.
+ * The storage wrapper and each entry carry separate versions (R18, numbered R14 on ethan-features):
+ * the wrapper stays 1 so older builds can still open the store, and entries are 2 (phrase groups).
+ * Version 1 entries migrate on read (R19: keeping their optional resting numbers and check times).
  */
 export const CONTAINER_VERSION = 1;
 export const PROFILE_VERSION = 2;
 export const PROFILE_KEY = 'motif.profiles';
 export const MAX_PROFILES = 8;
+/** Reserved name the session refreshes automatically after approval, so a page refresh never loses the setup. */
+export const AUTO_PROFILE_NAME = 'Last setup';
 export const FEATURE_SCHEMA = FEATURE_IDS.join(',');
 /** Mirrors SESSION_LIMITS scan bounds (checked by a test) without importing the session. */
 export const PROFILE_SCAN = { minMs: 1_000, maxMs: 6_000, stepMs: 500 } as const;
@@ -30,11 +34,25 @@ export interface StoredProfile {
   mapping: { assignments: Assignments };
   vocabulary: Vocabulary;
   scanIntervalMs: number;
+  /** Summary numbers of the resting face (never frames), so Continue can skip the rest check. Absent in older profiles. */
+  baseline?: Baseline;
+  /** R17: wall-clock times (ms) the rest check and each movement's checks last really passed. Absent in older profiles. */
+  checks?: StoredChecks;
+}
+
+export interface StoredChecks { restAt?: number; movementAt: Record<string, number> }
+
+/** Same model, same key: the saved fields in a fixed order (R15/R17 recent-check times). */
+export function modelKey(model: GestureModel): string {
+  return JSON.stringify(MODEL_KEYS.map((key) => model[key as keyof GestureModel]));
 }
 
 const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'vocabulary', 'scanIntervalMs'];
 const V1_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
-const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
+export const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
+/** Present only when saved: resting numbers and check times (R17). */
+const OPTIONAL_KEYS = ['baseline', 'checks'];
+const keysOf = (value: Record<string, unknown>, required: readonly string[]) => [...required, ...OPTIONAL_KEYS.filter((key) => Object.hasOwn(value, key))];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -50,13 +68,38 @@ export function sameName(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
 }
 
+const STATISTIC_KEYS = ['center', 'noise', 'low', 'high'];
+
+function isBaseline(value: unknown): value is Baseline {
+  if (!isRecord(value) || !hasExactKeys(value, ['durationMs', 'samples', 'statistics'])) return false;
+  if (!Number.isFinite(value.durationMs) || !Number.isFinite(value.samples)) return false;
+  const statistics = value.statistics;
+  if (!isRecord(statistics) || !hasExactKeys(statistics, FEATURE_IDS)) return false;
+  return FEATURE_IDS.every((feature) => {
+    const entry = statistics[feature];
+    return isRecord(entry) && hasExactKeys(entry, STATISTIC_KEYS) && STATISTIC_KEYS.every((key) => Number.isFinite(entry[key]))
+      && (entry.noise as number) > 0;
+  });
+}
+
+function isChecks(value: unknown, ids: ReadonlySet<string>): value is StoredChecks {
+  if (!isRecord(value)) return false;
+  const withRest = Object.hasOwn(value, 'restAt');
+  if (!hasExactKeys(value, withRest ? ['restAt', 'movementAt'] : ['movementAt'])) return false;
+  const time = (at: unknown) => typeof at === 'number' && Number.isFinite(at) && at > 0;
+  if (withRest && !time(value.restAt)) return false;
+  const movementAt = value.movementAt;
+  return isRecord(movementAt) && Object.entries(movementAt).every(([id, at]) => ids.has(id) && time(at));
+}
+
 /**
  * A version 1 entry becomes version 2 with its six phrases kept, in order, as one group called "Phrases"
  * (no guessing at groups). Repeats are dropped because a group cannot hold the same phrase twice.
+ * Optional resting numbers and check times are carried over unchanged and validated as version 2.
  * Only the parsed copy changes; the stored bytes stay as they are until the entry is saved again.
  */
 function migrateV1(value: Record<string, unknown>): Result<Record<string, unknown>> {
-  if (!hasExactKeys(value, V1_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  if (!hasExactKeys(value, keysOf(value, V1_KEYS))) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
   const { phrases, ...rest } = value;
   if (!Array.isArray(phrases) || phrases.length !== STARTER_PHRASES.length
     || !phrases.every((phrase) => typeof phrase === 'string' && phrase.trim().length > 0 && phrase.length <= V1_PHRASE_MAX)) {
@@ -78,7 +121,9 @@ export function parseProfile(input: unknown): Result<StoredProfile> {
     value = migrated.value;
   }
   if (value.version !== PROFILE_VERSION) return { ok: false, reasons: ['This profile was made by a different version of Motif.'] };
-  if (!hasExactKeys(value, PROFILE_KEYS)) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
+  const withBaseline = Object.hasOwn(value, 'baseline');
+  const withChecks = Object.hasOwn(value, 'checks');
+  if (!hasExactKeys(value, keysOf(value, PROFILE_KEYS))) return { ok: false, reasons: ['This profile has missing or unexpected data.'] };
   if (value.featureSchema !== FEATURE_SCHEMA) return { ok: false, reasons: ['This profile uses a different set of face measurements.'] };
   const reasons: string[] = [];
   const name = value.name;
@@ -105,6 +150,9 @@ export function parseProfile(input: unknown): Result<StoredProfile> {
   }
   const vocabulary = parseVocabulary(value.vocabulary);
   if (!vocabulary.ok) reasons.push(...vocabulary.reasons);
+  if (withBaseline && !isBaseline(value.baseline)) reasons.push('The saved resting numbers are not readable.');
+  const ids = new Set(Array.isArray(models) ? models.map((model) => (isRecord(model) ? model.id : undefined)).filter((id): id is string => typeof id === 'string') : []);
+  if (withChecks && !isChecks(value.checks, ids)) reasons.push('The saved check times are not readable.');
   const interval = value.scanIntervalMs;
   if (typeof interval !== 'number' || !Number.isFinite(interval) || interval < PROFILE_SCAN.minMs || interval > PROFILE_SCAN.maxMs || interval % PROFILE_SCAN.stepMs !== 0) {
     reasons.push('The saved scan speed is out of range.');
@@ -113,7 +161,18 @@ export function parseProfile(input: unknown): Result<StoredProfile> {
   return { ok: true, value: { ...(value as unknown as StoredProfile), vocabulary: vocabulary.value } };
 }
 
-export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; vocabulary: Vocabulary; scanIntervalMs: number }
+export interface ProfileFields { name: string; models: readonly GestureModel[]; mapping: Mapping; vocabulary: Vocabulary; scanIntervalMs: number; baseline?: Baseline | null; checks?: StoredChecks | null }
+
+/** Explicit fields only, so nothing extra attached to a live baseline is ever stored. */
+function copyBaseline(baseline: Baseline): Baseline {
+  return {
+    durationMs: baseline.durationMs, samples: baseline.samples,
+    statistics: Object.fromEntries(FEATURE_IDS.map((feature) => {
+      const { center, noise, low, high } = baseline.statistics[feature];
+      return [feature, { center, noise, low, high }];
+    })) as Baseline['statistics'],
+  };
+}
 
 /** Builds a profile from explicit fields only, then validates it exactly as a stored one. */
 export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
@@ -125,6 +184,8 @@ export function buildProfile(fields: ProfileFields): Result<StoredProfile> {
     mapping: { assignments: { ...fields.mapping.assignments } },
     vocabulary: fields.vocabulary,
     scanIntervalMs: fields.scanIntervalMs,
+    ...(fields.baseline ? { baseline: copyBaseline(fields.baseline) } : {}),
+    ...(fields.checks ? { checks: { ...(fields.checks.restAt !== undefined ? { restAt: fields.checks.restAt } : {}), movementAt: { ...fields.checks.movementAt } } } : {}),
   });
 }
 

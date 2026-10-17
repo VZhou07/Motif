@@ -5,7 +5,8 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software sc
 ## Current task — merge `origin/main` into `ethan-features` (R19)
 
 - User (awake, 2026-10-17): "merge main". Base: branch `ethan-features` at the commit after this note; `origin/main` at `e2d5871`. Trial merge (throwaway worktree, removed) conflicts in 10 files.
-- State: **reviewing** — R19 design drafted (scratchpad draft, to be written into reasoning.md during the merge); independent reasoning review (r19_review) running. No merge started in the working tree yet.
+- State: **implementing** — merge IN PROGRESS in the working tree (`git merge --no-commit origin/main`, not yet committed). Code conflicts resolved (profiles v2 + optional baseline/checks; session vocabulary in autosave/save/restore/returnToStart; main's layout without the named Save panel); tsc PASS; failing tests fixed by navigation/label/approve-comfortable only. R19 revision 1 BLOCKING (B1 a fresh setup could overwrite saved favourites; B2 draft still described the removed Save panel) → revision 2 (seed vocabulary from Last setup, keep it on back to start, uniform autosave, changed-assertion list) sent for re-check. Full vitest on the merged tree: 39 files/584 PASS; build PASS; browser check running (first run exceeded 10 minutes). R19 text: scratchpad draft, appended to reasoning.md after the verdict.
+- If interrupted: `git status` shows the merge state; finish with `git add` + `git commit` once tsc and the full vitest pass, or `git merge --abort` to return to `0c3c083`.
 - Owner: Claude Code coordinator. Files: all conflict files plus tests adapted for navigation. Do not push. Leave the unrelated Supabase edits in `package.json`/`package-lock.json` uncommitted.
 - Next action: after R19 is APPROVED, `git merge --no-commit origin/main`, resolve, run tsc + full vitest, commit the merge; then follow-up small commits (favourite autosave rule, tests, docs); then independent testing review.
 
@@ -19,6 +20,28 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software sc
 - Not ours: `package.json`/`package-lock.json` gained `@supabase/ssr` and `@supabase/supabase-js` at 15:06 from another process; left untouched and uncommitted. A backend is outside plan.md scope; user to decide.
 - Next action: none required for C1 software. Optional non-blocking polish (needs its own test review): N4 refresh tiles while paused after an edit, N5 resync group-name field, N6 copy vocabulary in the snapshot. Person: run ACCEPTANCE.md C1.1–C1.9 and 3.6. No processes left running; worker ownership released.
 - Rule: every commit passes `npx tsc --noEmit` and the full `npx vitest run`; browser-check at C1b, C1d, C1f, C1g. Add the cross-build duplicate-name note to README in C1g.
+
+## Latest focused task — merge of main into cat-features (R17)
+
+- User asked to resolve the merge of `main` (a0be7f0: wink channels, automatic Last setup, quick Continue) into `cat-features` (R15 one-hour reuse, R16 back to start). User decision: keep main's automatic saving and Continue, keep both back-to-start buttons, apply the one-hour rule to Continue (check times stored with the profile).
+- State: **software verified; human acceptance pending.** R17 revision 1 NOT APPROVED (B1 failed restore kept reusable times; B2 disclosures) → revision 2 APPROVED before code. Independent testing review PASS after one added disclosure test (tsc, vitest 31 files/393, build; 10 mutations caught; untestable equivalents noted). Merge committed locally; nothing pushed; no processes running.
+- Files: `src/app/session.ts`, `src/app/profiles.ts` (`checks`), `src/app/session.test-support.ts` (wallClock), `src/components/CommunicationView.tsx`, `ProfileViews.tsx`, `ReviewViews.tsx`, `src/App.test.tsx`, `src/app/session.profiles.test.ts`, docs. Pending person check: Continue within and after an hour with a real camera.
+
+## Branch cat-features — Back to start from assisted input (R16, numbered R15 on that branch)
+
+- Same "Done, back to start screen" button inside assisted input started from the start screen. Software verified (374 tests then); human check pending.
+
+## Branch cat-features — save panel, Back to start, one-hour reuse (R15, numbered R14 on that branch)
+
+- Back to start after saving; one-hour in-memory check reuse. Superseded in the merge by R17 (main's automatic Last setup with stored check times). Independent reviews passed on that branch (370 tests).
+
+## Latest focused task — wink channels and peak hold (R14)
+
+User: blink affects close-one-eye; only Open mouth works well. **Software verified; real-user wink/hold pending.** R14 revision 2 independently APPROVED (wink_rereview) before code. Independent r14_testing BLOCKING (4× skip and density untested) → tests added → recheck PASS (tsc, vitest 364, build). Worker ownership released. No real webcam. Overall Goal paused.
+
+- Wink: `winkLeft/Right = clamp(ipsi blink − contra blink)` from raw blendshapes; chooser/discovery Close-eye uses wink only; wink `activationMs` 500, others 250. A two-eye blink is near 0 wink.
+- Peak hold: Action strength is the best dense ≥600 ms timestamp slice (q25), skipping internally spiky windows (q75 > 4× q25). Rest / R12 tails stay time-fixed. Old profiles refuse restore on the changed feature schema.
+- Next person step: refresh `npm run dev`, try Close one eye without blinking both, and try eyebrow/head/lips with a short hold. Overlay still explains Rest vs Action. Commit locally without a Co-authored-by trailer if you want this saved (`Add wink peak holds`, `Test wink peak holds`, `Record wink hold checks`). No real camera was opened here. Nothing pushed.
 
 ## Previous focused task — camera diagnostics and Rest / Action cues (R13)
 
@@ -42,14 +65,14 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 
 ## Resume first (next agent)
 
-1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R13 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
+1. Read all of `AGENTS.md`, `plan.md`, `reasoning.md` (R14 revision 2 is the latest focused change) and `.agents/skills/motif-checkpoint/SKILL.md`.
 2. Run `git status` and `git log --oneline -n 10`. Expected: compare with "Last passing commit" below. No processes or extra worktrees were left running.
 3. On a fresh clone or another computer, do "Fresh clone setup" first. Then run the baseline checks below. All must pass before you change anything.
 4. Continue with the first unfinished item in "Exact next work" (software scope is complete; remaining items are optional or need a person). Commit each small passing chunk on its own (one module, feature step, test set or doc update). Never push.
 
 ## Last passing commit
 
-- Last passing code/test commits: `4b15c3b Add rest action diagnostics`, `ba253df Test rest action diagnostics`. Coordinator: typecheck PASS; vitest 31 files/353 PASS; build PASS. Independent r13_testing: tsc, 353 tests, build, browser 67/67, pending-at-boundary recheck PASS. Prior baseline `2ee25cf`.
+- Last passing **committed** code: `ba15850` (merge of debug-overlay) / `0a3a004 Move camera diagnostics aside`. R14 wink/peak-hold software is in the **working tree, not committed**: the environment's git wrapper injects `Co-authored-by: Cursor`, which this repo forbids. Coordinator: typecheck PASS; vitest 32 files/364 PASS; build PASS. Independent r14_testing recheck PASS. Prior R13 software: tsc, 353 tests, build, browser 67/67. Nothing pushed.
 - History note: the large commit `e2da549 Add guided calibration app` was undone at the user's request and rebuilt as 34 small commits (`5c56db0 Add checkpoint skill` … `370af21 Add build handoff notes`) with an identical tree; each code commit passed tsc and its own tests. Nothing was pushed.
 
 ## Fresh clone setup (another computer)
@@ -108,3 +131,18 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 
 - Linux x64, Node 24.18.0. `npm ci` + `npm run setup:assets` worked online. No Chrome/Edge installed: `scripts/browser-check.mjs` falls back to Playwright's bundled Chromium (revision 1248, already present in the default Playwright cache; otherwise `npx playwright install chromium`). Baseline at `c72dfd0`: tsc PASS, vitest 12 files/110 PASS, build PASS, browser-check 12/12 PASS.
 - Coordinator: Claude Code (session 3). Commits from `f1291e7 Add bundled Chromium fallback` onward.
+
+- **User-directed change (2026-10-17, branch `fix-record-movement`):** one automatic profile ("Last setup", reserved name, no naming UI) saved on approval and scan-speed change; Continue restores it using saved resting summary numbers (no rest check, no movement re-checks, controls still need approval). This was done at the user's request without a separate reasoning review; independent review of the quick-restore path is still pending. Real-camera behaviour untested (camera covered).
+
+## UX build loop (branch ux-setup-flow off fix-record-movement `2040095`, started 2026-10-17)
+- Plan: `/Users/vivianyang/.claude/plans/pasted-content-id-2ddb-you-are-goofy-dragonfly.md`; criteria `UX_ACCEPTANCE.md`; design `reasoning.md` (UX slice 1).
+- Baseline: tsc clean, vitest 363/363 (31 files), build OK.
+- Slice 1 state: design APPROVED (rev 2, `9b52e22`); QA (agent ae97aab9...) writing `src/app/ux-setup.acceptance.test.ts` (QA owns it); developer implementing in useMotif.ts, SetupViews.tsx, CameraPanel.tsx, ProfileViews.tsx, session.ts (profilesView hasBaseline), types.ts, App.tsx. Round 0 of 3.
+- Next: implement slice 1, QA verify, commit small, then slice 2 (click-to-record) and slice 3 (merged approve screen).
+- **Slice 1 software verified; human acceptance pending (1.H).** Commits aff3cc6..4b1003f plus acceptance tests; last passing commit is the one after 'Add slice 1 acceptance tests'. Agents: dev a7a8cb8d..., QA ae97aab9... (resumable via SendMessage). Next: slice 2 (click-to-record, rename on Approve) needs a design in reasoning.md and a reviewer before coding. Round counter resets per slice.
+- Slice 2 (merged approve screen, first movement only): design written (reasoning.md 'UX slice 2'), criteria 2.1-2.8 in UX_ACCEPTANCE.md; next: reviewer (a0c73f94...) then QA (ae97aab9...) writes `src/app/ux-approve.acceptance.test.ts`, then dev (a7a8cb8d...). Slice 3 = click-to-record + rename on the Approve screen.
+- Slice 2 design APPROVED (rev 3, `d46f1aa`). QA extending `src/app/ux-approve.acceptance.test.ts`; developer implementing (session.ts decisions/preview, types.ts, ReviewViews.tsx ComfortView, tests it intentionally changes). Round 0 of 3.
+- **Slice 2 software verified; human acceptance pending (2.H).** Commits a91bc53, 4ff4d6b, tests 29a9a09 (412 tests). Slice 3 (click-to-record, rename on approve): design in reasoning.md 'UX slice 3', criteria 3.1-3.8 in UX_ACCEPTANCE.md; next: reviewer a0c73f94..., QA ae97aab9... writes `src/app/ux-record.acceptance.test.ts`, dev a7a8cb8d....
+- Slice 3 design APPROVED (rev 2, `6a34eda`). QA finishing `src/app/ux-record.acceptance.test.ts`; developer implementing (SetupViews.tsx ChooseView, ReviewViews.tsx ComfortView, session.ts renameMovement, types.ts, tests it intentionally changes). Round 0 of 3.
+- **Slice 3 software verified; human acceptance pending (3.H).** Commits a559869, 0b9463d; tests 00ff6b9 + focus test. `ux-setup-flow` complete in software: 431 tests, tsc, build pass. Human checks 1.H, 2.H, 3.H pending. Next branch: `ux-comm-screen` (criteria AC1-AC14 in the plan file) off `ux-setup-flow` or `fix-record-movement`; needs design + review first. Nothing pushed. Agents: dev a7a8cb8d..., QA ae97aab9..., reviewer a0c73f94... (resumable).
+- **Hold length per movement (slice H) reverted at the user's request (2026-10-17)** with a revert commit on ux-landing; the original commits 5df857b..fed9ba6 remain in history if it is wanted again. Tree matches 6315311 (simplified start screen). 431 tests, tsc, build pass.

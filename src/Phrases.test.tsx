@@ -87,7 +87,7 @@ describe('communication levels on screen', () => {
     expect(button('Save message to Favourites')).toBeTruthy();
   });
 
-  it('confirms a favourite on screen and counts it in the save panel', () => {
+  it('confirms a favourite on screen and counts it in the automatic-save note', () => {
     const h = new Harness();
     h.setUpToCommunication();
     show(h);
@@ -95,8 +95,8 @@ describe('communication levels on screen', () => {
     expect(screen.getByRole('heading', { name: 'Save to Favourites?' })).toBeTruthy();
     fireEvent.click(button('Save “Thank you” to Favourites'));
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual(['Thank you']);
-    expect(screen.getByText(/including 1 favourite\)/)).toBeTruthy();
-    expect(screen.getByText(/changed since saving|Save this setup on this device/)).toBeTruthy();
+    // main removed the named Save panel; the automatic-save note carries the count (R19).
+    expect(screen.getByText(/saved on this device automatically.*including 1 favourite\)/)).toBeTruthy();
   });
 
   it('the edit panel works only while paused, and Resume returns to the main list after a change', () => {
@@ -116,12 +116,10 @@ describe('communication levels on screen', () => {
     expect(button('Open Needs, 4 phrases')).toBeTruthy();
   });
 
-  it('practice shows groups but no editor, More, or save panel', () => {
+  it('practice shows groups but no editor or More', () => {
     const h = new Harness();
     h.calibrate();
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
     show(h);
     expect(button('Open Quick, 3 phrases')).toBeTruthy();
     expect(screen.queryByText('Edit phrases (helper)')).toBeNull();

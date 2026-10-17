@@ -4,6 +4,8 @@ export const FEATURE_DEFINITIONS = [
   { id: 'browInnerUp', label: 'Inner eyebrows', unit: 'coefficient', noiseFloor: 0.001 },
   { id: 'eyeBlinkLeft', label: 'Left eye closing', unit: 'coefficient', noiseFloor: 0.001 },
   { id: 'eyeBlinkRight', label: 'Right eye closing', unit: 'coefficient', noiseFloor: 0.001 },
+  { id: 'winkLeft', label: 'Left eye only', unit: 'coefficient', noiseFloor: 0.001 },
+  { id: 'winkRight', label: 'Right eye only', unit: 'coefficient', noiseFloor: 0.001 },
   { id: 'eyeWideLeft', label: 'Left eye opening', unit: 'coefficient', noiseFloor: 0.001 },
   { id: 'eyeWideRight', label: 'Right eye opening', unit: 'coefficient', noiseFloor: 0.001 },
   { id: 'jawOpen', label: 'Mouth opening', unit: 'coefficient', noiseFloor: 0.001 },
@@ -20,7 +22,16 @@ export const FEATURE_DEFINITIONS = [
 
 export type FeatureId = (typeof FEATURE_DEFINITIONS)[number]['id']
 export const FEATURE_IDS: readonly FeatureId[] = FEATURE_DEFINITIONS.map((feature) => feature.id)
+export const WINK_FEATURES = ['winkLeft', 'winkRight'] as const satisfies readonly FeatureId[]
 export type FeatureValues = Partial<Record<FeatureId, number>>
+
+/** Ipsilateral blink minus the other eye. A two-eye blink is near 0. */
+export function deriveWinks(eyeBlinkLeft: number, eyeBlinkRight: number): Pick<Record<FeatureId, number>, 'winkLeft' | 'winkRight'> {
+  return {
+    winkLeft: Math.max(0, Math.min(1, eyeBlinkLeft - eyeBlinkRight)),
+    winkRight: Math.max(0, Math.min(1, eyeBlinkRight - eyeBlinkLeft)),
+  }
+}
 export type TrackingState = 'tracked' | 'missing' | 'multiple' | 'invalid' | 'stale'
 
 /** All timestamps use the same monotonic millisecond clock as performance.now(). */
