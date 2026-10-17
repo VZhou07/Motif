@@ -127,4 +127,27 @@ describe('free movement discovery in the session (R9)', () => {
     h.session.chooseSetupTarget('discovered:0');
     expect(h.snap.stage).toBe('choose');
   });
+
+  it('clears an earlier movement choice so a discovery failure never offers to record it again', () => {
+    const h = atChoose();
+    h.session.chooseMovement({ feature: 'jawOpen', direction: 1, label: 'Open mouth' });
+    h.session.cancel();
+    expect(h.snap.choice?.label).toBe('Open mouth');
+    h.session.decide('another-movement');
+    h.session.startDiscovery();
+    expect(h.snap.choice).toBeNull();
+    for (let i = 0; i < 5; i += 1) { h.run(500); h.step(REST, 'missing'); }
+    expect(h.snap.failure?.kind).toBe('discovery');
+    expect(ids(h)).not.toContain('record-again');
+  });
+
+  it('drops explored frames: looking again never reuses an earlier exploration', () => {
+    const h = atChoose();
+    h.session.startDiscovery();
+    explore(h, every4s(MOUTH));
+    expect(h.snap.discovery?.candidates).toHaveLength(1);
+    h.session.decide('discover-again');
+    explore(h, () => REST);
+    expect(h.snap.discovery?.candidates).toEqual([]);
+  });
 });
