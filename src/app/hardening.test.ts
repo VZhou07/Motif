@@ -42,9 +42,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     b.session.chooseMovement(OPEN_MOUTH);
     b.followPrompts((snap) => snap.stage === 'negative', MOUTH);
     b.run(11_000, HEAD_WOBBLE);
-    b.selectByGesture('comfortable', MOUTH);
-    b.selectByGesture('map:0', MOUTH);
-    b.selectByGesture('approve-mapping', MOUTH);
+    b.selectByGesture('approve-comfortable', MOUTH);
     b.selectByGesture('finish-practice', MOUTH);
     b.selectByGesture('add-movement', MOUTH);
     b.session.chooseMovement(PUFF_CHEEKS);

@@ -87,11 +87,9 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('2 / 2')).toBeTruthy();
     const current = document.querySelector('[aria-current="true"]');
-    expect(current?.textContent).toBe('Yes, comfortable and easy');
-    act(() => h.selectByGesture('comfortable'));
-    expect(document.querySelector('.mapping-explainer')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
-    act(() => h.selectByGesture('map:0'));
-    act(() => h.selectByGesture('approve-mapping'));
+    expect(current?.textContent).toBe('Record this movement again');
+    expect(document.querySelector('.comfort-preview')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
+    act(() => h.selectByGesture('approve-comfortable'));
     expect(screen.getByText(/NOTHING IS SPOKEN/)).toBeTruthy();
   });
 
@@ -294,14 +292,12 @@ describe('Motif app', () => {
       ['choose', () => h.run(9_000)],
       ['training', () => h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' })],
       ['comfort', () => { h.followPrompts((snap) => snap.stage === 'negative'); h.run(11_000, (t) => ({ headYaw: 6 * Math.sin(t / 900) })); }],
-      ['mapping', () => h.selectByGesture('comfortable')],
-      ['mapping confirm', () => h.selectByGesture('map:0')],
-      ['practice', () => h.selectByGesture('approve-mapping')],
+      ['practice', () => h.selectByGesture('approve-comfortable')],
       ['communication', () => h.selectByGesture('finish-practice')],
       ['recalibrate', () => h.selectByGesture('recalibrate')],
       ['assisted', () => { h.selectByGesture('keep-current'); h.session.useAssisted(); }],
     ];
-    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'mapping', 'mapping-confirm', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
+    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
     for (const [index, [name, go]] of screens.entries()) {
       act(go);
       expect([name, h.snap.stage]).toEqual([name, stages[index]]);

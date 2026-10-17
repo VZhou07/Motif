@@ -136,9 +136,7 @@ export class Harness {
   /** Full setup through comfort, mapping choice + approval and practice, all by gesture. */
   setUpToCommunication(): void {
     this.calibrate();
-    this.selectByGesture('comfortable');
-    this.selectByGesture('map:0');
-    this.selectByGesture('approve-mapping');
+    this.selectByGesture('approve-comfortable');
     this.selectByGesture('finish-practice');
   }
 }
