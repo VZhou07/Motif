@@ -1,13 +1,13 @@
 # Motif build update
 
-**Changed for you:**
-- **Close left/right eye** now means one eye; a two-eye blink should not fire it.
-- Other movements learn from a clear hold of about **0.6 seconds**.
-- Your setup saves automatically. **Done, back to start screen** (on the message screen, and inside assisted input) ends the session.
-- **Continue with your last setup** skips only checks that passed within the last hour; older ones run again. **Continue and re-check my movement** always checks everything. A failed restore makes the next Continue check everything. Confirming the controls is always asked.
+**Branch `ux-landing` (includes the latest `main`):**
+- A simpler start screen: one **Get started** button, or **Continue with your last setup** if one is saved.
+- Setup is **Get started**, click a movement, **Approve and practice**. You can rename the movement on the approve screen.
+- With one movement, **Choose another movement** on the confirm screen goes back to picking a movement.
+- From `main`: **Close left/right eye** means one eye (a two-eye blink should not fire it); movements learn from a clear hold of about 0.6 s; **Done, back to start screen**; Continue reuses only checks from the last hour.
 
-**Checked (automated):** typecheck PASS; 393 tests PASS; production build PASS. Designs and the merge reviewed and tested independently.
+**Checked (automated):** see `progress.md` for the latest test, typecheck and build results.
 
-Camera processing stays on this computer. Saved data: movement settings, controls, phrases, scan speed, resting summary numbers and when checks passed; never video or messages. Profiles saved before the eye change ask you to set up again.
+**Needs you (real camera):** Get started starts the rest check by itself; clicking a movement starts recording; the approve screen is clear; blink vs one-eye; Continue within and after an hour.
 
-**Still needs a person:** real face tracking, blink vs one-eye, short holds, comfort, beeps, hands-free use, and Continue within and after an hour. Nothing has been pushed.
+Camera processing stays on this computer. Nothing is pushed.

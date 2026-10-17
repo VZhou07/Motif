@@ -43,7 +43,7 @@ describe('Motif app', () => {
     const h = new Harness();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Your movement/);
-    expect(screen.getAllByRole('button', { name: /Start camera/ }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /Get started/ }).length).toBe(1);
     expect(screen.getByRole('button', { name: /assisted input/i })).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Speak message/ })).toBeNull();
     expect(screen.getByText(/stays on this device/)).toBeTruthy();
@@ -58,7 +58,7 @@ describe('Motif app', () => {
       throw error;
     });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker }} />);
-    fireEvent.click(screen.getAllByRole('button', { name: /Start camera/ })[0]!);
+    fireEvent.click(screen.getByRole('button', { name: /Get started/ }));
     const alerts = await screen.findAllByRole('alert');
     expect(alerts.some((alert) => /could not load/.test(alert.textContent ?? ''))).toBe(true);
     expect(h.snap.camera).toBe('error');
@@ -87,11 +87,9 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('2 / 2')).toBeTruthy();
     const current = document.querySelector('[aria-current="true"]');
-    expect(current?.textContent).toBe('Yes, comfortable and easy');
-    act(() => h.selectByGesture('comfortable'));
-    expect(document.querySelector('.mapping-explainer')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
-    act(() => h.selectByGesture('map:0'));
-    act(() => h.selectByGesture('approve-mapping'));
+    expect(current?.textContent).toBe('Record this movement again');
+    expect(document.querySelector('.comfort-preview')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
+    act(() => h.selectByGesture('approve-comfortable'));
     expect(screen.getByText(/NOTHING IS SPOKEN/)).toBeTruthy();
   });
 
@@ -205,7 +203,7 @@ describe('Motif app', () => {
     expect(screen.getByText(/when your checks last passed/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
     expect(h.session.getSnapshot().stage).toBe('welcome');
-    expect(screen.getByText(/skips the rest check and movement checks that passed within the last hour/)).toBeTruthy();
+    expect(screen.getByText(/Reuses checks from the last hour/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Continue with your last setup' }));
     expect(h.session.getSnapshot().stage).toBe('mapping-confirm');
   });
@@ -213,7 +211,7 @@ describe('Motif app', () => {
   it('offers back to start inside assisted input started from the start screen, but not in practice', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch) instead' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch)' }));
     act(() => h.session.selectTarget('practice'));
     expect(h.session.getSnapshot().stage).toBe('practice');
     expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
@@ -330,14 +328,12 @@ describe('Motif app', () => {
       ['choose', () => h.run(9_000)],
       ['training', () => h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' })],
       ['comfort', () => { h.followPrompts((snap) => snap.stage === 'negative'); h.run(11_000, (t) => ({ headYaw: 6 * Math.sin(t / 900) })); }],
-      ['mapping', () => h.selectByGesture('comfortable')],
-      ['mapping confirm', () => h.selectByGesture('map:0')],
-      ['practice', () => h.selectByGesture('approve-mapping')],
+      ['practice', () => h.selectByGesture('approve-comfortable')],
       ['communication', () => h.selectByGesture('finish-practice')],
       ['recalibrate', () => h.selectByGesture('recalibrate')],
       ['assisted', () => { h.selectByGesture('keep-current'); h.session.useAssisted(); }],
     ];
-    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'mapping', 'mapping-confirm', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
+    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
     for (const [index, [name, go]] of screens.entries()) {
       act(go);
       expect([name, h.snap.stage]).toEqual([name, stages[index]]);

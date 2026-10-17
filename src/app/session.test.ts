@@ -16,15 +16,10 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     expect(h.snap.approvedModel).toBeNull();
     expect(h.snap.scan?.driver).toBe('gesture');
 
-    h.selectByGesture('comfortable');
-    expect(h.snap.stage).toBe('mapping');
-    expect(h.snap.approvedModel).toBeNull();
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['map:0', 'reject']);
-    h.selectByGesture('map:0');
-    expect(h.snap.stage).toBe('mapping-confirm');
+    // First movement: one approve screen replaces the separate comfort, mapping and confirm screens (UX slice 2).
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['record-again', 'approve-comfortable', 'approve-effort', 'another-movement']);
     expect(h.snap.mapping).toBeNull();
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping']);
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable');
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.approvedModel?.feature).toBe('browOuterUpLeft');
     expect(h.snap.mapping?.mode).toBe('auto');

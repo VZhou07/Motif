@@ -16,3 +16,7 @@
 .profile-list li { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
 .movement-evidence { padding-left: 18px; font-size: 12px; line-height: 1.7; margin-bottom: 16px; }
 .movement-evidence ul { padding-left: 18px; }
+
+/* Start screen only: text at least 14px (UX slice 1). */
+.start-screen .button,.start-screen .helper-copy,.start-screen .settings-card>p,.start-screen .settings-card .field-label,.start-screen .status-notice{font-size:14px}
+.start-primary,.saved-setup{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:8px 0 18px}.button-large{min-height:64px;padding:18px 30px;font-size:17px!important;border-radius:14px}.start-secondary{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-left:-19px}.start-secondary .button-row{flex-wrap:wrap}.start-screen .settings-card{margin-top:22px}.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
