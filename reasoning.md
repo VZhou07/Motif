@@ -1,5 +1,11 @@
 # Motif reasoning and independent review
 
+## Current caregiver foundation
+
+R16 revision2 design and explicit pre-code approval: [workstream reasoning](docs/workstreams/request-relay/reasoning.md). Authorized Supabase Free DB/Auth, server-scoped pairing/requests, exact-origin config/privacy and two-second authorized polling are implemented; hosted validation and feature integration remain pending. Independent testing caught and fixed config, response-correlation, reconnect and real-SDK lifecycle defects; see [durable progress](docs/workstreams/request-relay/progress.md).
+
+Common-base reconciliation revision1 is separately [written and independently approved](docs/workstreams/request-relay/reconciliation.md) before merge/code. It preserves committed main features, invalidates legacy cached verification only through a policy marker, and freezes the type-only browser command port. No active teammate checkout is modified.
+
 ## R1 — First vertical slice design (revision 2)
 
 Status: design APPROVED by `architecture_review` for R1 revision 2. The user subsequently approved product defaults and the expanded build scope in R3/UA1–UA3; current authorization is defined there. No application implementation has started. Earlier review rows preserve their historical pending states, not current user decisions.

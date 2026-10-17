@@ -78,7 +78,7 @@ Official references: [Codex subagents](https://developers.openai.com/codex/subag
 - Use time-based filtering, separate activation/release thresholds, minimum dwell, one action per hold, and neutral rearming. Invalid, missing, stale, ambiguous, or interrupted tracking must produce no action. Require fresh neutral after recovery or phase changes.
 - Never use model confidence as evidence of intention. Fit only on training attempts; evaluate separately on held-out attempts and negative activity. Present small-sample observations honestly.
 - Every mapping needs explicit user approval. After calibration, navigation, speech, Pause, Resume, and access to recalibration must remain operable using the available gesture(s). Support assisted setup without promising fully independent onboarding prematurely.
-- Process camera input locally. Do not upload/persist frames, raw video, or facial identity data. Store only approved minimal calibration profiles when the profile checkpoint is implemented. No backend, medical diagnosis, or emergency detection in this MVP.
+- Process camera input locally. Do not upload/persist frames, raw video, or facial identity data. Store only approved minimal calibration profiles. The selected caregiver expansion permits deliberate Auth/pairing/care-request traffic to the configured Supabase project under the shared client and server permissions. Do not add other backend data flows, medical diagnosis or emergency detection.
 
 ## Git rules
 

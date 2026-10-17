@@ -1,13 +1,10 @@
 # Motif build update
 
-The head/mouth conflict fix is ready to try at **http://127.0.0.1:5187/**. It runs separately on `fix/gesture-conflicts`; Grok's checkout and your teammate's communication screen were left untouched.
+I am Agent 3, building the Supabase accounts and request foundation on the separate `feature/request-relay` branch. It now has caregiver accounts, private groups, participant invitations, request updates and permission tests. The other three teammates own participant screens, the caregiver dashboard and browser controls.
 
-A clear movement can now work alongside small incidental movement. Two gestures reaching their action thresholds together still cancel input. Rest shows and optionally speaks the movement needed for the next Action, including after an interrupted attempt. Failed checks explain whether the movement was missed, repeated, confused with another, or actually ambiguous, with measured values.
+Independent tests passed: 455 tests, typecheck and configured browser privacy checks. The production build is being rechecked after installing the local camera runtime files. I am preparing one tested starting commit that includes the committed main changes, so everyone can build against the same API.
 
-Calibration still uses **5 seconds Rest / 5 seconds Action**, with the existing low/high beeps. No new communication buttons were added.
+Supabase does not need a GitHub link. Each laptop needs the exact `VITE_SUPABASE_URL` and `VITE_SUPABASE_PUBLISHABLE_KEY` variables. The shared project still needs its SQL migration, anonymous sign-in and private demo caregiver accounts; see `docs/supabase-setup.md`.
 
-Independent checks passed: **378 tests, typecheck, production build, and 67 fake-camera browser checks**. Tests reproduce mouth with tilt down and turn right, use them for separate existing controls, and reject actual simultaneous activation.
+The participant/dashboard screens and browser companion are not connected yet. Hosted delivery and real-person camera checks remain pending. Teammate checkouts and the separate head/mouth preview at port 5187 are untouched. Nothing pushed.
 
-**Still needs your try:** real mouth/head calibration, comfortable timing, direction labels, and audible cues. No real camera was opened during these checks. See `ACCEPTANCE.md` 6.6.
-
-The changes are committed locally in the separate branch. Nothing was merged or pushed.

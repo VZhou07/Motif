@@ -8,6 +8,8 @@ The full experience is: observe rest → discover candidate movements → repeat
 
 ## Decisions and authorization
 
+The later caregiver expansion is authorized in [the four-branch plan](docs/caregiver-demo-plan.md). Supabase Free is selected and the Agent3 DB/client foundation is implemented under R16rev2; [setup steps](docs/supabase-setup.md) include the Vite variables, migration and Auth configuration. Hosted checks and feature integration remain pending. Before dependent implementation, Agent3 provides one reconciled, passing contract commit. The historical backend-free scope below describes the original local MVP; deliberate account/pairing/request traffic is now approved, while camera/calibration processing remains local.
+
 | Item | Decision / status |
 | --- | --- |
 | Repository | Inspected: only README and initial Git commit existed. No existing application to preserve. |
