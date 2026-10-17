@@ -193,13 +193,33 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText(/Never saved: video, camera images, your messages/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Alex' } });
+    const panel = screen.getByText(/^Save this setup on this device/).closest('details')!;
+    fireEvent.click(screen.getByText(/^Save this setup on this device/));
+    expect(panel.open).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
-    expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
+    expect(screen.getByRole('status').textContent).toBe('Saved “Alex” on this device.');
+    expect(panel.open).toBe(false);
+    expect(panel.querySelector('summary')!.textContent).toMatch(/“Alex”/);
     expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles[0].name).toBe('Alex');
+    fireEvent.click(screen.getByText(/^Save this setup on this device/));
     fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
     expect(screen.getByRole('status').textContent).toMatch(/already exists/);
+    expect(panel.open).toBe(true);
     fireEvent.click(screen.getByRole('button', { name: 'Replace “Alex”' }));
-    expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
+    expect(screen.getByRole('status').textContent).toBe('Saved “Alex” on this device.');
+    expect(panel.open).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
+    expect(h.session.getSnapshot().stage).toBe('welcome');
+    expect(screen.getByRole('button', { name: 'Restore “Alex”' })).toBeTruthy();
+  });
+
+  it('offers back to start only once the current setup is saved', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    h.setUpToCommunication();
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+    expect(h.session.returnToStart()).toBe(false);
+    expect(h.session.getSnapshot().stage).toBe('communication');
   });
 
   it('lists saved profiles on the welcome screen with restore and confirmed delete', () => {
