@@ -112,3 +112,21 @@ Design: reasoning.md "UX simplify, slice A". Baseline 513 tests. QA owns `src/ux
 
 ### Slice A result (round 1 of 3)
 Software verified: U1-U12 PASS (57 acceptance tests plus 24 `progress.ts` unit tests). Coordinator rerun: vitest 38 files/595 PASS, tsc clean. QA: build OK; out-of-list edits (capture.ts, CameraDiagnostics.tsx, session.ts strings) are wording plus the additive `proposals` field; edits to existing tests follow removed or renamed copy only. Mutations caught: Rest current on quick restore, two primaries on failure, "armed" in evidence, diagnostics always shown, cards out of scan order (after QA strengthened that test). Accepted deviation: `record-again` is never primary, so Approve is primary on the comfort screen; scan order unchanged. **Human acceptance pending:** UH.
+
+# Branch ux-simplify, slice B: one Approve screen; Recalibrate and Tiring inside Helper
+
+Design: reasoning.md "UX simplify, slice B". Baseline 595 tests. QA owns `src/app/ux-approve-all.acceptance.test.ts`.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| V1 | TEST | Adding a second movement: after the checks, the comfort screen offers `record-again`, `approve-comfortable`, `effort-choose`, `choose-different`, `another-movement`, `keep-current` in that order (no `approve-effort` with 2+ movements); Approve turns on exactly the previewed controls and reaches practice with no mapping or confirm screen. Recalibrate: same flow; with 2+ approved movements the card says the others will be turned off. One movement: the slice 2 list is unchanged. |
+| V2 | TEST | The preview equals the approved mapping even when notes or tiring reports change between showing and approving; computing the preview writes no session state (proposals and recommendation unchanged). |
+| V3 | TEST | `effort-choose` records effort "effort" and opens the cards with a recommendation that leaves that movement unused; `choose-different` records no effort and opens the cards; nothing is armed until a card is confirmed. Any refused approval announces a plain reason. |
+| V4 | TEST | Continue with a full re-check: the comfort screen offers `approve-saved`, `choose-different`, `another-movement` (no `reject-profile`); approve-saved arms the saved controls; an invalid saved mapping opens mapping instead; an unverified or partial restore still cannot arm. Quick restore still goes straight to the confirm screen. |
+| V5 | TEST | Helper Recalibrate shows `recalibrate-no`, `recalibrate-yes` (No first) with no stage change; No returns to the panel with nothing changed; Yes starts the rest check with `recalibrating` true; with the camera off, Yes changes nothing (no flags, stays in the panel, plain message). The state resets on Close helper, entering communication and back to start; it survives Pause, tracking loss and the step-idle fallback. |
+| V6 | TEST | Helper no longer lists `tiring`. Change controls with 2+ movements lists `report-tiring` after the proposals; it opens the tiring stage; choosing a movement returns to mapping with the recommendation updated; never-mind returns to mapping. With 1 movement, no `report-tiring`. |
+| V7 | TEST | First accidental selection safety: `record-again` first on every comfort list; `recalibrate-no` first; `keep-current` first on Change controls (unchanged). |
+| V8 | TEST | UI: comfort shows the controls card (mode heading + chips) for first, add, recalibrate and restore; the Helper recalibrate confirmation shows its one-line warning and moves focus to the question; no page titled "Recalibrate" remains. |
+| V9 | TEST | tsc, full vitest and build pass; existing tests change only where the comfort → mapping → confirm path, the recalibrate-confirm stage or the Helper tiring item is intentionally replaced. |
+| V10 | TEST | Nothing new is stored in profiles; effort/tiring notes behave as before for recommendations (scoring tests unchanged). |
+| VH | HUMAN | With the camera: adding a movement or continuing goes straight from "how does it feel" to practice, and recalibrating from Helper is clear. |
