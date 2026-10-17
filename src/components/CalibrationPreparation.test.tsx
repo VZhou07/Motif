@@ -20,9 +20,7 @@ function preparingCrossCheck(): Harness {
   h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', MOUTH);
   expect(h.snap.stage, h.snap.failure?.reasons.join(' ')).toBe('negative');
   h.run(11_000, HEAD_WOBBLE);
-  h.selectByGesture('comfortable', MOUTH);
-  h.selectByGesture('map:0', MOUTH);
-  h.selectByGesture('approve-mapping', MOUTH);
+  h.selectByGesture('approve-comfortable', MOUTH);
   h.selectByGesture('finish-practice', MOUTH);
   h.session.selectTarget('add-movement');
   h.session.chooseMovement({ feature: 'headPitch', direction: 1, label: HEAD_LABEL });
