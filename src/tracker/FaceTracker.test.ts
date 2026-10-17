@@ -94,6 +94,14 @@ describe('camera lifecycle', () => {
     expect(h.callbacks.size).toBe(0)
   })
 
+  it('says when the camera may be in use by another app', async () => {
+    const busy = new Error('Busy')
+    busy.name = 'NotReadableError'
+    const h = harness({ getUserMedia: async () => { throw busy } })
+    await expect(h.start()).rejects.toMatchObject({ code: 'camera', message: expect.stringMatching(/in use by another app/) })
+    expect(h.detector.close).toHaveBeenCalledTimes(1)
+  })
+
   it('fails visibly when model assets cannot load and never requests the camera', async () => {
     const h = harness({ createDetector: async () => { throw new Error('404') } })
     await expect(h.start()).rejects.toMatchObject({ code: 'model' })
