@@ -32,19 +32,11 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 | --- | --- |
 | W0/W1/WF1/WF2 | Reached. |
 | W2–W5 (camera, calibration, one-gesture communication, first slice) | Software verified; human acceptance pending (real webcam, live values, anatomical/head-direction labels, comfort, speech audibility). Reviews: r5_review → r5_rereview APPROVED; w2_w4_test_review → fixes → w2_w4_recheck PASS. |
-| W6 remaining P0 (multi-gesture) | Software verified; human acceptance pending (`w6_test_review` re-check PASS at `e848456`). R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
+| W6 remaining P0 (multi-gesture) | Software verified; human acceptance pending (`w6_test_review` re-check PASS at `e848456`). R6 revision 2 APPROVED (r6_review → r6_rereview). |
 | W7a profiles/recalibration | Software verified; human acceptance pending (`w7a_test_review` re-check PASS at `fa56d76`). |
 | W7b scoring/recommendations | Software verified; human acceptance pending (`w7b_test_review` re-check PASS at `5464487`). |
 | W7c discovery | TESTING (`w7c_test_review` running). Owner: session 3 coordinator. |
 | W8 hardening | REVIEWING (R10 revision 2 under `r10_review`). |
-
-## W6 status (R6 revision 2)
-
-Done and committed:
-- `src/app/mapping.ts` (+7 tests): proposals for 1–4 gestures, validation (one select, distinct actions, previous needs next, max 4), `step` vs `auto` mode, descriptions.
-- `src/app/session.ts` / `types.ts`: approved gesture SET + mapping replaces the single model; "Add a movement" (duplicates refused), held-out attempts plus one cross-check per existing gesture, negative window over the whole set; `mapping` → `mapping-confirm` (only Approve arms; Keep current first); Change controls; Use previous controls (practice; revalidated, needs approval); per-action routing (only the select gesture latches; next/previous move; pause toggles; unmapped events consumed and ignored); step mode has no timed advance; 60 s idle fail-safe switches to automatic scanning.
-- UI: mapping/confirmation screens, step-mode hint, movement name shown during check attempts, decision targets rendered in the toolbar.
-- Test helpers ready but NOT yet used: `Harness.stepTo`, `Harness.addMovement`, constants `MOUTH`, `PUCKER`, `CHEEK`, `HEAD_WOBBLE` in `src/app/session.test-support.ts`.
 
 ## Exact next work (ordered)
 
