@@ -241,6 +241,29 @@ describe('sound', () => {
     expect(sound.chime).toHaveBeenCalledTimes(1);
   });
 
+  it('two new requests in one update give one chime and one summary announcement', async () => {
+    const alex = person('Alex');
+    const { client, sound } = await mount(snapshot({ participants: [alex], requests: [] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable sound' }));
+    await waitFor(() => expect(sound.enable).toHaveBeenCalled());
+    await emit(client, snapshot({ participants: [alex], requests: [request(alex), request(alex, { kind: 'help' })] }));
+    expect(sound.chime).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('status').textContent).toBe('2 new requests.');
+  });
+
+  it('signing out and back in to the same account starts silent for the existing queue', async () => {
+    const alex = person('Alex');
+    const waiting = request(alex);
+    const { client, sound } = await mount(snapshot({ participants: [alex], requests: [] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enable sound' }));
+    await waitFor(() => expect(sound.enable).toHaveBeenCalled());
+    await emit(client, signedOut({ epoch: 2 }));
+    await emit(client, snapshot({ epoch: 3, participants: [alex], requests: [waiting] }));
+    expect(sound.chime).not.toHaveBeenCalled();
+    await emit(client, snapshot({ epoch: 3, participants: [alex], requests: [waiting, request(alex, { kind: 'help' })] }));
+    expect(sound.chime).toHaveBeenCalledTimes(1);
+  });
+
   it('an outage, a token-refresh epoch bump and reconnect re-alert nothing old and alert a new request once', async () => {
     const alex = person('Alex');
     const old = request(alex);
@@ -280,10 +303,17 @@ describe('people and invitations', () => {
     expect(await screen.findByText('K7Q2-M9XA')).toBeTruthy();
     expect(screen.getByText(/expires in 10:00/)).toBeTruthy();
     expect(screen.getByRole('status').textContent).not.toContain('K7Q2');
-    await act(async () => { clock.advance(61_000); vi.advanceTimersByTime(1_000); });
+    // Keep the board fresh (a poll before each tick) so only the code's own expiry can hide it.
+    const step = async (ms: number) => { await act(async () => { clock.advance(ms); client.emit(snapshot({ participants: [waiting] })); vi.advanceTimersByTime(1_000); }); };
+    await step(61_000);
     expect(screen.getByText(/expires in 8:59/)).toBeTruthy();
-    await act(async () => { clock.advance(540_000); vi.advanceTimersByTime(1_000); });
+    await step(538_000);
+    expect(screen.getByText('K7Q2-M9XA')).toBeTruthy();
+    expect(screen.getByText(/expires in 0:01/)).toBeTruthy();
+    await step(1_000);
     expect(screen.queryByText('K7Q2-M9XA')).toBeNull();
+    expect(screen.getByRole('list', { name: 'Open requests' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Create invitation for Alex' })).toBeTruthy();
   });
 
   it('hides the code when the person pairs', async () => {
@@ -318,7 +348,32 @@ describe('people and invitations', () => {
   });
 });
 
+describe('startup', () => {
+  it('keeps the loading view when the start-up refresh fails because the session changed', async () => {
+    const client = new FakeCareClient();
+    client.emit(snapshot({ connection: 'loading', access: signedOut().access }));
+    client.refresh.mockRejectedValueOnce(new CareError('session_changed', 'The active care account changed.'));
+    render(<CaregiverDashboard client={client} sound={fakeSound().port} clock={manualClock()} />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(screen.getByText('Connecting to the care service…')).toBeTruthy();
+    expect(screen.queryByLabelText('E-mail')).toBeNull();
+  });
+});
+
 describe('keyboard', () => {
+  it('after Mark complete the card is gone and focus moves to the open-requests heading', async () => {
+    const alex = person('Alex');
+    const acked = request(alex, { status: 'acknowledged', revision: 2 });
+    const { client } = await mount(snapshot({ participants: [alex], requests: [acked] }));
+    client.transitionRequest.mockImplementationOnce(async (id, revision, status) => {
+      client.emit(snapshot({ participants: [alex], requests: [{ ...acked, status: 'completed', revision: 3 }] }));
+      return { ...acked, id, status, revision: revision + 1 };
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Mark complete: Water request from Alex' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('heading', { name: /Open requests/ })));
+  });
+
+
   it('reaches Acknowledge with the keyboard, then moves focus to the same card\'s Mark complete button', async () => {
     const alex = person('Alex');
     const water = request(alex);
