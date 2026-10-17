@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createLocalProfileStore, createMemoryStorage, PROFILE_KEY, type ProfileStore } from './profiles';
+import { createLocalProfileStore, createMemoryStorage, parseProfile, PROFILE_KEY, type ProfileStore } from './profiles';
 import { BROW, HEAD_WOBBLE, Harness, MOUTH, REST, type Values } from './session.test-support';
 
 const BROW_LABEL = 'Raise left outer eyebrow';
@@ -82,6 +82,25 @@ describe('saving a profile (R7)', () => {
     original.session.saveProfile('Spare');
     expect(original.session.deleteAllProfiles()).toEqual({ ok: true });
     expect(original.snap.profiles.names).toEqual([]);
+  });
+});
+
+describe('saving a profile: guards (R7)', () => {
+  it('refuses to save during recalibration capture', () => {
+    const { original } = savedPersonA();
+    original.stepTo('recalibrate');
+    original.selectByGesture('start-recalibration');
+    expect(original.snap.stage).toBe('baseline');
+    expect(original.session.saveProfile('Mid')).toMatchObject({ ok: false });
+  });
+
+  it('marks the setup unsaved after a scan speed change', () => {
+    const h = new Harness({ profiles: storeFor().store });
+    h.setUpToCommunication();
+    expect(h.session.saveProfile('One')).toEqual({ ok: true });
+    expect(h.snap.profiles.unsaved).toBe(false);
+    h.selectByGesture('slower');
+    expect(h.snap.profiles.unsaved).toBe(true);
   });
 });
 
@@ -251,5 +270,63 @@ describe('restoring a profile (R7)', () => {
     h.selectByGesture('approve-mapping');
     expect(h.snap.approvedModels).toHaveLength(2);
     expect(h.snap.profiles.names).toEqual([]);
+  });
+
+  it('re-checks an unmapped saved movement exactly once', () => {
+    const { storage } = savedPersonA();
+    const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
+    const profile = raw.profiles[0];
+    const browId = profile.models.find((model: { label: string }) => model.label === BROW_LABEL).id;
+    profile.mapping.assignments = { [browId]: 'select' };
+    expect(parseProfile(profile).ok).toBe(true);
+    storage.setItem(PROFILE_KEY, JSON.stringify(raw));
+    const h = restoreOn(storage);
+    recheck(h);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.cycles.at(-1)!.heldOut.map((attempt) => attempt.expected)).toEqual([BROW_LABEL, BROW_LABEL, 'Open mouth']);
+  });
+
+  it('Choose another movement from restore comfort starts a normal setup that can be approved', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('another-movement');
+    expect(h.snap.stage).toBe('choose');
+    expect(h.snap.restoring).toBeNull();
+    h.session.chooseMovement(OPEN_MOUTH);
+    h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', MOUTH);
+    h.run(11_000, HEAD_WOBBLE);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.cycles.at(-1)!.source).toBe('trained');
+    h.selectByGesture('comfortable', MOUTH);
+    h.selectByGesture('map:0', MOUTH);
+    h.selectByGesture('approve-mapping', MOUTH);
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.approvedModels.map((model) => model.label)).toEqual(['Open mouth']);
+  });
+
+  it('fails as a mismatch when brief resting spikes leave a saved movement\'s neutral zone', () => {
+    const { storage } = savedPersonA();
+    const brow = JSON.parse(storage.data.get(PROFILE_KEY)!).profiles[0].models.find((model: { label: string }) => model.label === BROW_LABEL);
+    const h = restoreOn(storage);
+    const spike = brow.baselineCenter + brow.releaseThreshold * 1.6;
+    h.run(10_500, (t) => (t % 2_000 < 300 ? { browOuterUpLeft: spike } : REST));
+    expect(Math.abs(h.snap.baseline!.statistics.browOuterUpLeft.center - brow.baselineCenter)).toBeLessThan(brow.releaseThreshold);
+    expect(h.snap.failure?.kind).toBe('profile-mismatch');
+  });
+
+  it('after a restore, Keep current setup from Add a movement keeps today\'s rest', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('comfortable');
+    h.selectByGesture('approve-mapping');
+    h.run(600);
+    h.stepTo('finish-practice');
+    h.stepTo('add-movement');
+    expect(h.snap.stage).toBe('choose');
+    h.selectByGesture('keep-current');
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.baseline).not.toBeNull();
   });
 });
