@@ -14,7 +14,9 @@ async function launch(extraArgs) {
   for (const channel of ['chrome', 'msedge']) {
     try { return await chromium.launch({ channel, headless: true, args }); } catch { /* try the next installed browser */ }
   }
-  throw new Error('Neither Chrome nor Edge could be launched by Playwright.');
+  // No Chrome or Edge (e.g. a Linux server): use Playwright's bundled Chromium (`npx playwright install chromium`).
+  try { return await chromium.launch({ headless: true, args }); } catch { /* reported below */ }
+  throw new Error('No browser could be launched: install Chrome or Edge, or run `npx playwright install chromium`.');
 }
 
 const server = await preview({ preview: { port: PORT, host: '127.0.0.1', strictPort: true }, logLevel: 'error' });
