@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import type { ControlAction } from '../app/mapping';
+import { describeEvidence } from '../app/scoring';
 import type { CycleEvidence, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
 import { SavedProfiles } from './ProfileViews';
@@ -26,6 +29,13 @@ export function EvidencePanel({ snapshot }: { snapshot: SessionSnapshot }) {
     <details className="settings-card">
       <summary className="field-label">Setup evidence from this session ({snapshot.cycles.length} attempt{snapshot.cycles.length === 1 ? '' : 's'})</summary>
       <p>Observations from this short session only — not a measure of future or general accuracy.</p>
+      {snapshot.approvedModels.length > 0 && (
+        <ul className="movement-evidence" aria-label="Your movements">
+          {snapshot.evidence.filter((item) => snapshot.approvedModels.some((model) => model.id === item.id)).map((item) => (
+            <li key={item.id}><strong>{item.label}</strong><ul>{describeEvidence(item).map((line) => <li key={line}>{line}</li>)}</ul></li>
+          ))}
+        </ul>
+      )}
       <ol>
         {snapshot.cycles.map((cycle) => (
           <li key={cycle.cycle}>
@@ -89,7 +99,15 @@ export function MappingView({ snapshot, session }: ViewProps) {
         <p>With one movement, choices highlight one at a time every {interval} seconds and <strong>{label}</strong>, held briefly, selects the highlighted choice. With a “moves next” movement the highlight moves only when you make it — there is no timer. Rest briefly between movements.</p>
       </div>
       {snapshot.mappingLabel && <p className="status-notice">Current controls: {snapshot.mappingLabel}</p>}
+      {snapshot.recommendation && (
+        <div className="result-card" aria-label="Why this is recommended">
+          <h2>Why we recommend these controls</h2>
+          <ul>{snapshot.recommendation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
+          <p>Based only on what you told us and what was observed in this session. You can pick any option.</p>
+        </div>
+      )}
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      <CustomControls snapshot={snapshot} session={session} />
     </>
   );
 }
@@ -116,6 +134,40 @@ export function RecalibrateView({ snapshot, session }: ViewProps) {
     <>
       <Heading eyebrow="RECALIBRATE" title={<>Fresh start,<br /><em>same you.</em></>}
         lead="Recording a new rest check and movement turns communication off until the new movement is verified and approved. You can keep your current setup at every decision point." />
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+    </>
+  );
+}
+
+const ACTION_OPTIONS: Array<[ControlAction | '', string]> = [['', 'Not used'], ['select', 'Selects'], ['next', 'Moves next'], ['previous', 'Moves back'], ['pause', 'Pauses or resumes']];
+
+/** Helper form for any valid combination; it opens the same confirmation step and never arms anything itself. */
+function CustomControls({ snapshot, session }: ViewProps) {
+  const [choices, setChoices] = useState<Record<string, ControlAction | ''>>({});
+  const models = snapshot.setupModels;
+  if (models.length < 2) return null;
+  const submit = () => session.proposeCustom(Object.fromEntries(Object.entries(choices).filter(([id, action]) => action && models.some((model) => model.id === id))));
+  return (
+    <details className="settings-card">
+      <summary className="field-label">Helper: set controls by hand</summary>
+      <p>Choose what each movement does. Exactly one movement selects; moving back needs a movement for moving next. You review before anything turns on.</p>
+      {models.map((model) => (
+        <label key={model.id} className="text-field">{model.label}
+          <select value={choices[model.id] ?? ''} onChange={(event) => setChoices({ ...choices, [model.id]: event.target.value as ControlAction | '' })}>
+            {ACTION_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </label>
+      ))}
+      <button type="button" className="button" onClick={submit}>Review these controls</button>
+    </details>
+  );
+}
+
+export function TiringView({ snapshot, session }: ViewProps) {
+  return (
+    <>
+      <Heading eyebrow="TAKING CARE OF YOU" title={<>Which movement<br /><em>is tiring?</em></>}
+        lead="Choose the movement that is tiring. We will suggest controls that use it less. Nothing changes until you approve." />
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
     </>
   );

@@ -110,6 +110,8 @@ export interface SessionSnapshot {
   profiles: ProfilesView;
   /** Per-movement observations (counts with denominators) for approved movements and any in setup (R8). */
   evidence: MovementEvidence[];
+  /** Movements the mapping stages choose controls for (approved set, a candidate being added, or a restored set). */
+  setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */
   recommendation: { id: string; reasons: string[] } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */

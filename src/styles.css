@@ -14,3 +14,5 @@
 
 .profile-list { list-style: none; padding: 0; margin: 12px 0; display: grid; gap: 12px; }
 .profile-list li { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+.movement-evidence { padding-left: 18px; font-size: 11px; line-height: 1.7; margin-bottom: 16px; }
+.movement-evidence ul { padding-left: 18px; }

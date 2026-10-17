@@ -1092,7 +1092,7 @@ export class MotifSession {
       phrases: [...this.phrases], message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
       spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
-      evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use),
+      evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
     };
     for (const listener of this.listeners) listener();
