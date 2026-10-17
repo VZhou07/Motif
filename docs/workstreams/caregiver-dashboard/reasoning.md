@@ -75,7 +75,8 @@ Model unit tests (merge/stale revision/dedupe/scope/disambiguation/ordering/age/
 | Revision | Reviewer | Verdict |
 | --- | --- | --- |
 | 1 | design reviewer (independent) | NOT APPROVED — 8 blockers: failed sign-in lands in `unreachable`; error codes do not exist; expired session looks like an outage; sound baseline per epoch; wrong-role/unreachable dead ends; weak alias disambiguation; stylesheet not covered by project CSS tests; cold-start `ready` spec |
-| 2 | pending | — |
+| 2 | design reviewer (independent) | NOT APPROVED — 1 blocker: `CaregiverSession` discard rules ambiguous; an outage (offline, signed-out, same or new epoch) must not wipe the chime memory |
+| 3 | pending | — |
 
 ## Revision 2 — changes resolving the revision-1 review (supersedes conflicting revision-1 text)
 
@@ -101,3 +102,25 @@ Model unit tests (merge/stale revision/dedupe/scope/disambiguation/ordering/age/
 | Revision | Reviewer | Verdict |
 | --- | --- | --- |
 | 2 | pending | — |
+
+## Revision 3 — exact session and staleness rules (resolving the revision-2 review; supersedes the B3/B4 wording above)
+
+**`CaregiverSession = { groupId, tracker, invites }`.** Created at the first ONLINE caregiver snapshot when no session exists. It is DISCARDED (tracker and invites both) only on one of:
+1. `connection === 'idle'` with signed-out access (a genuine sign-out or an expired/absent credential — `load()` found no credential);
+2. an ONLINE snapshot whose role is not `caregiver` (including a caregiver without group → no group id);
+3. an ONLINE caregiver snapshot with a different `group.id` than the session's.
+
+It is NEVER discarded by: `offline` snapshots (signed-out + empty is how the real client reports any failed refresh, in the same epoch or in a new epoch after a token-refresh bump), `loading` snapshots, epoch increases alone, or the retention drop. A reused session keeps the tracker's seen-ids (UUIDs only, no personal text). So a request that arrives during an outage — of any length — is unseen when the first online snapshot returns and chimes exactly once; an already-seen id never chimes again.
+
+**Board data vs session.** Board DATA (participants, requests, last-good snapshot) is discarded on every epoch increase and at the retention cap; the `loading`/`signed-out`/`unreachable` views never show a previous account's rows. The sound-on flag is held above the board and survives.
+
+**Retention cap anchor.** `STALE_RETENTION_MS = 120 000`, measured as `mono() − lastOnlineAt`, where `lastOnlineAt` is the monotonic time of the last ONLINE caregiver snapshot (not "continuous offline" time, which a new epoch or a hung poll could reset). When exceeded: the board is dropped, the `invites` map is cleared (a code must not be kept hidden but live), the tracker is kept, and the `signed-out` view says "Connection or session lost for over 2 minutes. Sign in again." **Sign in again** (button on the offline banner) does the same drop: clears board data and invites immediately, leaves the tracker alone; **Sign out** discards the session via rule 1 once the client reports it.
+
+**Display fallback.** If `displayName` removes every character of an alias, show "Unnamed person #n" (n from the stable ordinal).
+
+**Added tests (real `CareService` over a fake transport):** (a) outage during which a new request arrives, then reconnect → exactly one chime, existing ids silent; (b) the same with an outage longer than 120 s (board dropped, then returns online → one chime for the new id, none for old); (c) a TOKEN_REFRESHED-style epoch bump combined with an offline poll, then recovery → no chime for old ids, one for a genuinely new id; (d) genuine sign-out (idle signed-out) then sign-in as a different group → tracker silently re-baselined, no chime for B's existing queue, no A ids anywhere in the DOM; (e) a caregiver who signs out and signs in again as the same account is re-baselined silently (accepted: a new session).
+
+### Revision 3 review record
+| Revision | Reviewer | Verdict |
+| --- | --- | --- |
+| 3 | pending | — |
