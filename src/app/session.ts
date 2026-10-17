@@ -1271,6 +1271,7 @@ export class MotifSession {
       movements: this.approvedModels.length,
       hasApproved: this.hasApproved,
       decisions: this.stage === 'practice' ? this.decisionTargets(this.allowedDecisions()) : [],
+      requests: [],
     };
   }
 

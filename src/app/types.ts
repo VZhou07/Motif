@@ -147,7 +147,7 @@ export interface SessionSnapshot {
 }
 
 export interface LevelView {
-  kind: 'top' | 'more' | 'group' | 'confirm';
+  kind: 'top' | 'more' | 'ask' | 'group' | 'confirm';
   group: { id: string; name: string; phrases: number } | null;
   /** The message text waiting for Save to Favourites confirmation. */
   confirm: string | null;

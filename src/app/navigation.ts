@@ -6,7 +6,7 @@ import type { Vocabulary } from './vocabulary';
  * Two-level communication scanning (R14). The top level is short; phrases sit inside groups and rarer
  * controls inside More. Pause is in every level, and lists never shift while they are scanned.
  */
-export type Level = 'top' | 'more' | { group: string } | { confirm: string };
+export type Level = 'top' | 'more' | 'ask' | { group: string } | { confirm: string };
 
 export interface LevelContext {
   stage: 'communication' | 'practice';
@@ -18,6 +18,8 @@ export interface LevelContext {
   hasApproved: boolean;
   /** Practice-only setup decisions shown at the top (`use-previous` when allowed). */
   decisions: readonly ScanTarget[];
+  /** Caregiver request targets from the paired device (W1); empty when unpaired or not configured. */
+  requests: readonly ScanTarget[];
 }
 
 export const CONTROL_LABELS: Record<string, string> = {
@@ -26,7 +28,7 @@ export const CONTROL_LABELS: Record<string, string> = {
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
   undo: 'Undo last', 'say-again': 'Say again', 'save-favourite': 'Save message to Favourites',
-  'cancel-favourite': 'Cancel, do not save', more: 'More options', back: 'Back',
+  'cancel-favourite': 'Cancel, do not save', more: 'More options', back: 'Back', ask: 'Ask caregiver',
 };
 
 const control = (id: string): ScanTarget => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' });
@@ -70,15 +72,20 @@ export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelC
     }
   } else if (level === 'more' && !practice) {
     return [...moreControls(context).map(control), nav('back'), control('pause')];
+  } else if (level === 'ask' && !practice && context.requests.length) {
+    return [...context.requests, nav('back'), control('pause')];
   } else if (isConfirmLevel(level) && !practice) {
     return [{ id: 'confirm-favourite', label: `Save “${level.confirm}” to Favourites`, kind: 'control' }, control('cancel-favourite'), control('pause')];
   }
   if (practice) return [control('finish-practice'), ...groupTargets(vocabulary), control('pause'), ...context.decisions];
-  return [control('speak'), control('undo'), ...groupTargets(vocabulary), control('pause'), nav('more')];
+  // Ask comes after Pause so Pause keeps its position whether or not the device is paired (W1).
+  const ask: ScanTarget[] = context.requests.length ? [{ id: 'ask', label: CONTROL_LABELS.ask!, kind: 'group' }] : [];
+  return [control('speak'), control('undo'), ...groupTargets(vocabulary), control('pause'), ...ask, nav('more')];
 }
 
 /** The level `buildLevel` actually produced, so the session never keeps a level that fell back to top. */
-export function effectiveLevel(level: Level, vocabulary: Vocabulary, stage: LevelContext['stage']): Level {
+export function effectiveLevel(level: Level, vocabulary: Vocabulary, stage: LevelContext['stage'], hasRequests = false): Level {
+  if (level === 'ask') return stage === 'communication' && hasRequests ? level : 'top';
   if (isGroupLevel(level)) return vocabulary.groups.some((group) => group.id === level.group && group.phrases.length) ? level : 'top';
   if (stage === 'practice' && level !== 'top') return 'top';
   return level;
