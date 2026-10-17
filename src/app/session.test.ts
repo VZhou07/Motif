@@ -406,7 +406,7 @@ describe('honest limits and setup settings', () => {
     expect(negative.eventCount).toBe(0);
     expect(negative.restarts).toBeGreaterThanOrEqual(10);
     expect(negative.validDurationMs).toBeLessThan(10_000);
-    expect(negative.reasons).toContain('Ten armed seconds were not observed within one minute.');
+    expect(negative.reasons).toContain('Ten seconds of everyday activity were not recorded within one minute.');
   });
 
   it('speaks capture prompts only when the helper enables spoken prompts', () => {

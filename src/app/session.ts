@@ -423,7 +423,7 @@ export class MotifSession {
     }
     if (this.stageValidMs > SESSION_LIMITS.negativeCapMs) {
       cycle.negative = { passed: false, eventCount: 0, validDurationMs: monitor.armedMs, restarts: monitor.restarts,
-        reasons: [...monitor.lastReasons, 'Ten armed seconds were not observed within one minute.'] };
+        reasons: [...monitor.lastReasons, 'Ten seconds of everyday activity were not recorded within one minute.'] };
       this.fail('negative', 'The everyday-activity check could not finish', cycle.negative.reasons);
     }
   }
@@ -739,7 +739,7 @@ export class MotifSession {
       case 'reject-profile': {
         const cycle = this.cycles[this.cycles.length - 1];
         if (cycle) cycle.outcome = 'rejected';
-        this.fail('rejected', 'Profile not used', ['You chose not to use this saved profile. Nothing was changed.']);
+        this.fail('rejected', 'Profile not used', ['You chose not to use this saved setup. Nothing was changed.']);
         break;
       }
       case 'start-recalibration': this.recalibrating = true; this.adding = false; this.beginBaseline(); break;
@@ -1166,7 +1166,7 @@ export class MotifSession {
       return [rest.low, rest.center, rest.high].some((value) => !(Math.abs(value - model.baselineCenter) < model.releaseThreshold));
     });
     if (misfits.length) {
-      this.fail('profile-mismatch', 'This saved profile does not fit today\'s rest', [
+      this.fail('profile-mismatch', 'This saved setup does not fit today\'s rest', [
         ...misfits.map((model) => `“${model.label}” reads differently at rest than when the profile was saved.`),
         'Today\'s rest check can still be used to set up a movement again, or use assisted input.',
       ]);
@@ -1181,13 +1181,13 @@ export class MotifSession {
       ? ` (${skipped} movement${skipped === 1 ? '' : 's'} checked within the last hour; not repeated)`
       : ' (all checked within the last hour; no attempts or everyday check this time)';
     if (!due.length) {
-      this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
+      this.cycles.push({ cycle: this.cycles.length + 1, movement: `Your saved setup${note}`, training: null, heldOut: [], negative: null,
         outcome: 'verified', source: 'restored', verifiedIds: [], profile: profile.name, quick: true });
       this.offerSavedControls();
       this.announce('Your movements were checked within the last hour. Review your saved controls, then approve; practice comes first and nothing is spoken.');
       return;
     }
-    this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
+    this.cycles.push({ cycle: this.cycles.length + 1, movement: `Your saved setup${note}`, training: null, heldOut: [], negative: null,
       outcome: 'in-progress', source: 'restored', verifiedIds: [], profile: profile.name });
     this.verifyPlan = due.flatMap((model) => (assignments[model.id] ? [model.id, model.id] : [model.id]));
     this.diagnosticModel = due[0] ?? null;
