@@ -96,5 +96,5 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 ## UX build loop (branch ux-setup-flow off fix-record-movement `2040095`, started 2026-10-17)
 - Plan: `/Users/vivianyang/.claude/plans/pasted-content-id-2ddb-you-are-goofy-dragonfly.md`; criteria `UX_ACCEPTANCE.md`; design `reasoning.md` (UX slice 1).
 - Baseline: tsc clean, vitest 363/363 (31 files), build OK.
-- Slice 1 state: reviewing design; QA writes `src/app/ux-setup.acceptance.test.ts`; developer waits for review verdict. Round 0 of 3.
+- Slice 1 state: design APPROVED (rev 2, `9b52e22`); QA (agent ae97aab9...) writing `src/app/ux-setup.acceptance.test.ts` (QA owns it); developer implementing in useMotif.ts, SetupViews.tsx, CameraPanel.tsx, ProfileViews.tsx, session.ts (profilesView hasBaseline), types.ts, App.tsx. Round 0 of 3.
 - Next: implement slice 1, QA verify, commit small, then slice 2 (click-to-record) and slice 3 (merged approve screen).
