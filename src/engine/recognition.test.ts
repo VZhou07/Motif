@@ -114,4 +114,39 @@ describe('gesture input state machine', () => {
       expect(feed(runtime, stream(0, 500)).at(-1)?.phase).toBe('unarmed')
     }
   })
+
+  describe('names why a pending dwell ended (R8 B2)', () => {
+    const mouth: GestureModel = { ...testModel, id: 'mouth', feature: 'jawOpen' }
+    function pending(models: GestureModel | GestureModel[] = testModel) {
+      const runtime = new GestureRuntime(models)
+      feed(runtime, stream(0, 500))
+      expect(runtime.step(makeFrame(550, { browOuterUpLeft: 0.8 })).started).toBe(testModel.id)
+      return runtime
+    }
+    const cause = (update: ReturnType<GestureRuntime['step']>) => [update.cancelled, update.cancelledId, update.cancelCause]
+
+    it('released: back to neutral before the dwell completed', () => {
+      expect(cause(pending().step(makeFrame(600)))).toEqual([true, testModel.id, 'released'])
+    })
+    it('band: the pending movement dropped into its own transition band', () => {
+      expect(cause(pending().step(makeFrame(600, { browOuterUpLeft: 0.3 })))).toEqual([true, testModel.id, 'band'])
+    })
+    it('conflict: another movement joined, or a different movement became the active one', () => {
+      expect(cause(pending([testModel, mouth]).step(makeFrame(600, { browOuterUpLeft: 0.8, jawOpen: 0.8 })))).toEqual([true, testModel.id, 'conflict'])
+      expect(cause(pending([testModel, mouth]).step(makeFrame(600, { jawOpen: 0.8 })))).toEqual([true, testModel.id, 'conflict'])
+      expect(cause(pending([testModel, mouth]).step(makeFrame(600, { jawOpen: 0.3 })))).toEqual([true, testModel.id, 'conflict'])
+    })
+    it('invalid: gaps, non-finite values, stale time and invalidate()', () => {
+      expect(cause(pending().step(makeFrame(900, { browOuterUpLeft: 0.8 })))).toEqual([true, testModel.id, 'invalid'])
+      expect(cause(pending().step(makeFrame(600, { browOuterUpLeft: Number.NaN })))).toEqual([true, testModel.id, 'invalid'])
+      expect(cause(pending().step(makeFrame(600, { browOuterUpLeft: 0.8 }), 1_000))).toEqual([true, testModel.id, 'invalid'])
+      expect(cause(pending().invalidate())).toEqual([true, testModel.id, 'invalid'])
+    })
+    it('adds no cause when nothing was pending', () => {
+      const runtime = new GestureRuntime(testModel)
+      feed(runtime, stream(0, 500))
+      expect(cause(runtime.step(makeFrame(550)))).toEqual([false, undefined, undefined])
+      expect(cause(runtime.invalidate())).toEqual([false, undefined, undefined])
+    })
+  })
 })
