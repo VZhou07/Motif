@@ -40,7 +40,9 @@ export function ScanHint({ snapshot }: { snapshot: SessionSnapshot }) {
     const ready = operating && snapshot.mappingLabel
       ? (snapshot.scanMode === 'step'
         ? `Step by step, no timer: ${snapshot.mappingLabel.replace(/ \(step by step, no timer\)$/, '')}.`
-        : 'Your select movement selects the highlighted choice. Buttons also work for a helper.')
+        : snapshot.stepFallback
+          ? 'No movement for a minute, so scanning is automatic for now. Your select movement selects; choose Change controls to go back to step by step.'
+          : 'Your select movement selects the highlighted choice. Buttons also work for a helper.')
       : snapshot.approvedModels.length + (snapshot.candidate ? 1 : 0) > 1
         ? 'Any of your verified movements selects the highlighted choice. Buttons also work for a helper.'
         : 'Your movement selects the highlighted choice. Buttons also work for a helper.';

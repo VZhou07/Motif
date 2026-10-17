@@ -177,4 +177,11 @@ describe('Motif app', () => {
     act(() => h.selectByGesture('map:1'));
     expect(document.querySelector('[data-scan-id="approve-mapping"]')).toBeTruthy();
   });
+
+  it('keeps a visible note while the step fallback scans automatically', () => {
+    const h = twoMovements();
+    h.run(61_000);
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(document.querySelector('.control-hint')?.textContent).toMatch(/scanning is automatic for now/);
+  });
 });
