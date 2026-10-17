@@ -279,7 +279,7 @@ Opt-in, minimal, versioned local profiles (UA1/UA2): explicit Save with a name, 
 `StoredProfile = { version: 1, featureSchema: string, name: string, models: GestureModel[], mapping: { assignments: Assignments }, phrases: string[], scanIntervalMs: number }`, kept in `localStorage` under one key `motif.profiles` as `{ version: 1, profiles: StoredProfile[] }`.
 - `featureSchema` is `FEATURE_IDS.join(',')`, so a model saved for a different feature set is rejected rather than reinterpreted.
 - Models are the approved, frozen `GestureModel`s (feature, direction, baseline center, thresholds, dwell times, label, id). They are numbers relative to blendshape coefficients/angles, not images or identity data.
-- Never stored: video, frames, baseline statistics, setup evidence, the message being composed, spoken history, camera status, or anything about the device. The rest check is always re-recorded.
+- Never stored: video, frames, setup evidence, the message being composed, spoken history, camera status, or anything about the device. **User change (2026-10-17):** the automatic "Last setup" profile also keeps the four summary numbers per measurement of the approved rest check (centre, noise, low, high; no frames), so Continue can skip today's rest check. Profiles without them, and the "Continue and re-check my movement" button, still run the rest check and full re-checks. Skipped rest and movement checks are shown honestly in the evidence panel.
 - Limits: name 1–40 characters after trimming; at most 8 profiles; Save with an existing name needs explicit `replace`.
 
 ### Profile module (pure, `src/app/profiles.ts`)

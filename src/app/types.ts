@@ -57,6 +57,8 @@ export interface CycleEvidence {
   /** Ids of every model the held-out/re-check attempts and negative window were run on, once verified. */
   verifiedIds: string[];
   profile?: string;
+  /** Restored without movement re-checks: only today's rest was compared with the saved thresholds. */
+  quick?: boolean;
 }
 
 export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch' | 'discovery';

@@ -72,17 +72,19 @@ export function useMotif(runtime?: Partial<Runtime>) {
     };
   }, [session, tracker, speech, cues]);
 
-  const startCamera = useCallback(async () => {
+  const startCamera = useCallback(async (): Promise<boolean> => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video) return false;
     session.setCamera('loading');
     try {
       await cues.unlock();
       setCueStatus(cueSnapshot(cues));
       await tracker.start(video, (frame) => session.ingest(frame, performance.now()), (error) => session.setCamera('error', error.message));
       session.setCamera('running');
+      return true;
     } catch (error) {
       session.setCamera('error', error instanceof TrackerError ? error.message : 'The camera could not start. Retry or use assisted input.');
+      return false;
     }
   }, [session, tracker, cues]);
 
