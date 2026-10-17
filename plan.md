@@ -37,6 +37,10 @@ After calibration, let the user review and change what each verified movement do
 
 The recognition layer emits movement IDs, and the mapping layer resolves IDs to approved actions. Existing Next/Select/Previous/Pause already support this pattern; remaining engineering work must first inspect that behavior rather than rebuild it. Broader direct shortcuts, head pointing, reading tools, free writing and hand tracking are unapproved proposals. This is a recorded product requirement, not a claim that new features have been implemented. Restricted setup scanning may still use any verified movement to choose a setup decision; timed recording must not execute normal application commands.
 
+## Proposed caregiver-connected expansion — selection pending
+
+The user requested a four-teammate plan for deliberate requests to a caregiver dashboard on another device, plus useful browser shortcuts and easy return to communication. [The proposed branch plan](docs/caregiver-demo-proposal.md) defines participant UI, caregiver dashboard, backend/integration and browser-access ownership, shared contracts, feasibility gates and acceptance checkpoints. This is planning only: request networking/backend/extension work changes the earlier local-only scope and is not yet an approved implementation checkpoint. Camera/calibration data stays local; only deliberately sent request metadata would be shared. Keep the current teammate's communication ownership. Specific AI-track eligibility is pending the event's actual rules; computer-vision ML is already part of Motif and does not require an LLM.
+
 ## First vertical slice
 
 Deliver a runnable application in which a real webcam supplies live numerical facial signals, a person records a resting baseline and repeated comfortable movement, the system learns one gesture from that person's data, the person verifies it and approves its mapping, and that gesture selects a real communication action through automatic scanning. No fake recognizer or injected feature stream appears in the demo path.
