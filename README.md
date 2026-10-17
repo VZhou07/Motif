@@ -43,7 +43,7 @@ npm run build
 node scripts/browser-check.mjs   # after build: headless browser checks with Chrome's synthetic fake camera
 ```
 
-The browser check never opens a real webcam. It uses Chrome or Edge if installed, otherwise Playwright's bundled Chromium (`npx playwright install chromium`). Set `CHECK_DETAIL=all` to list every failing element. The fake camera shows no face, so screens after calibration are covered by the automated session/screen tests and the manual checklist in [ACCEPTANCE.md](ACCEPTANCE.md).
+The browser check never opens a real webcam. It uses Chrome or Edge if installed, otherwise Playwright's bundled Chromium (`npx playwright install chromium`). Set `CHECK_DETAIL=all` to list every failing element. The fake camera shows no face, so screens after calibration are checked for behaviour and accessible names by the automated session/screen tests, for colour and text size by a stylesheet test, and for real-world contrast, focus and layout only by the manual checklist in [ACCEPTANCE.md](ACCEPTANCE.md).
 
 ## Using it
 
