@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BROW, CHEEK, Harness, MOUTH, PUCKER, REST, type Values } from './session.test-support';
+import { BROW, CHEEK, HEAD_WOBBLE, Harness, MOUTH, PUCKER, REST, type Values } from './session.test-support';
 import type { MovementChoice } from './types';
 
 describe('guided calibration to communication (simulated numeric person)', () => {
@@ -761,5 +761,41 @@ describe('multiple gestures (R6)', () => {
     h.session.useGesture();
     expect(h.snap.inputMode).toBe('gesture');
     expect(h.snap.scanMode).toBe('step');
+  });
+
+  it('recalibration keeps the whole set on cancel and replaces it only after a new approval', () => {
+    const h = twoGestureStep();
+    const before = { models: h.snap.approvedModels, mapping: h.snap.mapping };
+    h.stepTo('recalibrate');
+    h.selectByGesture('start-recalibration');
+    expect(h.snap.stage).toBe('baseline');
+    h.run(10_500);
+    expect(h.snap.stage).toBe('choose');
+    h.session.cancel();
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['restart-recalibration', 'another-movement', 'keep-current']);
+    h.selectByGesture('keep-current', MOUTH); // any approved movement drives setup choices
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.approvedModels).toEqual(before.models);
+    expect(h.snap.mapping).toEqual(before.mapping);
+    expect(h.snap.scanMode).toBe('step');
+
+    h.stepTo('recalibrate');
+    h.selectByGesture('start-recalibration');
+    h.run(10_500);
+    h.selectByGesture('same-movement');
+    expect(h.snap.stage).toBe('training');
+    h.followPrompts((snap) => snap.stage === 'negative', BROW);
+    expect(h.snap.cycles.at(-1)!.heldOut.every((attempt) => attempt.kind === 'held-out')).toBe(true);
+    h.run(11_000, HEAD_WOBBLE);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.approvedModels).toEqual(before.models);
+    h.selectByGesture('comfortable');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current', 'map:0', 'reject']);
+    h.selectByGesture('map:0');
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.approvedModels).toHaveLength(1);
+    expect(h.snap.scanMode).toBe('auto');
+    // The old two-movement controls refer to movements that no longer exist.
+    expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
   });
 });
