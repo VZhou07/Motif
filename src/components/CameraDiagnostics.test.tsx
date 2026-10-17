@@ -115,6 +115,24 @@ describe('live camera diagnostics (R13)', () => {
     expect(panel().textContent).not.toContain('Recording only.');
   });
 
+  it('explains when Rest was already stronger than Action', () => {
+    const snapshot = trialSnapshot();
+    render(<CameraDiagnostics snapshot={{ ...snapshot, stage: 'setup-failed', capture: null, choice: { feature: 'jawOpen', direction: 1, label: 'Open mouth' },
+      failure: { kind: 'training', title: 'Could not learn', reasons: ['An attempt did not return to the personal resting baseline.'] },
+      calibrationReport: { feature: 'jawOpen', direction: 1, baselineCenter: 0.1, noise: 0.001,
+        weakestMovement: 0.475, restLimit: 0.348, restCeiling: 0.828, margin: -0.353, minimumMargin: 0.051,
+        phases: [{ attempt: 1, phase: 'before', restDistance: 0.83 }] },
+    }} />);
+    expect(panel().textContent).toContain('already as strong as or stronger than during Action');
+    expect(panel().textContent).toContain('Open mouth');
+  });
+
+  it('warns during Rest when the live signal already looks like Action', () => {
+    const snapshot = trialSnapshot();
+    render(<CameraDiagnostics snapshot={{ ...snapshot, frame: frameAt(12_000, { browOuterUpLeft: 0.8 }) }} />);
+    expect(panel().textContent).toContain('This already looks like Action');
+  });
+
   it('keeps frozen thresholds from diagnosticModel after candidate is cleared', () => {
     const snapshot = trialSnapshot();
     render(<CameraDiagnostics snapshot={{ ...snapshot, stage: 'setup-failed', capture: null, candidate: null,

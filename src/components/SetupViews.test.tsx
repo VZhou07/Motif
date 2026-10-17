@@ -33,6 +33,9 @@ describe('calibration pacing presentation (R13)', () => {
     const h = startTrial();
     renderApp(h);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest comfortably.');
+    const preview = document.querySelector('.camera-preview');
+    const diagnostics = screen.getByRole('region', { name: 'Live camera diagnostics' });
+    expect(preview?.contains(diagnostics)).toBe(false);
     expect(screen.getByText('Next: Action. Stay relaxed until the Action cue.')).toBeTruthy();
     expect(countdown().firstChild?.textContent).toBe('5');
     expect(screen.getByText('seconds until action')).toBeTruthy();

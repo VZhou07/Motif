@@ -59,6 +59,13 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
   if (!explanation && feature && (typeof value !== 'number' || !Number.isFinite(value))) explanation = 'The selected signal is unavailable. This input does not count.';
   if (!explanation && !feature) explanation = snapshot.stage === 'baseline' ? 'Recording your resting variation. Keep a comfortable, relaxed position.' : 'Choose a movement after the rest check to see its signal here.';
   if (!explanation && snapshot.failure) explanation = 'Setup is stopped. The recorded reason is shown below.';
+  const movementName = capture?.movement ?? model?.label ?? snapshot.choice?.label ?? definition?.label ?? 'the movement';
+  if (!explanation && !model && capture?.prompt === 'Rest' && distance !== null && distance > 0.35) {
+    explanation = `This already looks like Action. Stay relaxed through Rest, then make “${movementName}” only during Action.`;
+  }
+  if (!explanation && !model && capture?.prompt === 'Action' && distance !== null && distance < 0.12) {
+    explanation = `This still looks like rest. Make and hold “${movementName}” until Rest.`;
+  }
   if (!explanation && !model) explanation = 'Recording only. Activation and release thresholds are not learned yet.';
   if (!explanation && observation?.kind === 'uncertain') {
     const anotherMovement = frame && observedModels.some((other) => other.id !== model?.id
@@ -77,6 +84,7 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
   const negative = snapshot.failure?.kind === 'negative' ? snapshot.cycles.at(-1)?.negative : null;
   const failedPhases = report?.phases.filter((phase) => phase.restDistance > report.restLimit) ?? [];
   const largestRest = [...(report?.phases ?? [])].sort((a, b) => b.restDistance - a.restDistance)[0];
+  const inverted = report && report.weakestMovement <= report.restCeiling;
 
   return (
     <section className="camera-diagnostics" aria-label="Live camera diagnostics">
@@ -88,6 +96,7 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
         <strong>Why this attempt stopped</strong>
         <ul>{snapshot.failure.reasons.map((reason, index) => <li key={index}>{reason}</li>)}</ul>
         {failedTraining && report && <>
+          {inverted && <p>During Rest, “{movementName}” was already as strong as or stronger than during Action. Keep a closed, relaxed face through Rest; open or move only when Action appears, and hold until Rest.</p>}
           <p>Recorded measurements, not the live reading:</p>
           {(failedPhases.length ? failedPhases : largestRest ? [largestRest] : []).map((phase) => <p key={`${phase.attempt}:${phase.phase}`}>
             Attempt {phase.attempt} · {phase.phase === 'after' ? 'Rest after Action' : 'Rest before Action'}: {format(phase.restDistance, report.feature)} / rest limit {format(report.restLimit, report.feature)} (90th percentile).

@@ -50,15 +50,15 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, cueStatus, on
           <span className="eyebrow">YOUR CAMERA</span>
           <span className={`tracking-pill ${tracked ? 'tracking-good' : ''}`}><span />{running ? 'Live · local' : snapshot.camera === 'loading' ? 'Starting' : 'Off'}</span>
         </div>
-        <div className={`camera-preview camera-with-diagnostics ${running ? 'camera-running' : ''}`}>
+        <div className={`camera-preview ${running ? 'camera-running' : ''}`}>
           <video ref={videoRef} muted playsInline aria-label="Mirrored local camera preview" />
           <div className="camera-placeholder" aria-hidden="true">
             <svg viewBox="0 0 160 160" fill="none"><path d="M80 21c-29 0-43 21-43 52 0 36 17 65 43 65s43-29 43-65c0-31-14-52-43-52Z" stroke="currentColor" strokeWidth="2" strokeDasharray="5 6" /><path d="M57 70h9m28 0h9M79 74l-3 18h8m-20 16c9 7 23 7 32 0" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" /></svg>
             <span>{snapshot.camera === 'loading' ? 'Getting things ready…' : 'A space for your movement'}</span>
           </div>
           {running && <span className="preview-caption">Mirrored preview · left and right mean your own sides</span>}
-          <CameraDiagnostics snapshot={snapshot} />
         </div>
+        <CameraDiagnostics snapshot={snapshot} />
         <div className="camera-status"><span className={`status-dot ${tracked ? 'status-good' : ''}`} /><strong>{trackingLabel(snapshot)}</strong></div>
         <p className="camera-help">{running
           ? 'Keep only the calibrated person in view. When tracking is unclear, controls safely wait.'
