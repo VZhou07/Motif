@@ -163,6 +163,32 @@ function CustomControls({ snapshot, session }: ViewProps) {
   );
 }
 
+/** Candidates from free exploration: suggestions only; choosing one starts the usual practice and checks (R9). */
+export function DiscoveryResultsView({ snapshot, session }: ViewProps) {
+  const result = snapshot.discovery;
+  const candidates = result?.candidates ?? [];
+  return (
+    <>
+      <Heading eyebrow="FINDING YOUR MOVEMENTS" title={candidates.length ? <>Movements we<br /><em>noticed.</em></> : <>Nothing clear<br /><em>this time.</em></>}
+        lead="These are suggestions from what the camera saw, not proof of what you meant. Choosing one starts the usual practice and checks; nothing works until you approve it." />
+      {result?.reason && <p className="status-notice">{result.reason}</p>}
+      {candidates.length > 0 && (
+        <ul className="movement-evidence" aria-label="Noticed movements">
+          {candidates.map((candidate) => (
+            <li key={`${candidate.feature}:${candidate.direction}`}>
+              <strong>{candidate.label}</strong> — seen {candidate.episodes} times
+              {candidate.companions.length > 0 && <> · moves together with: {candidate.companions.map((channel) => channel.label).join(', ')}</>}
+              {candidate.alsoMoves.length > 0 && <> · often at the same time as: {candidate.alsoMoves.map((channel) => channel.label).join(', ')}</>}
+              {candidate.interferesWith.map((label) => <span key={label}> · may interfere with “{label}” — the cross-check will test this</span>)}
+            </li>
+          ))}
+        </ul>
+      )}
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+    </>
+  );
+}
+
 export function TiringView({ snapshot, session }: ViewProps) {
   return (
     <>

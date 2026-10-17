@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react';
 import { CAPTURE_TIMING } from '../app/capture';
+import { DISCOVERY } from '../app/discovery';
 import { liveDeviation, MOVEMENT_OPTIONS, type MovementOption } from '../app/movements';
 import type { MotifSession } from '../app/session';
 import type { SessionSnapshot } from '../app/types';
@@ -74,19 +75,23 @@ const PROMPT_TITLES: Record<string, ReactNode> = {
   Move: <>Make your movement<br /><em>and hold it.</em></>,
   'Return to rest': <>Gently return<br /><em>to rest.</em></>,
   'Everyday activity': <>Be yourself.<br /><em>Move naturally.</em></>,
+  'Explore freely': <>Try what feels<br /><em>comfortable.</em></>,
 };
 
 export function CaptureView({ snapshot, session }: ViewProps) {
   const capture = snapshot.capture;
   if (!capture) return null;
   const phaseMs = capture.kind === 'baseline' ? CAPTURE_TIMING.baselineMs : capture.kind === 'negative' ? CAPTURE_TIMING.negativeMs
+    : capture.kind === 'discovery' ? DISCOVERY.captureMs
     : capture.prompt === 'Rest' ? CAPTURE_TIMING.restMs : capture.prompt === 'Move' ? CAPTURE_TIMING.moveMs : CAPTURE_TIMING.returnMs;
   const seconds = Math.max(0, Math.ceil(((1 - capture.phaseProgress) * phaseMs) / 1_000));
   const eyebrow = capture.kind === 'baseline' ? 'STEP 1 · YOUR RESTING BASELINE'
     : capture.kind === 'training' ? `MOVEMENT PRACTICE · ${capture.index} OF ${capture.total}`
-      : capture.kind === 'verification' ? `SEPARATE CHECK · ${capture.index} OF ${capture.total}` : 'EVERYDAY ACTIVITY CHECK';
+      : capture.kind === 'verification' ? `SEPARATE CHECK · ${capture.index} OF ${capture.total}`
+        : capture.kind === 'discovery' ? 'FINDING YOUR MOVEMENTS' : 'EVERYDAY ACTIVITY CHECK';
   const lead = capture.kind === 'baseline' ? 'Rest in a position that feels natural. Only clear, uninterrupted camera input counts.'
     : capture.kind === 'negative' ? 'Look around, talk or make small ordinary movements — but please avoid your chosen movement. We count any accidental selections.'
+      : capture.kind === 'discovery' ? 'Try any movements you can comfortably make, a few times each, holding each for a moment and resting in between. Nothing is selected while exploring.'
       : capture.kind === 'verification' ? 'A new attempt that checks what was learned. It does not change the learned movement.'
         : 'Follow the prompt at a comfortable pace. Return to rest when asked.';
   return (
@@ -142,6 +147,9 @@ export function ChooseView({ snapshot, session }: ViewProps) {
       <label className="text-field">Name for this movement <span>(optional)</span>
         <input value={name} maxLength={60} placeholder="My comfortable movement" onChange={(event) => setName(event.target.value)} />
       </label>
+      <div className="button-row">
+        <button type="button" className="button" disabled={snapshot.camera !== 'running'} onClick={() => session.startDiscovery()}>Not sure? Find my movements</button>
+      </div>
       <div className="button-row">
         <button type="button" className="button button-primary" disabled={!selected || snapshot.camera !== 'running'}
           onClick={() => selected && session.chooseMovement({ feature: selected.feature, direction: selected.direction, label: name.trim() || selected.label })}>

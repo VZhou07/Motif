@@ -3,11 +3,11 @@ import { useMotif, type MotifRuntime } from './app/useMotif';
 import { CameraPanel } from './components/CameraPanel';
 import { CommunicationView } from './components/CommunicationView';
 import { BrandMark, Icon } from './components/Icon';
-import { ComfortView, FailedView, MappingConfirmView, MappingView, RecalibrateView, TiringView } from './components/ReviewViews';
+import { ComfortView, DiscoveryResultsView, FailedView, MappingConfirmView, MappingView, RecalibrateView, TiringView } from './components/ReviewViews';
 import { CaptureView, ChooseView, WelcomeView } from './components/SetupViews';
 
 const SETUP_STEP: Partial<Record<Stage, number>> = {
-  welcome: 0, baseline: 0, choose: 1, training: 1, verify: 1, negative: 1, 'setup-failed': 1, comfort: 1, mapping: 2, 'mapping-confirm': 2,
+  welcome: 0, baseline: 0, choose: 1, discover: 1, 'discover-results': 1, training: 1, verify: 1, negative: 1, 'setup-failed': 1, comfort: 1, mapping: 2, 'mapping-confirm': 2,
 };
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
@@ -20,7 +20,9 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
     case 'baseline':
     case 'training':
     case 'verify':
-    case 'negative': content = <CaptureView {...view} />; break;
+    case 'negative':
+    case 'discover': content = <CaptureView {...view} />; break;
+    case 'discover-results': content = <DiscoveryResultsView {...view} />; break;
     case 'choose': content = <ChooseView {...view} />; break;
     case 'setup-failed': content = <FailedView {...view} />; break;
     case 'comfort': content = <ComfortView {...view} />; break;
