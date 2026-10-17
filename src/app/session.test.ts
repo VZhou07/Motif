@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BROW, Harness, REST } from './session.test-support';
+import { BROW, CHEEK, Harness, MOUTH, PUCKER, REST, type Values } from './session.test-support';
+import type { MovementChoice } from './types';
 
 describe('guided calibration to communication (simulated numeric person)', () => {
   it('learns, verifies, approves by gesture, practices, composes and speaks', () => {
@@ -424,5 +425,219 @@ describe('honest limits and setup settings', () => {
       h.followPrompts((snap) => snap.capture?.index === 2);
       expect(h.spoken.slice(0, 3)).toEqual(enabled ? ['Rest', 'Move', 'Return to rest'] : []);
     }
+  });
+});
+
+const BROW_LABEL = 'Raise left outer eyebrow';
+const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
+const PUCKER_LIPS = { feature: 'mouthPucker', direction: 1, label: 'Pucker lips' } as const;
+const PUFF_CHEEKS = { feature: 'cheekPuff', direction: 1, label: 'Puff cheeks' } as const;
+const MOVES: Record<string, Values> = { [BROW_LABEL]: BROW, 'Open mouth': MOUTH, 'Pucker lips': PUCKER, 'Puff cheeks': CHEEK };
+const perform = (label: string | null): Values => MOVES[label ?? ''] ?? REST;
+
+/** From communication: add a verified movement, confirm comfort and approve proposal `proposal` by gesture. */
+function addAndApprove(h: Harness, choice: MovementChoice, proposal = 'map:0'): void {
+  h.addMovement(choice, perform);
+  expect(h.snap.stage).toBe('comfort');
+  h.selectByGesture('comfortable');
+  h.selectByGesture(proposal);
+  h.selectByGesture('approve-mapping');
+  expect(h.snap.stage).toBe('practice');
+}
+
+/** Brow selects, mouth moves next (step scanning), in communication. */
+function twoGestureStep(): Harness {
+  const h = new Harness();
+  h.setUpToCommunication();
+  addAndApprove(h, OPEN_MOUTH);
+  h.stepTo('finish-practice');
+  expect(h.snap.stage).toBe('communication');
+  return h;
+}
+
+describe('multiple gestures (R6)', () => {
+  it('adds a second movement with held-out, cross-check and negative evidence over the whole set', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    expect(h.snap.scan?.targets.map((target) => target.id)).toContain('add-movement');
+    h.addMovement(OPEN_MOUTH, perform);
+    expect(h.snap.stage).toBe('comfort');
+    const cycle = h.snap.cycles[1]!;
+    expect(cycle.movement).toBe('Open mouth');
+    expect(cycle.heldOut.map((attempt) => [attempt.kind, attempt.expected, attempt.passed, attempt.eventCount])).toEqual([
+      ['held-out', 'Open mouth', true, 1], ['held-out', 'Open mouth', true, 1], ['cross-check', BROW_LABEL, true, 1],
+    ]);
+    expect(cycle.negative).toMatchObject({ passed: true, eventCount: 0 });
+    expect(cycle.negative!.validDurationMs).toBeGreaterThanOrEqual(10_000);
+    // Nothing changes until the new set's controls are approved.
+    expect(h.snap.approvedModels).toHaveLength(1);
+    expect(h.snap.mapping?.mode).toBe('auto');
+
+    h.selectByGesture('comfortable');
+    expect(h.snap.stage).toBe('mapping');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current', 'map:0', 'map:1', 'map:2', 'map:3', 'reject']);
+    h.selectByGesture('map:0');
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.approvedModels).toHaveLength(1);
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
+    expect(h.snap.mapping?.mode).toBe('step');
+    expect(h.snap.scanMode).toBe('step');
+    expect(h.snap.cycles[1]!.outcome).toBe('approved');
+  });
+
+  it('fails a candidate that interferes with an existing movement and keeps the old set after fresh neutral', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    const before = h.snap.mapping;
+    // The person's brow raise also lifts the inner brows, so the new inner-brow model collides with it.
+    const habit = (label: string | null): Values => (label === BROW_LABEL ? { ...BROW, browInnerUp: 0.7 } : { browInnerUp: 0.7 });
+    h.addMovement({ feature: 'browInnerUp', direction: 1, label: 'Raise inner brows' }, habit);
+    expect(h.snap.stage).toBe('setup-failed');
+    expect(h.snap.failure?.title).toMatch(/interfered with “Raise left outer eyebrow”/);
+    const attempts = h.snap.cycles[1]!.heldOut;
+    expect(attempts.map((attempt) => [attempt.kind, attempt.passed])).toEqual([['held-out', true], ['held-out', true], ['cross-check', false]]);
+    expect(h.snap.cycles[1]!.negative).toBeNull();
+    expect(h.snap.decisions.map((decision) => decision.id)).toContain('keep-current');
+
+    h.selectByGesture('keep-current', BROW, 60_000, 600, 0);
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.runtime?.armed).toBe(false); // the selecting hold cannot carry over
+    expect(h.snap.approvedModels).toHaveLength(1);
+    expect(h.snap.mapping).toEqual(before);
+    expect(h.snap.adding).toBe(false);
+    h.selectByGesture('phrase:1');
+    expect(h.snap.message).toEqual(['No']);
+  });
+
+  it('refuses a movement that is already a control but allows the opposite direction', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    h.selectByGesture('add-movement');
+    expect(h.snap.stage).toBe('choose');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current']);
+    h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow again' });
+    expect(h.snap.stage).toBe('choose');
+    expect(h.snap.announcement).toMatch(/already one of your controls/);
+    h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: -1, label: 'Lower left outer eyebrow' });
+    expect(h.snap.stage).toBe('training');
+  });
+
+  it('a simultaneous brow and mouth movement selects nothing in setup or communication', () => {
+    const h = new Harness();
+    h.setUpToCommunication();
+    h.addMovement(OPEN_MOUTH, perform);
+    expect(h.snap.stage).toBe('comfort');
+    h.run(1_000);
+    h.run(800, { ...BROW, ...MOUTH });
+    h.run(800);
+    expect(h.snap.stage).toBe('comfort');
+    h.selectByGesture('comfortable');
+    h.selectByGesture('map:0');
+    h.selectByGesture('approve-mapping');
+    h.stepTo('finish-practice');
+    expect(h.snap.stage).toBe('communication');
+    const index = h.snap.scan!.index;
+    h.run(800);
+    h.run(800, { ...BROW, ...MOUTH });
+    h.run(800);
+    expect(h.snap.scan!.index).toBe(index);
+    expect(h.snap.message).toEqual([]);
+    expect(h.snap.stage).toBe('communication');
+  });
+
+  it('step scanning has no timed advance, next never latches, and select picks the stepped item', () => {
+    const h = twoGestureStep();
+    expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('slower');
+    const index = h.snap.scan!.index;
+    h.run(10_000);
+    expect(h.snap.scan!.index).toBe(index);
+    h.run(250, MOUTH);
+    h.run(400, MOUTH); // dwell completes during the hold
+    expect(h.snap.scan!.latched).toBeNull();
+    h.run(600);
+    expect(h.snap.scan!.index).toBe((index + 1) % h.snap.scan!.targets.length);
+    expect(h.snap.message).toEqual([]);
+    h.stepTo('phrase:2');
+    expect(h.snap.message).toEqual(['I need water']);
+  });
+
+  it('a next dwell spanning an automatic scan boundary selects nothing (step fallback mode)', () => {
+    const h = twoGestureStep();
+    h.run(61_000);
+    expect(h.snap.stepFallback).toBe(true);
+    expect(h.snap.scanMode).toBe('auto');
+    expect(h.snap.mapping?.mode).toBe('step'); // mapping and approval unchanged
+    expect(h.snap.announcement).toMatch(/scanning is now automatic/);
+    // Start a next hold just before the scan deadline so it spans the boundary.
+    h.run(600);
+    const start = h.snap.scan!.index;
+    while (h.snap.scan!.index === start) h.step();
+    h.run(1_700);
+    h.run(800, MOUTH);
+    h.run(800);
+    expect(h.snap.message).toEqual([]);
+    expect(h.snap.scan!.latched).toBeNull();
+    h.selectByGesture('phrase:3');
+    expect(h.snap.message).toEqual(['Please help me']);
+  });
+
+  it('the idle fallback only counts valid tracking and resets on any movement', () => {
+    const h = twoGestureStep();
+    h.run(50_000);
+    h.run(600, MOUTH);
+    h.run(30_000);
+    expect(h.snap.stepFallback).toBe(false);
+    h.run(10, REST);
+    for (let i = 0; i < 20; i += 1) h.step(REST, 'missing');
+    h.run(29_000);
+    expect(h.snap.stepFallback).toBe(false);
+    h.run(2_000);
+    expect(h.snap.stepFallback).toBe(true);
+  });
+
+  it('previous moves back with three movements', () => {
+    const h = twoGestureStep();
+    addAndApprove(h, PUCKER_LIPS);
+    expect(h.snap.mappingLabel).toMatch(/Pucker lips moves back/);
+    h.stepTo('finish-practice');
+    const length = h.snap.scan!.targets.length;
+    const index = h.snap.scan!.index;
+    h.run(600);
+    h.run(600, MOUTH); h.run(600);
+    h.run(600, MOUTH); h.run(600);
+    h.run(600, PUCKER); h.run(600);
+    expect(h.snap.scan!.index).toBe((index + 1) % length);
+    h.run(600, PUCKER); h.run(600);
+    h.run(600, PUCKER); h.run(600);
+    expect(h.snap.scan!.index).toBe((index - 1 + length) % length);
+    expect(h.snap.message).toEqual([]);
+  });
+
+  it('a pause movement toggles; next is ignored while paused; select also resumes', () => {
+    const h = twoGestureStep();
+    addAndApprove(h, PUCKER_LIPS);
+    h.stepTo('finish-practice');
+    addAndApprove(h, PUFF_CHEEKS);
+    expect(h.snap.mappingLabel).toMatch(/Puff cheeks pauses or resumes/);
+    h.stepTo('finish-practice');
+    expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('add-movement');
+    h.run(600);
+    h.run(600, CHEEK); h.run(600);
+    expect(h.snap.scan!.paused).toBe(true);
+    const index = h.snap.scan!.index;
+    h.run(600, MOUTH); h.run(600);
+    h.run(600, PUCKER); h.run(600);
+    expect(h.snap.scan!.paused).toBe(true);
+    expect(h.snap.scan!.index).toBe(index);
+    h.run(600, CHEEK); h.run(600);
+    expect(h.snap.scan!.paused).toBe(false);
+    expect(h.snap.message).toEqual([]);
+    h.run(600, CHEEK); h.run(600);
+    expect(h.snap.scan!.paused).toBe(true);
+    h.run(600, BROW); h.run(600);
+    expect(h.snap.scan!.paused).toBe(false);
+    expect(h.snap.message).toEqual([]);
   });
 });
