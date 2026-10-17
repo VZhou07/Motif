@@ -186,6 +186,23 @@ describe('quick continue', () => {
   });
 });
 
+describe('one-movement saved setup: confirm screen', () => {
+  it('offers Choose another movement instead of a one-option controls page, and approves nothing', () => {
+    const { storage, store } = storeFor();
+    new Harness({ profiles: store }).setUpToCommunication();
+    const h = new Harness({ profiles: storeFor(storage).store });
+    h.session.setCamera('running');
+    expect(h.session.restoreProfile('Last setup', true)).toBe(true);
+    expect(h.snap.stage).toBe('mapping-confirm');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['another-movement', 'approve-mapping']);
+    h.selectByGesture('another-movement');
+    expect(h.snap.stage).toBe('choose');
+    expect(h.snap.approvedModels).toEqual([]);
+    expect(h.snap.restoring).toBeNull();
+    expect(h.snap.pendingMapping).toBeNull();
+  });
+});
+
 describe('saving a profile: guards (R7)', () => {
   it('refuses to save during recalibration capture', () => {
     const { original } = savedPersonA();
