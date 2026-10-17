@@ -282,7 +282,7 @@ describe('Motif app', () => {
     h.run(20_500);
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Nothing clear/);
-    expect(screen.getByText(/No repeated movement was clear enough/)).toBeTruthy();
+    expect(document.querySelector('.status-notice')?.textContent).toMatch(/No repeated movement was clear enough/);
     fireEvent.click(screen.getByRole('button', { name: 'Look again' }));
     act(() => { for (let i = 0; i < 5; i += 1) { h.run(500); h.step(REST, 'missing'); } });
     expect(h.snap.failure?.kind).toBe('discovery');
