@@ -145,6 +145,8 @@ export interface ProfilesView {
   active: string | null;
   /** True when the approved setup differs from what was last saved (or was never saved). */
   unsaved: boolean;
+  /** True when the saved setup includes resting numbers (legacy saves may not). */
+  hasBaseline: boolean;
 }
 
 export interface SpeechPort {

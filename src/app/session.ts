@@ -1011,6 +1011,7 @@ export class MotifSession {
     return {
       names: this.profileList.profiles.map((profile) => profile.name), rejected: this.profileList.rejected,
       available: this.profileList.available, readable: this.profileList.readable, active: this.activeProfile,
+      hasBaseline: this.profileList.profiles.some((profile) => profile.name === AUTO_PROFILE_NAME && !!profile.baseline),
       unsaved: this.hasApproved && (this.activeProfile === null || this.signature() !== this.activeSignature),
     };
   }
