@@ -12,12 +12,12 @@ const SETUP_STEP: Partial<Record<Stage, number>> = {
 };
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
-  const { snapshot, session, videoRef, startCamera, getStarted, stopCamera, cueStatus, setCuesEnabled } = useMotif(runtime);
+  const { snapshot, session, videoRef, startCamera, getStarted, stopCamera, cueStatus, setCuesEnabled, requests } = useMotif(runtime);
   const step = SETUP_STEP[snapshot.stage];
   const view = { snapshot, session };
   let content;
   switch (snapshot.stage) {
-    case 'welcome': content = <WelcomeView {...view} onStartCamera={startCamera} onGetStarted={getStarted} />; break;
+    case 'welcome': content = <WelcomeView {...view} onStartCamera={startCamera} onGetStarted={getStarted} requests={requests} />; break;
     case 'baseline':
     case 'training':
     case 'verify':
@@ -32,7 +32,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
     case 'recalibrate-confirm': content = <RecalibrateView {...view} />; break;
     case 'tiring': content = <TiringView {...view} />; break;
     case 'practice':
-    case 'communication': content = <CommunicationView {...view} />; break;
+    case 'communication': content = <CommunicationView {...view} requests={requests} />; break;
   }
   return (
     <div className="app-shell">

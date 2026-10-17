@@ -1,3 +1,4 @@
+import type { ParticipantRequestController } from '../features/participant-requests/controller';
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { FaceTracker, TrackerError } from '../tracker';
 import { createCueAudio, type CueAudio, type CueAudioStatus } from './audio';
@@ -14,6 +15,8 @@ export interface MotifRuntime {
   tracker: Pick<FaceTracker, 'start' | 'stop'>;
   speech: LocalSpeech;
   cues?: CueAudio;
+  /** Caregiver requests for this participant page (W1); absent in tests and when not wired. */
+  requests?: ParticipantRequestController;
 }
 type Runtime = MotifRuntime;
 
@@ -154,5 +157,5 @@ export function useMotif(runtime?: Partial<Runtime>) {
     setCueStatus(cueSnapshot(cues));
   }, [cues]);
 
-  return { snapshot, session, videoRef, startCamera, getStarted, stopCamera, cueStatus, setCuesEnabled };
+  return { snapshot, session, videoRef, startCamera, getStarted, stopCamera, cueStatus, setCuesEnabled, requests: runtime?.requests ?? null };
 }

@@ -2,19 +2,27 @@ import { Icon } from './Icon';
 import { PhraseEditor } from './PhraseEditor';
 import { EvidencePanel } from './ReviewViews';
 import { ScanButton, ScanHint } from './ScanBoard';
-import type { ViewProps } from './SetupViews';
+import { CaregiverPairingCard, type ViewProps } from './SetupViews';
+import type { ParticipantRequestController } from '../features/participant-requests/controller';
+import { ParticipantRequestsPanel } from '../features/participant-requests/ParticipantRequestsPanel';
 
-export function CommunicationView({ snapshot, session }: ViewProps) {
+export function CommunicationView({ snapshot, session, requests }: ViewProps & { requests?: ParticipantRequestController | null }) {
   const scan = snapshot.scan;
   const practice = snapshot.stage === 'practice';
   const favouriteCount = snapshot.vocabulary.groups[0]?.phrases.length ?? 0;
   const paused = scan?.paused ?? false;
   const activate = (id: string) => session.selectTarget(id);
-  const tiles = scan?.targets.filter((target) => target.kind === 'phrase' || target.kind === 'group') ?? [];
-  const controls = scan?.targets.filter((target) => target.kind !== 'phrase' && target.kind !== 'group') ?? [];
+  // Request targets render only in the requests panel, with live labels (W1).
+  const shown = scan?.targets.filter((target) => !target.id.startsWith('request:')) ?? [];
+  const tiles = shown.filter((target) => target.kind === 'phrase' || target.kind === 'group');
+  const controls = shown.filter((target) => target.kind !== 'phrase' && target.kind !== 'group');
   const level = snapshot.level;
   const where = level?.kind === 'group' && level.group ? `${level.group.name} · ${level.group.phrases} phrase${level.group.phrases === 1 ? '' : 's'}`
-    : level?.kind === 'more' ? 'More options' : level?.kind === 'confirm' ? 'Save to Favourites?' : 'Main list';
+    : level?.kind === 'more' ? 'More options' : level?.kind === 'ask' ? 'Ask caregiver' : level?.kind === 'confirm' ? 'Save to Favourites?' : 'Main list';
+  const asking = level?.kind === 'ask';
+  const panel = requests && !practice
+    ? <ParticipantRequestsPanel controller={requests} snapshot={snapshot} onActivate={(id) => session.selectRequest(id)} disabled={paused} />
+    : null;
   const mode = snapshot.inputMode === 'assisted' ? 'Assisted Space switch' : 'Automatic scanning';
   return (
     <>
@@ -32,6 +40,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           </div>
         : <ScanHint snapshot={snapshot} />}
       <h2 className="level-heading">{where}</h2>
+      {asking && panel}
       <nav className="group-tabs" aria-label="Helper shortcuts to phrase groups">
         {[{ id: 'top', label: 'Main list' }, ...snapshot.vocabulary.groups.map((group) => ({ id: group.id, label: group.name }))].map((tab) => {
           const current = tab.id === 'top' ? level?.kind === 'top' : level?.kind === 'group' && level.group?.id === tab.id;
@@ -63,6 +72,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
             {snapshot.lastSpoken && <p className="speech-note">Last spoken: “{snapshot.lastSpoken}”</p>}
           </section>
         )}
+      {!asking && panel}
       {!snapshot.speech.available && !practice && (
         <p className="speech-note">No local speech voice is available in this browser. Your message stays visible on screen; Motif never uses a remote voice.</p>
       )}
@@ -90,6 +100,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
             : <p>Pause scanning first, so nothing can be selected while phrases change. Resume then starts from the main list if anything changed.</p>}
         </details>
       )}
+      {!practice && requests && <CaregiverPairingCard controller={requests} />}
       {!practice && snapshot.inputMode === 'assisted' && !snapshot.approvedModels.length && (
         <div className="button-row">
           <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>

@@ -1,3 +1,5 @@
+import type { ParticipantRequestController } from '../features/participant-requests/controller';
+import { ParticipantPairing } from '../features/participant-requests/ParticipantPairing';
 import type { ReactNode } from 'react';
 import { liveDeviation, MOVEMENT_OPTIONS } from '../app/movements';
 import type { MotifSession } from '../app/session';
@@ -16,7 +18,7 @@ export function Heading({ eyebrow, title, lead }: { eyebrow: string; title: Reac
 
 const percent = (value: number) => Math.round(Math.max(0, Math.min(1, Number.isFinite(value) ? value : 0)) * 100);
 
-export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: ViewProps & { onStartCamera: () => Promise<boolean> | void; onGetStarted: () => Promise<boolean> | void }) {
+export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted, requests }: ViewProps & { onStartCamera: () => Promise<boolean> | void; onGetStarted: () => Promise<boolean> | void; requests?: ParticipantRequestController | null }) {
   const running = snapshot.camera === 'running';
   const loading = snapshot.camera === 'loading';
   // A saved setup makes Continue the main action; a new setup stays available but is secondary.
@@ -47,7 +49,18 @@ export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: 
             <SavedProfiles snapshot={snapshot} session={session} onStartCamera={onStartCamera} />
           </>}
       <SetupOptions snapshot={snapshot} session={session} />
+      {requests && <CaregiverPairingCard controller={requests} />}
     </div>
+  );
+}
+
+/** Helper card: pair this device with a caregiver's invitation (W1). Pairing never changes the movement setup. */
+export function CaregiverPairingCard({ controller }: { controller: ParticipantRequestController }) {
+  return (
+    <details className="settings-card">
+      <summary className="field-label">Caregiver requests: pair this device</summary>
+      <ParticipantPairing controller={controller} />
+    </details>
   );
 }
 

@@ -8,6 +8,7 @@ import { createLocalSpeech } from './app/speech';
 import type { MotifRuntime } from './app/useMotif';
 import { BrandMark, Icon } from './components/Icon';
 import { CaregiverDashboard } from './features/caregiver';
+import { ParticipantRequestController } from './features/participant-requests/controller';
 
 export interface RootProps {
   /** Tests only: fake tracker/speech/session for the participant surface. */
@@ -18,9 +19,16 @@ export interface RootProps {
 
 function participantRuntime(): Partial<MotifRuntime> {
   const speech = createLocalSpeech();
+  // One request controller on the page's single care client (W1); without configuration it only says so.
+  const care = sharedCareClient();
+  let session: MotifSession | null = null;
+  const requests = new ParticipantRequestController({
+    client: care.status === 'ready' ? care.client : null,
+    announce: (text) => session?.announceExternal(text),
+  });
   // Profiles live in this browser's storage and are written only by an explicit Save (R7).
-  const session = new MotifSession({ speech, profiles: createLocalProfileStore(() => window.localStorage) });
-  return { session, speech };
+  session = new MotifSession({ speech, profiles: createLocalProfileStore(() => window.localStorage), requests });
+  return { session, speech, requests };
 }
 
 /** Role-aware surfaces. The participant session outlives a visit to the caregiver page; its camera does not. */
