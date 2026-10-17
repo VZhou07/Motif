@@ -692,7 +692,8 @@ export class MotifSession {
   /** Everything a profile stores, to tell whether the approved setup still matches the saved one. */
   private signature(models: readonly GestureModel[] = this.approvedModels, assignments: Mapping['assignments'] | null = this.mapping?.assignments ?? null,
     phrases: readonly string[] = this.phrases, intervalMs: number = this.intervalMs): string {
-    return JSON.stringify([models, assignments, phrases, intervalMs]);
+    // Assignment order does not matter: the same controls picked again must not read as a change.
+    return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, phrases, intervalMs]);
   }
 
   /** Explicit, caregiver-assisted Save of the approved setup. Never reachable from the scanner. */
