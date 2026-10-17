@@ -1,0 +1,29 @@
+# Request relay handoff
+
+Owner root, feature/request-relay, CDB1 Supabase foundation R16 revision 2. Worktree C:/Users/light/Motif/.cache/worktrees/request-relay, base 17ecce3. Main at 5ea672b and its untracked wink test belong to others; preserve them and the R15 preview.
+
+State: CDB1 implementation complete, final independent build/docs verification running. Supabase Free project created by user on another laptop; no hosted connection observed here. Runtime uses real Supabase; PGlite executes local SQL/RLS tests. Scope is shared DB/client/config/setup, not teammate screens. Whole C1 reconciliation and caregiver demo still pending.
+
+R16 revision 2 independently APPROVED before code. State implementing. Ownership: mapping_investigation owns supabase/migrations/** and src/care/database.test.ts plus database.test-support.ts only; root owns src/care contracts/client/config, dependencies/privacy and docs; conflict_tests independent read-only tester. Rev1 blockers resolved by authorized polling/no Realtime and serialized auth+data with pinned JWT/epochs. SDK2.118.0/PGlite0.5.10; npm ci completed (119 packages, audit0). Baseline tests session86440 finishing. No real camera or external service started.
+
+Implementation owners have returned their files; root owns them now. Independent conflict_tests final CDB1 SOFTWARE verdict PASS: full 40 files/455 tests PASS, typecheck PASS, actual SDK immediate-dispose/replacement and offline-poll recovery probes PASS. Configured browser privacy on temporary port4447 PASS (server/browser closed; only intercepted fake requests, no camera/backend). Initial build missing ignored WASM; root ran npm run setup:assets, copied installed package WASM and reused existing model without downloading; independent final production build PASS. README networking/storage privacy corrected. No unresolved source blocker remains. Hosted acceptance remains pending, so overall CDB1 acceptance is not reached.
+
+Review fixes: validate factory config; project-specific Auth storage; correlate mutation identity/payload/revision; continue polling after outages; await actual SDK initialize before final dispose (new real-SDK regression first reproduced leaked timer, then passed). SQL migration wrapped in one transaction. Two-second authorized polling deliberately replaces raw Realtime.
+
+Local focused commits: f39ea7e dependencies; c9f02f2 contracts; 40f5e62 SQL/RLS tests; 42c9b2a scoped network policy; d8247d0 client; 4759b2f factory/lifecycle tests and public exports. No push. Root docs/setup are being finalized before common-base reconciliation. R17/common-base design in reconciliation.md revision1 independently APPROVED by mapping_investigation before merge/code. Next: save foundation/docs; merge only committed main in this isolated branch; preserve both histories; policy-version cached evidence and add type-only browser command contract; independently rerun merged regression/build/browser checks; record exact common base. No dependent implementation until that base is shared.
+
+Hosted remaining checks: correct VITE env names locally, apply SQL once, enable anonymous Auth, create confirmed caregiver demo accounts; use isolated identities for real hosted pairing/request/ack/permissions/concurrent redemption. SQL harness is actual PostgreSQL but not hosted JWT/concurrent transaction proof. UI/routes/extension and cross-device/human acceptance remain unfinished. Preserve original main untracked wink test and port5187/session66988 R15 preview. No owned running test command after final tester exits.
+
+## 2026-10-17 — R18 role-aware routing (Agent 3 coordinator, Claude Code)
+
+Worktree `/Users/golbargghazinour/Desktop/Motif/.cache/worktrees/request-relay`, local branch `feature/request-relay` (tracks origin, never pushed). Fast-forwarded to `4c84180` (relay `1e94ede` + reviewed caregiver dashboard). `03c606f Update R15 tests for one approve screen`: the 7 failures (session.conflicts ×4, CalibrationPreparation ×3) were a semantic merge gap — ux-landing replaced the one-movement Comfortable→mapping→approve steps with `approve-comfortable` and updated older tests, but the later-merged R15 tests still used the old steps. App behaviour unchanged; those 8 tests pass; typecheck PASS.
+
+State: R18 software verified. Reasoning: rev1/rev2 BLOCKED, rev3 APPROVED by a3e2c68504a8cc4e3 before code. Commits: db2a6fa design record, 6f3f53d remount adapters, 9093160 shared care client, be530f0 route parsing, 361eb81 caregiver route mount, then `Test care client stays lazy`. Independent testing reviewer a7a8207bfabb92182 VERDICT PASS (full vitest 52 files/671, tsc, build PASS; 8 of 9 own mutations caught; the uncaught fixed-message gap and the lazy-import test were then added, 672 PASS). Coordinator also mutation-checked cue attach, setHidden, speech.cancel, session ref and lazy import.
+
+Routes: `#/` participant app (unchanged UI plus a "Caregiver dashboard" header link); `#/caregiver` caregiver dashboard over the one shared Supabase client, or a setup message when `.env.local` is missing/invalid. No camera on the caregiver page. The route grants no authority.
+
+Known failure (pre-existing, not R18): `npm run test:browser` clicks the old "Start camera" welcome button removed by ux-landing (3df10b0/5776920), times out, then hangs because the browser is not closed on failure. Next owner (Agent 3): update the six clicks to the new welcome flow and close the browser in a finally; rerun.
+
+Pending outside this checkpoint: Agent 1 participant pairing/request view (invitations cannot be redeemed in-app yet, so C2 is not reached), gesture-to-request wiring, Agent 4 browser companion, hosted Supabase setup, real two-device delivery, real camera/comfort checks. No running processes.
+
+Resume: read root docs + this file; `git log --oneline 4c84180..HEAD`; fix browser-check script; integrate Agent 1/4 commits when handed off.

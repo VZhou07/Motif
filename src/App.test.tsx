@@ -27,6 +27,11 @@ function twoMovements(): Harness {
   return h;
 }
 
+/** Assisted scanning: lets time pass until `id` is highlighted (R14 levels put groups on the main list). */
+function highlight(h: Harness, id: string) {
+  act(() => { for (let guard = 0; h.highlightedId() !== id; guard += 1) { if (guard > 1_000) throw new Error(`no ${id}`); h.stall(50); } });
+}
+
 function setHidden(value: boolean) {
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => value });
   fireEvent(document, new Event('visibilitychange'));
@@ -69,14 +74,18 @@ describe('Motif app', () => {
     h.speechAvailable = false;
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: /assisted input/i }));
+    highlight(h, 'group:g1');
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
     const yes = screen.getByRole('button', { name: 'Add “Yes” to message' });
     expect(yes.getAttribute('aria-current')).toBe('true');
     fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    // Back on the main list Speak is highlighted; a repeat or chord pressing it would set lastSpoken.
     fireEvent.keyDown(window, { code: 'Space', key: ' ', repeat: true });
     fireEvent.keyDown(window, { code: 'Space', key: ' ', ctrlKey: true });
     expect(screen.getByRole('region', { name: 'Message' }).textContent).toContain('Yes');
     expect(h.snap.message).toEqual(['Yes']);
     fireEvent.click(screen.getByRole('button', { name: 'Helper' })); // these details live in the Helper panel
+    expect(h.snap.lastSpoken).toBeNull();
     expect(screen.getByText(/No local speech voice is available/)).toBeTruthy();
   });
 
@@ -106,11 +115,12 @@ describe('Motif app', () => {
   it('lets a helper edit a phrase during setup and shows it on the board', () => {
     const h = new Harness();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    const input = screen.getByRole('textbox', { name: 'Phrase 1' });
+    const input = screen.getByRole('textbox', { name: 'Quick phrase 1' });
     fireEvent.change(input, { target: { value: 'Good morning' } });
     fireEvent.blur(input);
-    expect(h.snap.phrases[0]).toBe('Good morning');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Good morning');
     fireEvent.click(screen.getByRole('button', { name: /assisted input/i }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Quick, 3 phrases' }));
     expect(screen.getByRole('button', { name: 'Add “Good morning” to message' })).toBeTruthy();
   });
 
@@ -123,17 +133,26 @@ describe('Motif app', () => {
     fireEvent.keyDown(field, { code: 'Space', key: ' ' });
     expect(h.snap.message).toEqual([]);
     field.remove();
+    highlight(h, 'group:g1');
     const pause = screen.getByRole('button', { name: /Pause/ });
     pause.focus();
     fireEvent.keyDown(pause, { code: 'Space', key: ' ' });
-    expect(h.snap.message).toEqual(['Yes']);
+    // The switch acted on the highlighted tile (open Quick), not on the focused Pause button.
+    expect(h.snap.level).toMatchObject({ kind: 'group', group: { id: 'g1' } });
     expect(h.snap.scan?.paused).toBe(false);
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    expect(h.snap.message).toEqual(['Yes']);
   });
 
   it('registers input listeners once under StrictMode double mounting', () => {
     const h = new Harness();
     render(<StrictMode><App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} /></StrictMode>);
     fireEvent.click(screen.getByRole('button', { name: /assisted input/i }));
+    highlight(h, 'group:g1');
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    // A doubled listener would open Quick and then also add "Yes" from this one key press.
+    expect(h.snap.level?.kind).toBe('group');
+    expect(h.snap.message).toEqual([]);
     fireEvent.keyDown(window, { code: 'Space', key: ' ' });
     expect(h.snap.message).toEqual(['Yes']);
   });
@@ -213,8 +232,7 @@ describe('Motif app', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch)' }));
-    act(() => h.session.selectTarget('helper'));
-    act(() => h.session.selectTarget('practice'));
+    act(() => h.click('practice')); // in More since C1 (R18)
     expect(h.session.getSnapshot().stage).toBe('practice');
     expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
     act(() => h.session.selectTarget('finish-practice'));
@@ -323,7 +341,7 @@ describe('Motif app', () => {
       screen.queryAllByRole(role, { name: (name) => name.trim() === '' }).map((element) => `${role}: ${element.outerHTML.slice(0, 80)}`));
     const announcers = () => document.querySelectorAll('[aria-live]:not([aria-live="off"])').length;
     const h = new Harness();
-    h.session.setPhrase(0, 'Yes');
+    h.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 0, text: 'Yes' });
     const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     const screens: Array<[string, () => void]> = [
       ['welcome', () => {}],

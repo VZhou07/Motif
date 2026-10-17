@@ -3,6 +3,7 @@ import type { Mapping, MappingProposal, ScanMode } from './mapping';
 import type { DiscoveryResult } from './discovery';
 import type { MovementEvidence } from './scoring';
 import type { TrainingDiagnostics } from '../engine/calibration';
+import type { Vocabulary } from './vocabulary';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
@@ -35,6 +36,9 @@ export interface CaptureStatus {
   feature: FeatureId | null;
   direction: 1 | -1 | null;
   modelId: string | null;
+  /** Preparation only. Does not change the current recording's evidence/index. */
+  nextMovement?: string | null;
+  nextModelId?: string | null;
 }
 
 export interface AttemptEvidence {
@@ -64,7 +68,8 @@ export interface CycleEvidence {
 export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative' | 'rejected' | 'cancelled' | 'profile-mismatch' | 'discovery';
 export interface Failure { kind: FailureKind; title: string; reasons: string[] }
 
-export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' }
+/** `group` opens a phrase group and `nav` moves between levels (More, Back); R14. */
+export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' | 'group' | 'nav' }
 export interface ScanView {
   targets: ScanTarget[];
   index: number;
@@ -115,7 +120,10 @@ export interface SessionSnapshot {
   decisions: ScanTarget[];
   scan: ScanView | null;
   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
-  phrases: string[];
+  /** Current communication/practice scan level; null outside those stages (R14). */
+  level: LevelView | null;
+  /** Phrase groups (Favourites first); deliberately saved settings, never message history (R14). */
+  vocabulary: Vocabulary;
   message: string[];
   lastSpoken: string | null;
   speech: { available: boolean; voiceName: string | null };
@@ -152,6 +160,13 @@ export interface ProposalCard {
   recommended: boolean;
   inUse: boolean;
   parts: Array<{ label: string; action: 'select' | 'next' | 'previous' | 'pause' }>;
+}
+
+export interface LevelView {
+  kind: 'top' | 'more' | 'group' | 'confirm' | 'clear' | 'recalibrate';
+  group: { id: string; name: string; phrases: number } | null;
+  /** The message text waiting for Save to Favourites confirmation. */
+  confirm: string | null;
 }
 
 export interface ProfilesView {

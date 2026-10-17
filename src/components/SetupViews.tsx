@@ -1,9 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { liveDeviation, MOVEMENT_OPTIONS } from '../app/movements';
 import type { SetupProgress } from '../app/progress';
 import type { MotifSession } from '../app/session';
 import type { CapturePrompt, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
+import { PhraseEditor } from './PhraseEditor';
 import { AUTO_PROFILE_NAME } from '../app/profiles';
 import { SavedProfiles } from './ProfileViews';
 import { DecisionList } from './ScanBoard';
@@ -73,20 +74,10 @@ export function SetupOptions({ snapshot, session }: ViewProps) {
           onChange={(event) => session.setSpokenPrompts(event.target.checked)} />
         Speak setup prompts aloud {snapshot.speech.available ? `(local voice: ${snapshot.speech.voiceName})` : '(no local voice available on this device)'}
       </label>
-      <div className="phrase-edit-grid">
-        {snapshot.phrases.map((phrase, index) => <PhraseField key={`${index}:${phrase}`} index={index} phrase={phrase} session={session} />)}
-      </div>
+      <h2 className="field-label">Phrase groups</h2>
+      <p className="helper-copy">Phrases are kept on this device with Last setup once a movement setup is approved. Continue uses the phrases saved with that setup.</p>
+      <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
     </details>
-  );
-}
-
-function PhraseField({ index, phrase, session }: { index: number; phrase: string; session: MotifSession }) {
-  const [draft, setDraft] = useState(phrase);
-  return (
-    <label className="text-field">Phrase {index + 1}
-      <input value={draft} maxLength={60} onChange={(event) => setDraft(event.target.value)}
-        onBlur={() => { if (!session.setPhrase(index, draft)) setDraft(phrase); }} />
-    </label>
   );
 }
 
@@ -100,6 +91,7 @@ const PROMPT_TITLES: Record<CapturePrompt, ReactNode> = {
 export function CaptureView({ snapshot, session }: ViewProps) {
   const capture = snapshot.capture;
   if (!capture) return null;
+  const upcomingMovement = capture.prompt === 'Rest' ? capture.nextMovement : null;
   const seconds = Math.max(0, Math.ceil(capture.remainingMs / 1_000));
   const nextInstruction = capture.nextPrompt === 'Action' ? 'Next: Move. Stay relaxed until the cue.'
     : capture.nextPrompt === 'Rest' ? 'Next: Rest. Relax when the cue appears.' : null;
@@ -115,7 +107,9 @@ export function CaptureView({ snapshot, session }: ViewProps) {
   return (
     <>
       <Heading eyebrow={eyebrow} title={PROMPT_TITLES[capture.prompt]} lead={lead} />
-      {capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
+      {upcomingMovement
+        ? <p className="status-notice">Next Action: <strong>{upcomingMovement}</strong>. Stay relaxed until Action.</p>
+        : capture.movement && <p className="status-notice">Movement for this attempt: <strong>{capture.movement}</strong></p>}
       <div className={`recording-card ${capture.prompt === 'Action' ? 'recording-move' : ''}`}>
         <div><span className="recording-dot" /><span>{capture.prompt === 'Action' ? 'Move' : capture.prompt}</span></div>
         <strong className="timer" aria-hidden="true">{seconds}<small>seconds</small></strong>

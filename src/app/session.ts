@@ -1,4 +1,4 @@
-import type { Baseline, FeatureFrame, GestureModel, TrackingState, TrainingTrial } from '../domain/types';
+import type { Baseline, FeatureFrame, GestureModel, Result, TrackingState, TrainingTrial } from '../domain/types';
 import { fitGesture, type TrainingDiagnostics } from '../engine/calibration';
 import type { CueAudio } from './audio';
 import { FeatureProcessor, MAX_FRAME_GAP_MS } from '../engine/features';
@@ -9,10 +9,12 @@ import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from
 import { describeMapping, MAX_GESTURES, type ControlAction, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
+import { buildLevel, effectiveLevel, isClearLevel, isConfirmLevel, isGroupLevel, isRecalibrateLevel, type Level, type LevelContext } from './navigation';
+import { addFavourite, addProblem, applyEdit, defaultVocabulary, FAVOURITES_ID, type Vocabulary, type VocabularyEdit } from './vocabulary';
+import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, VERIFICATION_POLICY_VERSION, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
-  STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
-  type InputMode, type MovementChoice, type ProfilesView, type ProposalCard, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
+  type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
+  type InputMode, type LevelView, type MovementChoice, type ProfilesView, type ProposalCard, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
 } from './types';
 
 export const SESSION_LIMITS = {
@@ -55,15 +57,6 @@ export const DECISION_LABELS = {
   'full-list': 'Choose from the full list',
 } as const;
 export type DecisionId = keyof typeof DECISION_LABELS;
-
-const CONTROL_LABELS: Record<string, string> = {
-  speak: 'Speak', undo: 'Undo', repeat: 'Say it again', helper: 'Helper', 'close-helper': 'Close helper',
-  'clear-yes': 'Yes, clear it', 'clear-no': 'Keep it', 'recalibrate-no': 'Keep current setup', 'recalibrate-yes': 'Start recalibration',
-  clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
-  practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Start talking',
-  'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
-  'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
-};
 
 /** R14: a check that passed less than this long ago on this page is not repeated when the same profile is restored. */
 export const RECENT_CHECK_MS = 60 * 60 * 1000;
@@ -151,12 +144,9 @@ export class MotifSession {
   private recalibrating = false;
   private cycles: CycleEvidence[] = [];
   private failure: Failure | null = null;
-  private phrases = [...STARTER_PHRASES];
+  private vocabulary: Vocabulary = defaultVocabulary();
   private message: string[] = [];
   private lastSpoken: string | null = null;
-  private helperOpen = false;
-  private confirmingClear = false;
-  private confirmingRecalibrate = false;
   private lastMovementAt: number | null = null;
   private movementSeenShown = false;
   private spokenPrompts = false;
@@ -175,6 +165,12 @@ export class MotifSession {
 
   private scanner: ScanController | null = null;
   private scanTargets: ScanTarget[] = [];
+  /** Communication/practice scan level (R14); reset to top on every stage entry. */
+  private level: Level = 'top';
+  /** Counted scanner wraps (via tick) in a sub-level with nothing in between; two return to top. */
+  private idleWraps = 0;
+  /** The vocabulary when the scan was paused, so Resume can tell whether it changed. */
+  private pausedVocabulary: Vocabulary | null = null;
   private runtime: GestureRuntime | null = null;
   private scanDriver: 'gesture' | 'assisted' | 'none' = 'none';
   private intervalMs: number = SESSION_LIMITS.scanDefaultMs;
@@ -186,7 +182,16 @@ export class MotifSession {
     this.store = options.profiles ?? createMemoryProfileStore();
     this.cues = options.cues ?? null;
     this.refreshProfiles();
+    this.vocabulary = this.savedVocabulary();
     this.publish();
+  }
+
+  /**
+   * R19 B1: phrases come from the readable Last setup (first readable entry, as `get`), so a fresh setup
+   * after a reload never overwrites saved favourites with the defaults. Defaults when there is none.
+   */
+  private savedVocabulary(): Vocabulary {
+    return this.profileList.profiles.find((profile) => sameName(profile.name, AUTO_PROFILE_NAME))?.vocabulary ?? defaultVocabulary();
   }
 
   readonly subscribe = (listener: () => void): (() => void) => {
@@ -262,6 +267,7 @@ export class MotifSession {
       const before = this.scanner.snapshot.index;
       this.scanner.tick(nowMs);
       changed ||= this.scanner.snapshot.index !== before;
+      this.afterTick(before, nowMs);
     }
     if (this.movementSeenShown && !this.movementSeen()) changed = true;
     if (changed) this.publish();
@@ -271,7 +277,7 @@ export class MotifSession {
     if (this.hidden === hidden) return;
     this.hidden = hidden;
     if (hidden) { this.cues?.stop(); this.failClosed(nowMs, 'stale'); }
-    if (this.scanner && this.scanDriver === 'assisted') this.scanner.setSuspended(hidden, nowMs);
+    if (this.scanner && this.scanDriver === 'assisted') this.setScanSuspended(hidden, nowMs);
     this.publish();
   }
 
@@ -389,7 +395,7 @@ export class MotifSession {
     cycle.heldOut.push({ attempt: cycle.heldOut.length + 1, passed: result.passed, eventCount: result.eventCount,
       validDurationMs: result.validDurationMs, reasons: result.reasons, expected: this.labelOf(expectedId), expectedId, kind });
     if (!result.passed) {
-      this.fail('verification', kind === 'cross-check' ? `The new movement interfered with “${this.labelOf(expectedId)}”`
+      this.fail('verification', kind === 'cross-check' ? `“${this.labelOf(expectedId)}” did not pass its combined check`
         : kind === 'recheck' ? `“${this.labelOf(expectedId)}” did not pass its re-check` : 'A check attempt did not pass', result.reasons);
       return;
     }
@@ -437,21 +443,26 @@ export class MotifSession {
   private cue(prompt: CapturePrompt): void {
     if (prompt === this.lastPrompt) return;
     this.lastPrompt = prompt;
-    this.announce(prompt);
-    if (this.spokenPrompts) this.speech.speak(prompt);
+    const capture = prompt === 'Rest' ? this.captureStatus() : null;
+    // Rest always states the target, including after a dropped preparation.
+    // A previously announced next gesture must not survive an interrupted retry.
+    const instruction = capture?.nextMovement
+      ? `Rest. Next Action: ${capture.nextMovement}.` : prompt;
+    this.announce(instruction);
+    if (this.spokenPrompts) this.speech.speak(instruction);
     if (!this.hidden && this.camera === 'running' && (prompt === 'Rest' || prompt === 'Action')) this.cues?.play(prompt === 'Rest' ? 'rest' : 'action');
   }
   // ── Stages and restricted setup scanners ─────────────────────────────────
 
   private setStage(stage: Stage): void {
     this.stage = stage;
-    this.helperOpen = false;
-    this.confirmingClear = false;
-    this.confirmingRecalibrate = false;
     this.processor.reset();
     this.runtime = null;
     this.scanner = null;
     this.scanTargets = [];
+    this.level = 'top';
+    this.idleWraps = 0;
+    this.pausedVocabulary = null;
     this.scanDriver = 'none';
     this.baselineRecorder = null;
     this.trialRecorder = null;
@@ -678,6 +689,8 @@ export class MotifSession {
     const valid = validateMapping(set, pending.assignments);
     if (!valid.ok) { this.enterMapping(); this.announce(valid.reasons[0] ?? 'Those controls are not valid.'); return; }
     const restored = this.restoring;
+    let replacedPhrases = false;
+    const restoredName = this.restoring?.profile.name ?? '';
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
@@ -687,7 +700,8 @@ export class MotifSession {
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
-      this.phrases = [...restored.profile.phrases];
+      replacedPhrases = JSON.stringify(this.vocabulary) !== JSON.stringify(restored.profile.vocabulary);
+      this.vocabulary = restored.profile.vocabulary;
       this.intervalMs = restored.profile.scanIntervalMs;
     } else if (this.candidate) {
       if (!cycle || cycle.outcome !== 'verified') { this.announce(CANNOT_APPROVE); return; }
@@ -712,12 +726,13 @@ export class MotifSession {
       const { profile } = restored;
       this.activeProfile = profile.name;
       // Compared with what was saved, so approving different controls marks the setup unsaved.
-      this.activeSignature = this.signature(profile.models, profile.mapping.assignments, profile.phrases, profile.scanIntervalMs);
+      this.activeSignature = this.signature(profile.models, profile.mapping.assignments, profile.vocabulary, profile.scanIntervalMs);
       this.refreshProfiles();
     }
     this.autoSaveProfile();
     this.enterPractice();
-    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.`);
+    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.${
+      replacedPhrases ? ` Your phrases were replaced by the ones saved with “${restoredName}”.` : ''}`);
   }
 
   private usePrevious(): void {
@@ -876,13 +891,21 @@ export class MotifSession {
     this.publish();
   }
 
-  setPhrase(index: number, text: string): boolean {
-    const phrase = text.trim();
-    if (!['welcome', 'choose', 'setup-failed'].includes(this.stage) || !Number.isInteger(index)
-      || index < 0 || index >= this.phrases.length || phrase.length < 1 || phrase.length > 60) return false;
-    this.phrases[index] = phrase;
+  /** Conventional helper edit of the phrase vocabulary during setup; returns the plain reason when refused. */
+  editVocabulary(edit: VocabularyEdit): Result<Vocabulary> {
+    // During use, only while paused, so the scanner can never select something being edited (R14).
+    const pausedUse = this.stage === 'communication' && this.scanner?.snapshot.paused === true;
+    if (!['welcome', 'choose', 'setup-failed'].includes(this.stage) && !pausedUse) {
+      return { ok: false, reasons: ['Phrases can be edited during setup, or while communication is paused.'] };
+    }
+    const result = applyEdit(this.vocabulary, edit);
+    if (result.ok) {
+      this.vocabulary = result.value;
+      // R19: one rule — while a movement setup is approved, every phrase change is kept in Last setup.
+      if (this.hasApproved) this.autoSaveProfile();
+    }
     this.publish();
-    return true;
+    return result;
   }
 
   setSpokenPrompts(enabled: boolean): void {
@@ -1023,15 +1046,15 @@ export class MotifSession {
 
   /** Everything a profile stores, to tell whether the approved setup still matches the saved one. */
   private signature(models: readonly GestureModel[] = this.approvedModels, assignments: Mapping['assignments'] | null = this.mapping?.assignments ?? null,
-    phrases: readonly string[] = this.phrases, intervalMs: number = this.intervalMs): string {
+    vocabulary: Vocabulary = this.vocabulary, intervalMs: number = this.intervalMs): string {
     // Assignment order does not matter: the same controls picked again must not read as a change.
-    return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, phrases, intervalMs]);
+    return JSON.stringify([models, assignments ? Object.entries(assignments).sort() : null, vocabulary, intervalMs]);
   }
 
   /** Keeps the approved setup under a reserved name; failures (blocked or full storage) are silent and never affect input. */
   private autoSaveProfile(): boolean {
     if (!this.hasApproved || !this.mapping) return false;
-    const built = buildProfile({ name: AUTO_PROFILE_NAME, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases,
+    const built = buildProfile({ name: AUTO_PROFILE_NAME, models: this.approvedModels, mapping: this.mapping, vocabulary: this.vocabulary,
       scanIntervalMs: this.intervalMs, baseline: this.approvedBaseline, checks: this.storedChecks() });
     const saved = built.ok && this.store.save(built.value, true).ok;
     this.refreshProfiles();
@@ -1045,7 +1068,7 @@ export class MotifSession {
       const at = this.checkedAt.get(modelKey(model));
       if (at !== undefined) movementAt[model.id] = at;
     }
-    return { ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
+    return { policyVersion: VERIFICATION_POLICY_VERSION, ...(this.approvedBaselineAt !== null ? { restAt: this.approvedBaselineAt } : {}), movementAt };
   }
 
   /** R17 B1: after a failed restore, never skip that profile's checks again until fresh ones pass. */
@@ -1059,14 +1082,15 @@ export class MotifSession {
   saveProfile(name: string, replace = false): StoreResult {
     const refuse = (reason: string): StoreResult => { this.announce(reason); this.publish(); return { ok: false, code: 'invalid', reason }; };
     if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from practice or communication.');
-    const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, phrases: this.phrases, scanIntervalMs: this.intervalMs, checks: this.storedChecks() });
+    const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, vocabulary: this.vocabulary, scanIntervalMs: this.intervalMs, checks: this.storedChecks() });
     if (!built.ok) return refuse(built.reasons[0] ?? 'This setup cannot be saved.');
     const result = this.store.save(built.value, replace);
     this.refreshProfiles();
     if (result.ok) {
       this.activeProfile = built.value.name;
       this.activeSignature = this.signature();
-      this.announce(`Saved “${built.value.name}” on this device. Only movement settings, controls, phrases, scan speed and when your checks last passed were saved.`);
+      const favourites = built.value.vocabulary.groups[0]?.phrases.length ?? 0;
+      this.announce(`Saved “${built.value.name}” on this device, including ${favourites} favourite${favourites === 1 ? '' : 's'}. Only movement settings, controls, phrases, scan speed and when your checks last passed were saved.`);
     } else this.announce(result.reason);
     this.publish();
     return result;
@@ -1075,7 +1099,7 @@ export class MotifSession {
   /** Helper-only: end this session and return to the start screen, where a saved profile can be restored. The camera stays on. */
   returnToStart(): boolean {
     if (this.stage === 'communication' && this.inputMode === 'assisted' && !this.hasApproved) {
-      // R15: assisted input without a movement setup has nothing to save; phrases and scan speed are kept.
+      // R15: assisted input without a movement setup has nothing to save; phrase groups (including Favourites) and scan speed are kept.
       this.speech.cancel();
       this.cues?.stop();
       this.message = [];
@@ -1129,7 +1153,7 @@ export class MotifSession {
     this.recalibrating = false;
     this.cycles = [];
     this.failure = null;
-    this.phrases = [...STARTER_PHRASES];
+    // R19: phrases stay (they were just kept in Last setup), so Set up again never loses favourites.
     this.message = [];
     this.lastSpoken = null;
     this.lastMovementAt = null;
@@ -1151,6 +1175,7 @@ export class MotifSession {
     const result = this.store.remove(name);
     this.refreshProfiles();
     if (result.ok && this.activeProfile && sameName(this.activeProfile, name)) this.activeProfile = null;
+    if (result.ok && !this.hasApproved && sameName(name, AUTO_PROFILE_NAME)) this.vocabulary = defaultVocabulary();
     this.announce(result.ok ? `Deleted “${name}” from this device.` : result.reason);
     this.publish();
     return result;
@@ -1160,6 +1185,8 @@ export class MotifSession {
     const result = this.store.removeAll();
     this.refreshProfiles();
     if (result.ok) this.activeProfile = null;
+    // R19: deleted favourites must not be written back by a later approval.
+    if (result.ok && !this.hasApproved) this.vocabulary = defaultVocabulary();
     this.announce(result.ok ? 'All saved profiles were deleted from this device.' : result.reason);
     this.publish();
     return result;
@@ -1178,7 +1205,7 @@ export class MotifSession {
     this.choice = null;
     const models = profile.models.map((model) => ({ ...model }));
     // R17: Continue reuses only times stored with this profile; Re-check and a forgotten profile reuse nothing.
-    const reuse = quick && !this.noReuse.has(profile.name.trim().toLowerCase());
+    const reuse = quick && profile.checks?.policyVersion === VERIFICATION_POLICY_VERSION && !this.noReuse.has(profile.name.trim().toLowerCase());
     this.checkedAt.clear();
     if (reuse) {
       for (const model of models) {
@@ -1285,52 +1312,107 @@ export class MotifSession {
 
   // ── Scanning and communication ───────────────────────────────────────────
 
+  /** Resolves `phrase:<groupId>:<index>` against the current vocabulary; stale ids resolve to nothing. */
   private phraseFor(id: string): string | undefined {
-    const match = /^phrase:(\d+)$/.exec(id);
-    return match ? this.phrases[Number(match[1])] : undefined;
+    const match = /^phrase:([^:]+):(\d+)$/.exec(id);
+    return match ? this.vocabulary.groups.find((group) => group.id === match[1])?.phrases[Number(match[2])] : undefined;
+  }
+
+  private levelContext(): LevelContext {
+    return {
+      stage: this.stage === 'practice' ? 'practice' : 'communication',
+      inputMode: this.inputMode,
+      timed: this.inputMode === 'assisted' || this.scanMode() === 'auto',
+      movements: this.approvedModels.length,
+      hasApproved: this.hasApproved,
+      decisions: this.stage === 'practice' ? this.decisionTargets(this.allowedDecisions()) : [],
+    };
+  }
+
+  private levelTargets(): ScanTarget[] {
+    const context = this.levelContext();
+    this.level = effectiveLevel(this.level, this.vocabulary, context.stage);
+    return buildLevel(this.level, this.vocabulary, context);
   }
 
   private enterPractice(): void {
     this.setStage('practice');
     this.practice = { selections: 0, last: null };
-    const targets: ScanTarget[] = [
-      ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
-      { id: 'finish-practice', label: CONTROL_LABELS['finish-practice']!, kind: 'control' },
-      ...this.decisionTargets(this.allowedDecisions()),
-    ];
-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+    this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
-  /** The communication scan list, rebuilt from state so the panel and the Clear confirmation can replace it. */
-  private communicationTargets(): ScanTarget[] {
-    const control = (id: string): ScanTarget => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' });
-    if (this.confirmingRecalibrate) return ['recalibrate-no', 'recalibrate-yes'].map(control);
-    if (this.confirmingClear) return ['clear-no', 'clear-yes'].map(control);
-    const phrases: ScanTarget[] = this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const }));
-    if (this.helperOpen) {
-      const assisted = this.inputMode === 'assisted';
-      const yours = assisted ? [this.hasApproved ? 'use-gesture' : 'setup-gesture']
-        : ['change-controls', ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
-      const speed = assisted || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
-      return ['close-helper', ...yours, ...speed, ...(this.message.length ? ['clear'] : []), 'practice', 'pause'].map(control);
-    }
-    return this.message.length
-      ? [control('speak'), control('undo'), ...phrases, control('pause'), control('helper')]
-      : [...phrases, ...(this.lastSpoken ? [control('repeat')] : []), control('pause'), control('helper')];
-  }
-
-  private enterCommunication(options: { keepPanel?: boolean } = {}): void {
-    const { helperOpen, confirmingClear, confirmingRecalibrate } = this;
+  private enterCommunication(): void {
     this.setStage('communication');
-    if (options.keepPanel) { this.helperOpen = helperOpen; this.confirmingClear = confirmingClear; this.confirmingRecalibrate = confirmingRecalibrate; }
-    this.startScanner(this.communicationTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+    this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
-  /** After a communication selection the list may change; the highlight restarts at the first item. */
-  private refreshCommunication(nowMs: number, before: ScanController | null): void {
-    if (this.stage !== 'communication' || !this.scanner || this.scanner !== before) return;
-    this.scanTargets = this.communicationTargets();
+  /**
+   * Swaps the scanned list in place (R14): the same scanner and gesture runtime, so one action per hold
+   * and neutral rearming are untouched. `setTargets` puts the highlight on the first target and cancels any latch.
+   */
+  private setLevel(level: Level, nowMs: number): void {
+    if (!this.scanner || !this.isRoutedStage()) return;
+    this.level = level;
+    this.scanTargets = this.levelTargets();
     this.scanner.setTargets(this.scanTargets.map((target) => target.id), nowMs);
+    this.idleWraps = 0;
+  }
+
+  /** Called after BOTH tick sites: two wraps from the last target to the first return a sub-level to top. */
+  private afterTick(beforeIndex: number, nowMs: number): void {
+    const scanner = this.scanner;
+    if (!scanner || !this.isRoutedStage() || this.level === 'top') return;
+    if (beforeIndex !== this.scanTargets.length - 1 || scanner.snapshot.index !== 0) return;
+    this.idleWraps += 1;
+    if (this.idleWraps < 2) return;
+    const confirming = isConfirmLevel(this.level);
+    const asking = isClearLevel(this.level) || isRecalibrateLevel(this.level);
+    this.setLevel('top', nowMs);
+    this.announce(confirming ? 'Not saved. Back to the main list.' : asking ? 'Nothing changed. Back to the main list.' : 'Back to the main list.');
+    this.publish();
+  }
+
+  /** Suspension changes reset the auto-return count only when the value actually flips. */
+  private setScanSuspended(value: boolean, nowMs: number): void {
+    const scanner = this.scanner;
+    if (!scanner) return;
+    if (scanner.snapshot.suspended !== value) this.idleWraps = 0;
+    scanner.setSuspended(value, nowMs);
+  }
+
+  /** Opens a group tile; an empty group only announces, so the list the user has learned never shifts. */
+  private openLevel(groupId: string, nowMs: number): void {
+    const group = this.vocabulary.groups.find((entry) => entry.id === groupId);
+    if (!group) return;
+    if (!group.phrases.length) {
+      this.idleWraps = 0;
+      this.announce(group.id === 'favourites' ? 'No favourites yet. Use More, then Save message to Favourites.' : `${group.name} has no phrases yet.`);
+      return;
+    }
+    this.setLevel({ group: group.id }, nowMs);
+    this.announce(`${group.name}: ${group.phrases.length} phrase${group.phrases.length === 1 ? '' : 's'}.`);
+  }
+
+  /**
+   * Helper (conventional input) shortcut to a group or the main list from any level while not paused.
+   * A gesture dwell in progress is cancelled with no action. Gesture and Space input never use this.
+   */
+  openGroup(id: string | 'top'): void {
+    const scanner = this.scanner;
+    if (!scanner || !this.isRoutedStage() || scanner.snapshot.paused) return;
+    const nowMs = this.clock();
+    const confirming = isConfirmLevel(this.level);
+    if (id === 'top') {
+      this.setLevel('top', nowMs);
+      this.announce(confirming ? 'Not saved. Main list.' : 'Main list.');
+    } else {
+      const group = this.vocabulary.groups.find((entry) => entry.id === id);
+      if (!group) return;
+      if (!group.phrases.length) { this.openLevel(id, nowMs); this.publish(); return; }
+      this.setLevel({ group: id }, nowMs);
+      this.announce(`${confirming ? 'Not saved. ' : ''}${group.name}: ${group.phrases.length} phrase${group.phrases.length === 1 ? '' : 's'}.`);
+    }
+    this.publish();
   }
 
   private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
@@ -1344,11 +1426,11 @@ export class MotifSession {
       // Fail closed: discard any pending dwell and latch, freeze timing, and require fresh neutral later.
       this.runtime?.invalidate();
       scanner.cancelSelection(nowMs);
-      scanner.setSuspended(true, nowMs);
+      this.setScanSuspended(true, nowMs);
       this.lastScanFrameTimestamp = undefined;
       return;
     }
-    scanner.setSuspended(false, nowMs);
+    this.setScanSuspended(false, nowMs);
     // A paused scan never counts toward the step fallback, which would otherwise rebuild an unpaused scanner.
     if (this.lastScanFrameTimestamp !== undefined && !scanner.snapshot.paused) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
     this.lastScanFrameTimestamp = frame.timestampMs;
@@ -1359,6 +1441,7 @@ export class MotifSession {
     if (this.isRoutedStage() && (update.started || update.event)) this.lastMovementAt = nowMs;
     if (update.started) {
       this.idleValidMs = 0;
+      this.idleWraps = 0;
       if (actionOf(update.started) === 'select') scanner.beginSelection(nowMs);
     }
     if (update.cancelled && scanner.snapshot.latchedTarget !== undefined) scanner.cancelSelection(nowMs);
@@ -1381,52 +1464,73 @@ export class MotifSession {
       if (this.idleValidMs >= SESSION_LIMITS.stepIdleMs) this.fallBackToAutomatic();
       return;
     }
+    const before = scanner.snapshot.index;
     scanner.tick(nowMs);
+    this.afterTick(before, nowMs);
   }
 
   /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
   private fallBackToAutomatic(): void {
     this.stepFallback = true;
-    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication({ keepPanel: true });
-    this.announce('No movement for a minute, so scanning is now automatic. Your select movement still selects; helpers can use the buttons.');
+    const confirming = isConfirmLevel(this.level);
+    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
+    this.announce(`${confirming ? 'Not saved. ' : ''}No movement for a minute, so scanning is now automatic, starting from the main list. Your select movement still selects; helpers can use the buttons.`);
   }
 
   private pauseScan(nowMs: number): void {
     this.idleValidMs = 0;
+    this.idleWraps = 0;
+    if (!this.scanner?.snapshot.paused) this.pausedVocabulary = this.vocabulary;
     this.scanner?.setPaused(true, nowMs);
     this.announce(this.inputMode === 'assisted' ? 'Paused. Press Space to resume.' : 'Paused. Rest, then use your select or pause movement to resume.');
   }
 
+  /** One Resume rule (R14): same level from its first target, or the main list if phrases changed while paused. */
   private resumeScan(nowMs: number): void {
     this.idleValidMs = 0;
     this.scanner?.setPaused(false, nowMs);
-    this.announce('Resumed.');
+    const changed = this.pausedVocabulary !== null && this.pausedVocabulary !== this.vocabulary;
+    const dropped = changed && isConfirmLevel(this.level);
+    this.pausedVocabulary = null;
+    this.setLevel(changed ? 'top' : this.level, nowMs);
+    this.announce(changed ? `Resumed at the main list because the phrases changed.${dropped ? ' Not saved.' : ''}` : 'Resumed.');
   }
 
   private activate(id: string, nowMs: number): void {
     if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:') || id.startsWith('tiring:') || id.startsWith('discovered:')) { this.chooseSetupTarget(id); return; }
+    if (!this.isRoutedStage()) return;
+    this.idleWraps = 0;
     const phrase = this.phraseFor(id);
+    // Navigation and Pause work the same in practice and communication (R14 M2).
+    if (id.startsWith('group:')) { this.openLevel(id.slice('group:'.length), nowMs); return; }
+    if (id === 'back') { this.setLevel('top', nowMs); this.announce('Main list.'); return; }
+    if (id === 'pause') { this.pauseScan(nowMs); return; }
     if (this.stage === 'practice') {
       if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
       if (phrase) {
         this.practice = { selections: this.practice.selections + 1, last: phrase };
-        this.announce(`Practice: selected "${phrase}".`);
+        this.setLevel('top', nowMs);
+        this.announce(`Practice: selected "${phrase}". Back to the main list.`);
       }
       return;
     }
-    if (this.stage !== 'communication') return;
-    const before = this.scanner;
-    if (phrase) { this.message = [...this.message, phrase]; this.announce(`Added "${phrase}".`); this.refreshCommunication(nowMs, before); return; }
+    // A phrase goes into the message and the highlight returns to Speak, the likely next step: one announcement.
+    if (phrase) { this.message = [...this.message, phrase]; this.setLevel('top', nowMs); this.announce(`Added "${phrase}". Back to the main list.`); return; }
     switch (id) {
+      case 'more': this.setLevel('more', nowMs); this.announce('More options.'); break;
       case 'speak': this.speakMessage(); break;
-      case 'undo': if (this.message.length) { this.message = this.message.slice(0, -1); this.announce('Removed the last phrase.'); } break;
-      case 'repeat': if (this.lastSpoken) { this.speech.speak(this.lastSpoken); this.announce(`Saying again: ${this.lastSpoken}`); } break;
-      case 'helper': this.helperOpen = true; this.announce('Helper options.'); break;
-      case 'close-helper': this.helperOpen = false; this.confirmingRecalibrate = false; this.announce('Helper closed.'); break;
-      case 'clear': if (this.message.length) { this.confirmingClear = true; this.helperOpen = false; this.announce('Clear the whole message? Keep it is first.'); } break;
-      case 'clear-no': this.confirmingClear = false; this.announce('Message kept.'); break;
-      case 'clear-yes': this.message = []; this.confirmingClear = false; this.announce('Message cleared.'); break;
-      case 'pause': this.pauseScan(nowMs); break;
+      case 'undo': this.undoLast(); break;
+      case 'say-again': this.sayAgain(); break;
+      case 'save-favourite': this.askToSaveFavourite(nowMs); break;
+      case 'confirm-favourite': this.confirmFavourite(nowMs); break;
+      case 'cancel-favourite': this.setLevel('top', nowMs); this.announce('Not saved.'); break;
+      case 'clear':
+        if (!this.message.length) { this.announce('Nothing to clear.'); break; }
+        this.setLevel({ clear: true }, nowMs);
+        this.announce('Clear the whole message? Keep it is first.');
+        break;
+      case 'clear-no': this.setLevel('top', nowMs); this.announce('Message kept.'); break;
+      case 'clear-yes': this.message = []; this.setLevel('top', nowMs); this.announce('Message cleared.'); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'practice': this.enterPractice(); this.announce('Practice: selections are not spoken.'); break;
@@ -1440,15 +1544,13 @@ export class MotifSession {
         break;
       case 'recalibrate':
         if (this.hasApproved && this.inputMode === 'gesture') {
-          this.confirmingRecalibrate = true;
+          this.setLevel({ recalibrate: true }, nowMs);
           this.announce('Recalibrating turns communication off until the new movement is approved. Keep current setup is first.');
         }
         break;
-      case 'recalibrate-no': this.confirmingRecalibrate = false; this.announce('Nothing changed.'); break;
+      case 'recalibrate-no': this.setLevel('more', nowMs); this.announce('Nothing changed.'); break;
       case 'recalibrate-yes':
-        this.confirmingRecalibrate = false;
-        if (this.camera !== 'running') { this.announce('Start the camera first. Nothing was changed.'); break; }
-        this.helperOpen = false;
+        if (this.camera !== 'running') { this.setLevel('more', nowMs); this.announce('Start the camera first. Nothing was changed.'); break; }
         this.recalibrating = true;
         this.adding = false;
         this.beginBaseline();
@@ -1456,14 +1558,60 @@ export class MotifSession {
       case 'use-gesture': this.useGesture(); break;
       case 'setup-gesture': this.setStage('welcome'); this.announce('Set up a movement: start the camera, then the rest check.'); break;
     }
-    this.refreshCommunication(nowMs, before);
   }
 
   private changeInterval(delta: number, nowMs: number): void {
     this.intervalMs = Math.max(SESSION_LIMITS.scanMinMs, Math.min(SESSION_LIMITS.scanMaxMs, this.intervalMs + delta));
+    this.idleWraps = 0;
     this.scanner?.setInterval(this.intervalMs, nowMs);
     this.autoSaveProfile();
     this.announce(`Scanning every ${(this.intervalMs / 1_000).toFixed(1)} seconds.`);
+  }
+
+  private undoLast(): void {
+    const last = this.message.at(-1);
+    if (last === undefined) { this.announce('Nothing to undo.'); return; }
+    this.message = this.message.slice(0, -1);
+    this.announce(`Removed “${last}”.`);
+  }
+
+  /** Repeats the last spoken text; it lives in memory only and is never stored. */
+  private sayAgain(): void {
+    const text = this.lastSpoken;
+    if (!text) { this.announce('Nothing has been spoken yet.'); return; }
+    const spoken = this.speech.speak(text);
+    this.announce(spoken ? `Speaking again: ${text}` : `Local speech is not available on this device. Your message is shown on screen: ${text}`);
+  }
+
+  /** The message bar's "Say it again": communication only, never practice or while paused; the scan list is unaffected. */
+  repeatLast(): void {
+    if (this.stage !== 'communication' || !this.scanner || this.scanner.snapshot.paused || !this.lastSpoken) return;
+    this.sayAgain();
+    this.publish();
+  }
+
+  /** Checks first, so the person is never asked to confirm something that cannot be saved. */
+  private askToSaveFavourite(nowMs: number): void {
+    if (!this.message.length) { this.announce('Nothing to save yet. Add a phrase first.'); return; }
+    const text = this.message.join('. ');
+    const problem = addProblem(this.vocabulary, FAVOURITES_ID, text);
+    if (problem) { this.announce(problem); return; }
+    this.setLevel({ confirm: text }, nowMs);
+    this.announce(`Save “${text}” to Favourites? Select Save to confirm, or Cancel.`);
+  }
+
+  /** Re-validated on confirm; a rejection changes nothing and nothing is ever evicted. Storage waits for profile Save. */
+  private confirmFavourite(nowMs: number): void {
+    if (!isConfirmLevel(this.level)) return;
+    const result = addFavourite(this.vocabulary, this.level.confirm);
+    if (result.ok) this.vocabulary = result.value;
+    this.setLevel('top', nowMs);
+    if (!result.ok) { this.announce(`Not saved: ${result.reasons[0] ?? 'this cannot be saved.'}`); return; }
+    // R19: favourites persist only through the automatic Last setup, which needs an approved movement setup.
+    if (!this.hasApproved) { this.announce('Saved to Favourites. It is kept on this device only once a movement setup is approved.'); return; }
+    this.announce(this.autoSaveProfile()
+      ? 'Saved to Favourites. It is kept on this device with Last setup.'
+      : 'Saved to Favourites for now; this browser could not keep it, so it will be gone when this page closes.');
   }
 
   private speakMessage(): void {
@@ -1503,6 +1651,19 @@ export class MotifSession {
 
   private announce(text: string): void { this.announcement = text; }
 
+  private levelView(): LevelView | null {
+    if (!this.isRoutedStage() || !this.scanner) return null;
+    const level = this.level;
+    if (isGroupLevel(level)) {
+      const group = this.vocabulary.groups.find((entry) => entry.id === level.group);
+      return { kind: 'group', group: group ? { id: group.id, name: group.name, phrases: group.phrases.length } : null, confirm: null };
+    }
+    if (isConfirmLevel(level)) return { kind: 'confirm', group: null, confirm: level.confirm };
+    if (isClearLevel(level)) return { kind: 'clear', group: null, confirm: null };
+    if (isRecalibrateLevel(level)) return { kind: 'recalibrate', group: null, confirm: null };
+    return { kind: level, group: null, confirm: null };
+  }
+
   private captureStatus(): CaptureStatus | null {
     const base = { interruptions: this.stageInterruptions, notice: this.notice, movement: null as string | null,
       nextPrompt: null as CapturePrompt | null, feature: null as MovementChoice['feature'] | null,
@@ -1520,8 +1681,12 @@ export class MotifSession {
       const expected = training ? this.choice?.label ?? null : this.labelOf(this.verifyPlan[done] ?? '');
       const modelId = training ? null : this.verifyPlan[done] ?? null;
       const selected = training ? this.choice : this.mappingSet().find((model) => model.id === modelId);
+      const trailingRest = status.prompt === 'Rest' && status.elapsedMs >= CAPTURE_TIMING.restMs + CAPTURE_TIMING.moveMs;
+      const nextModelId = training ? null : this.verifyPlan[done + (trailingRest ? 1 : 0)] ?? null;
+      const nextMovement = training ? this.choice?.label ?? null : nextModelId ? this.labelOf(nextModelId) : null;
       return { ...base, movement: expected, feature: selected?.feature ?? null, direction: selected?.direction ?? null,
-        modelId, kind: training ? 'training' : 'verification', index: done + 1,
+        modelId, nextMovement: status.prompt === 'Rest' ? nextMovement : null,
+        nextModelId: status.prompt === 'Rest' ? nextModelId : null, kind: training ? 'training' : 'verification', index: done + 1,
         total: training ? SESSION_LIMITS.trainingTrials : this.verifyPlan.length,
         prompt: status.prompt, phaseProgress: status.phaseProgress, overallProgress: status.overallProgress, validMs: status.elapsedMs,
         remainingMs: status.remainingMs, nextPrompt: !training && done === this.verifyPlan.length - 1 && status.elapsedMs >= CAPTURE_TIMING.restMs + CAPTURE_TIMING.moveMs ? null : status.nextPrompt };
@@ -1571,14 +1736,14 @@ export class MotifSession {
       scan: scanner ? { targets: this.scanTargets, index: scanner.index, latched: scanner.latchedTarget ?? null, paused: scanner.paused,
         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,
-      phrases: [...this.phrases], message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
+      level: this.levelView(), vocabulary: this.vocabulary, message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
       spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
       proposals: this.stage === 'mapping' ? this.proposalCards() : [],
-      helperOpen: this.helperOpen, confirmingClear: this.confirmingClear, confirmingRecalibrate: this.confirmingRecalibrate, movementSeen: this.movementSeen(),
+      helperOpen: this.isRoutedStage() && this.level === 'more', confirmingClear: isClearLevel(this.level), confirmingRecalibrate: isRecalibrateLevel(this.level), movementSeen: this.movementSeen(),
       comfortPreview: this.comfortPreview(),
     };
     for (const listener of this.listeners) listener();

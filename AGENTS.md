@@ -40,6 +40,16 @@ Every delegation must provide the canonical skill path, `AGENTS.md`, `plan.md`, 
 
 ## Handoff and agent failure
 
+### Concurrent caregiver workstreams
+
+For the selected four-branch caregiver build, use [docs/caregiver-demo-plan.md](docs/caregiver-demo-plan.md) and [docs/agent-prompts.md](docs/agent-prompts.md). Each teammate works in a separate clone/worktree. The backend/integration owner alone edits shared contracts, root planning/status documents, app routing/session integration, global privacy/network policy, profile schema and dependency manifests/lockfiles.
+
+Feature owners still read the root plan/reasoning/progress and canonical skill, but record their own designs, independent review verdicts, progress, tests and resume instructions in `docs/workstreams/<workstream>/reasoning.md` and `progress.md`. These per-feature documents satisfy the reasoning/handoff-writing requirement for that worker; the integrator summarizes them in root documents. Use `participant-requests`, `caregiver-dashboard`, `request-relay` or `browser-access` as the workstream directory. Do not have four agents edit the root journals. Existing communication files transfer only to the communication teammate or after an explicit owner handoff.
+
+Commit shared versioned contracts on an agreed passing base before dependent implementation. Other workers may inspect/design while that gate is pending; do not invent incompatible contracts. Report the base/contract commit IDs so the human teammates can share them; never push automatically. Integrate feature commits on the integration owner's isolated branch after independent review/checks, preserving active checkouts. Do not merge over a teammate's ongoing work. A missing subagent tool or unavailable hardware check must be recorded honestly.
+
+The user explicitly requires functional integration and caregiver account access control. The shared first checkpoint includes real caregiver authentication, paired-participant identity and server-enforced group ownership, not only request shapes. All workers follow the selected plan's account/access matrix and Integrated completion contract. Agent 3 owns role-aware routes, real auth/client/backend wiring and independent tests of the merged app. Feature-ready is not integrated-verified; resolving Git conflicts cannot satisfy completion. Include cross-caregiver/group and participant isolation, revocation, old-session/queued-event rejection, and browser Return preserving the correct participant. Never grant access from a UI role switch, local profile, alias or guessed ID.
+
 - Treat `progress.md` as the durable handoff record. Update it before each implementation chunk, after every review/checkpoint, and before stopping or handing off. Keep the current reasoning revision and exact next action visible.
 - Every active work item must name its owner/subagent, allowed files, dependencies, acceptance tests, and state (`planned`, `reviewing`, `implementing`, `testing`, `blocked`, or `reached`). Give parallel workers disjoint file ownership; transfer ownership explicitly before another agent edits those files.
 - Record the last passing checkpoint, Git base commit, changed/new files and their purpose, completed versus partial behavior, exact commands/results, known failures, pending manual checks, relevant running command/session identifiers, and a small ordered resume checklist. Never store credentials, private recordings, or environment secrets in handoff files.
@@ -68,7 +78,7 @@ Official references: [Codex subagents](https://developers.openai.com/codex/subag
 - Use time-based filtering, separate activation/release thresholds, minimum dwell, one action per hold, and neutral rearming. Invalid, missing, stale, ambiguous, or interrupted tracking must produce no action. Require fresh neutral after recovery or phase changes.
 - Never use model confidence as evidence of intention. Fit only on training attempts; evaluate separately on held-out attempts and negative activity. Present small-sample observations honestly.
 - Every mapping needs explicit user approval. After calibration, navigation, speech, Pause, Resume, and access to recalibration must remain operable using the available gesture(s). Support assisted setup without promising fully independent onboarding prematurely.
-- Process camera input locally. Do not upload/persist frames, raw video, or facial identity data. Store only approved minimal calibration profiles when the profile checkpoint is implemented. No backend, medical diagnosis, or emergency detection in this MVP.
+- Process camera input locally. Do not upload/persist frames, raw video, or facial identity data. Store only approved minimal calibration profiles. The selected caregiver expansion permits deliberate Auth/pairing/care-request traffic to the configured Supabase project under the shared client and server permissions. Do not add other backend data flows, medical diagnosis or emergency detection.
 
 ## Git rules
 

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createLocalProfileStore, createMemoryStorage, parseProfile, PROFILE_KEY, type ProfileStore, type StorageLike, type StoredProfile } from './profiles';
 import { BROW, HEAD_WOBBLE, Harness, MOUTH, REST, type Values } from './session.test-support';
+import { defaultVocabulary } from './vocabulary';
 
 const BROW_LABEL = 'Raise left outer eyebrow';
 const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
@@ -14,15 +15,26 @@ function storeFor(storage = createMemoryStorage()): { storage: ReturnType<typeof
 function savedPersonA() {
   const { storage, store } = storeFor();
   const h = new Harness({ profiles: store });
-  h.session.setPhrase(0, 'Hello');
+  h.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 0, text: 'Hello' });
   h.setUpToCommunication();
   h.selectByGesture('slower');
   h.addMovement(OPEN_MOUTH, perform);
   h.selectByGesture('approve-comfortable');
   h.stepTo('finish-practice');
-  h.session.selectTarget('phrase:2'); // a message that must never be saved
+  h.click('phrase:g2:0'); // a message that must never be saved
   expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
   return { storage, store, original: h };
+}
+
+/**
+ * R19 seeds a new page's phrases from Last setup. Resetting Last setup's phrases to the defaults lets the
+ * restore tests still prove that a named profile's phrases apply only on approval.
+ */
+function lastSetupWithDefaultPhrases(storage: ReturnType<typeof createMemoryStorage>): void {
+  const store = storeFor(storage).store;
+  const last = store.get('Last setup');
+  if (!last) throw new Error('fixture: no Last setup');
+  expect(store.save({ ...last, vocabulary: defaultVocabulary() }, true)).toEqual({ ok: true });
 }
 
 /** A fresh page (new session) on the same device, camera running, restore started. */
@@ -55,7 +67,7 @@ describe('saving a profile (R7)', () => {
     expect(raw).not.toMatch(/"message"|lastSpoken/);
     expect(raw).not.toMatch(/heldOut|negative|frame|timestamp/);
     const saved = JSON.parse(raw).profiles.find((profile: { name: string }) => profile.name === 'Person A');
-    expect(saved.phrases[0]).toBe('Hello');
+    expect(saved.vocabulary.groups[1]!.phrases[0]).toBe('Hello');
     expect(saved.scanIntervalMs).toBe(2_500);
     expect(saved.models).toHaveLength(2);
   });
@@ -248,7 +260,7 @@ describe('back to start (R15/R17)', () => {
     const { h } = twoAndBack();
     expect(h.snap).toMatchObject({ stage: 'welcome', camera: 'running', approvedModels: [], mapping: null, scan: null,
       message: [], cycles: [], inputMode: 'gesture', profiles: { names: [LAST] } });
-    expect(h.snap.phrases[0]).toBe('Yes');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes');
   });
 
   it('is refused when this browser cannot keep the setup', () => {
@@ -263,7 +275,7 @@ describe('back to start (R15/R17)', () => {
 describe('back to start from assisted input (R16)', () => {
   function assisted(): Harness {
     const h = new Harness({ profiles: storeFor().store });
-    h.session.setPhrase(0, 'Hello');
+    h.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 0, text: 'Hello' });
     h.session.useAssisted();
     expect(h.snap).toMatchObject({ stage: 'communication', inputMode: 'assisted' });
     return h;
@@ -271,23 +283,22 @@ describe('back to start from assisted input (R16)', () => {
 
   it('returns to the start screen, clears the message, keeps phrases, and Space or a target no longer acts', () => {
     const h = assisted();
-    h.session.selectTarget('phrase:1');
+    h.click('phrase:g1:1');
     expect(h.snap.message).toHaveLength(1);
     const cancel = vi.spyOn(h.speech, 'cancel');
     expect(h.session.returnToStart()).toBe(true);
     expect(cancel).toHaveBeenCalled();
     expect(h.snap).toMatchObject({ stage: 'welcome', inputMode: 'gesture', message: [], lastSpoken: null, scan: null });
-    expect(h.snap.phrases[0]).toBe('Hello');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Hello');
     expect(h.snap.announcement).toBe('Back at the start screen. Nothing was saved.');
     h.session.switchPress(h.now);
-    h.session.selectTarget('phrase:0');
+    h.session.selectTarget('phrase:g1:0');
     expect(h.snap.message).toEqual([]);
   });
 
   it('is refused during assisted practice', () => {
     const h = assisted();
-    h.session.selectTarget('helper');
-    h.session.selectTarget('practice');
+    h.click('practice'); // in More since C1 (R18)
     expect(h.snap.stage).toBe('practice');
     expect(h.session.returnToStart()).toBe(false);
     expect(h.snap.stage).toBe('practice');
@@ -295,6 +306,29 @@ describe('back to start from assisted input (R16)', () => {
 });
 
 describe('Continue within an hour of the checks (R17)', () => {
+  it.each([undefined, 2])('rechecks legacy or incompatible policy %s without deleting the profile', (policyVersion) => {
+    const { h, storage, store } = twoAndBack();
+    editLast(storage, (profile) => {
+      if (policyVersion === undefined) delete profile.checks!.policyVersion;
+      else profile.checks!.policyVersion = policyVersion;
+    });
+    expect(store.get(LAST)?.models).toHaveLength(2);
+    h.now += MINUTE;
+    expect(h.session.restoreProfile(LAST, true)).toBe(true);
+    expect(h.snap.stage).toBe('baseline');
+    expect(h.snap.approvedModels).toEqual([]);
+    h.run(10_500);
+    expect(h.snap.stage).toBe('verify');
+    finishRechecks(h);
+    expect(h.snap.stage).toBe('comfort');
+    expect(h.snap.cycles.at(-1)?.heldOut).toHaveLength(4);
+    expect(h.snap.cycles.at(-1)?.negative?.passed).toBe(true);
+    expect(h.snap.approvedModels).toEqual([]);
+    h.selectByGesture('comfortable');
+    approveSaved(h);
+    expect(lastSetup(store).checks?.policyVersion).toBe(1);
+  });
+
   it('an explicit Save says that check times are stored', () => {
     const h = new Harness({ profiles: storeFor().store });
     h.setUpToCommunication();
@@ -305,7 +339,7 @@ describe('Continue within an hour of the checks (R17)', () => {
   it('stores only times with the setup, with ids of its own movements', () => {
     const { store, storage } = twoAndBack();
     const saved = lastSetup(store);
-    expect(Object.keys(saved.checks!).sort()).toEqual(['movementAt', 'restAt']);
+    expect(Object.keys(saved.checks!).sort()).toEqual(['movementAt', 'policyVersion', 'restAt']);
     expect(Object.keys(saved.checks!.movementAt).sort()).toEqual(saved.models.map((model) => model.id).sort());
     expect(storage.data.get(PROFILE_KEY)).not.toMatch(/heldOut|negative|frame|timestamp|"message"/);
     expect(parseProfile({ ...saved, checks: { ...saved.checks, movementAt: { other: 5 } } }).ok).toBe(false);
@@ -322,7 +356,7 @@ describe('Continue within an hour of the checks (R17)', () => {
     expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['choose-different', 'approve-mapping']);
     expect(h.snap.approvedModels).toEqual([]);
     expect(h.snap.runtime?.armed).not.toBe(true);
-    h.session.selectTarget('phrase:0');
+    h.session.selectTarget('phrase:g1:0');
     expect(h.snap.message).toEqual([]);
     expect(h.snap.cycles.at(-1)).toMatchObject({ source: 'restored', quick: true, heldOut: [], negative: null, outcome: 'verified' });
     expect(h.snap.cycles.at(-1)!.movement).toMatch(/no attempts or everyday check this time/);
@@ -546,15 +580,39 @@ describe('saving a profile: guards (R7)', () => {
 });
 
 describe('restoring a profile (R7)', () => {
+  it('says so when restoring replaces the phrases in use (R14/R19)', () => {
+    const { storage } = savedPersonA();
+    const h = new Harness({ profiles: storeFor(storage).store });
+    expect(h.session.editVocabulary({ kind: 'add-phrase', group: 'favourites', text: 'Call my sister' }).ok).toBe(true);
+    h.session.setCamera('running');
+    expect(h.session.restoreProfile('Person A')).toBe(true);
+    recheck(h);
+    h.selectByGesture('comfortable', MOUTH);
+    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.vocabulary.groups[0]!.phrases).toEqual([]);
+    expect(h.snap.announcement).toMatch(/Your phrases were replaced by the ones saved with “Person A”\.$/);
+  });
+
+  it('does not mention phrases when nothing is replaced', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('comfortable', MOUTH);
+    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    expect(h.snap.announcement).not.toMatch(/phrases were replaced/);
+  });
+
   it('re-checks a two-movement profile while disarmed and arms only after approval', () => {
     const { storage } = savedPersonA();
+    lastSetupWithDefaultPhrases(storage);
     const h = restoreOn(storage);
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.restoring).toBe('Person A');
     expect(h.snap.approvedModels).toEqual([]);
-    h.session.selectTarget('phrase:0');
+    h.session.selectTarget('phrase:g1:0');
     expect(h.snap.message).toEqual([]);
-    expect(h.snap.phrases[0]).toBe('Yes'); // saved phrases apply only on approval
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes'); // saved phrases apply only on approval
 
     recheck(h);
     expect(h.snap.stage).toBe('comfort');
@@ -575,14 +633,14 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.restoring).toBeNull();
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
     expect(h.snap.scanMode).toBe('step');
-    expect(h.snap.phrases[0]).toBe('Hello');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Hello');
     expect(h.snap.scan?.intervalMs).toBe(2_500);
     expect(h.snap.profiles).toMatchObject({ active: 'Person A', unsaved: false });
     expect(h.snap.evidence.map((item) => item.effort)).toEqual(['unknown', 'unknown']); // effort is not saved in v1 profiles
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
     h.run(600);
     h.stepTo('finish-practice');
-    h.stepTo('phrase:0');
+    h.stepTo('phrase:g1:0');
     expect(h.snap.message).toEqual(['Hello']);
     // Today's rest becomes the approved baseline, so adding a movement later still works.
     h.stepTo('add-movement');
@@ -604,6 +662,7 @@ describe('restoring a profile (R7)', () => {
 
   it('“Do not use this profile” works by gesture in mapping and applies nothing', () => {
     const { storage } = savedPersonA();
+    lastSetupWithDefaultPhrases(storage);
     const h = restoreOn(storage);
     recheck(h);
     h.session.decide('reject-profile'); // not offered on the comfort screen: ignored
@@ -615,7 +674,7 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.failure?.title).toBe('Profile not used');
     expect(h.snap.approvedModels).toEqual([]);
     expect(h.snap.restoring).toBeNull();
-    expect(h.snap.phrases[0]).toBe('Yes');
+    expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes');
     expect(h.snap.cycles.at(-1)!.outcome).toBe('rejected');
   });
 
@@ -670,6 +729,7 @@ describe('restoring a profile (R7)', () => {
 
   it('cancel and assisted input clear the restore without applying anything', () => {
     const { storage } = savedPersonA();
+    lastSetupWithDefaultPhrases(storage);
     const cancelled = restoreOn(storage);
     cancelled.run(3_000);
     cancelled.session.cancel();
@@ -681,7 +741,7 @@ describe('restoring a profile (R7)', () => {
     expect(assisted.snap.restoring).toBeNull();
     expect(assisted.snap.inputMode).toBe('assisted');
     expect(assisted.snap.approvedModels).toEqual([]);
-    expect(assisted.snap.phrases[0]).toBe('Yes');
+    expect(assisted.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes');
   });
 
   it('refuses without a camera, with an approved setup, for a missing profile, or with storage blocked', () => {

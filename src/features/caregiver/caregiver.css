@@ -1,0 +1,30 @@
+.cg-dashboard{max-width:960px;margin:0 auto;padding:24px 16px 48px;color:#163e33;background:#f6f7f2}
+.cg-title{font-size:32px;line-height:1.2;margin:0 0 8px;letter-spacing:-.02em}
+.cg-note{font-size:14px;color:#3d5a4a;margin:0 0 20px;max-width:640px}
+.cg-heading{font-size:20px;margin:0 0 12px}
+.cg-heading:focus{outline:3px solid #ac5516;outline-offset:4px}
+.cg-muted{font-size:13px;color:#4a5f50;margin:4px 0}
+.cg-live{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+.cg-panel{border:1px solid #d4dfcb;background:#fffefa;border-radius:16px;padding:20px;margin:0 0 20px}
+.cg-header{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:flex-start;margin:0 0 20px}
+.cg-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 0}
+.cg-row .button,.cg-panel .button{min-height:48px}
+.cg-badge{display:inline-block;font-size:13px;font-weight:650;color:#1d5d45;background:#e4ecd9;border-radius:20px;padding:6px 12px;margin:8px 0 0}
+.cg-badge-lost{color:#7a3a12;background:#fff1de}
+.cg-alert{font-size:14px;color:#7a2e12;background:#fff1de;border:1px solid #d3b088;border-radius:10px;padding:10px 12px;margin:10px 0}
+.cg-banner p{margin:0}
+.cg-list{list-style:none;padding:0;margin:0;display:grid;gap:12px}
+.cg-card{border:1px solid #d3dfcb;background:#fffefa;border-radius:12px;padding:14px 16px;overflow-wrap:anywhere}
+.cg-card-new{border-color:#456e35;border-width:2px;background:#f2f7ec}
+.cg-card-quiet{font-size:13px;color:#4a5f50}
+.cg-card-title{font-size:17px;font-weight:620;margin:0 0 4px;overflow-wrap:anywhere}
+.cg-card-status{font-size:14px;color:#2b4f3c;margin:0 0 4px}
+.cg-new{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#7a3a12}
+.cg-invite{margin:10px 0;padding:12px;border-radius:10px;background:#edf2e7}
+.cg-invite p{font-size:14px;margin:0 0 6px;color:#244e32}
+.cg-code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:24px;letter-spacing:.12em;overflow-wrap:anywhere;color:#163e33}
+.cg-confirm{margin:10px 0;padding:12px;border:1px solid #d3b088;border-radius:10px;background:#fff8ee}
+.cg-confirm p{font-size:14px;margin:0;color:#5c2d0e}
+.cg-add{align-items:flex-end;margin-top:16px}
+.cg-details summary{font-size:14px;font-weight:620;cursor:pointer;min-height:44px;display:flex;align-items:center}
+@media (max-width:520px){.cg-title{font-size:26px}.cg-header{flex-direction:column}}

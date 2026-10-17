@@ -3,6 +3,7 @@ import { CameraDiagnostics } from './CameraDiagnostics';
 import { SignalDashboard } from './CameraPanel';
 import { Icon } from './Icon';
 import { EvidencePanel } from './ReviewViews';
+import { PhraseEditor } from './PhraseEditor';
 import { ScanButton } from './ScanBoard';
 import type { ViewProps } from './SetupViews';
 
@@ -36,7 +37,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
           <h2 ref={heading} tabIndex={-1}>Helper options</h2>
           <p>For a helper or for settings. Your message is kept. Scan speed: {seconds} s.</p>
         </div>
-        {!confirming && <ScanButton id="close-helper" snapshot={snapshot} onActivate={activate} disabled={paused}>Close helper</ScanButton>}
+        {!confirming && <ScanButton id="back" snapshot={snapshot} onActivate={activate} disabled={paused}>Close helper</ScanButton>}
       </div>
       {confirming && (
         <div className="recalibrate-confirm">
@@ -45,6 +46,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
           <div className="helper-row">
             <ScanButton id="recalibrate-no" snapshot={snapshot} onActivate={activate} disabled={paused}>Keep current setup</ScanButton>
             <ScanButton id="recalibrate-yes" snapshot={snapshot} onActivate={activate} primary disabled={paused}>Start recalibration</ScanButton>
+            <ScanButton id="pause" snapshot={snapshot} onActivate={activate} disabled={paused}><Icon name="pause" />Pause</ScanButton>
           </div>
         </div>
       )}
@@ -63,7 +65,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       )}
       <h3 className="helper-group">Scanning and message</h3>
       <div className="helper-row" role="group" aria-label="Scanning and message">
-        {['slower', 'faster', 'clear', 'practice', 'pause'].filter((id) => offered.has(id)).map((id) => {
+        {['slower', 'faster', 'clear', 'save-favourite', 'say-again', 'practice', 'pause'].filter((id) => offered.has(id)).map((id) => {
           const target = snapshot.scan!.targets.find((candidate) => candidate.id === id)!;
           return (
             <ScanButton key={id} id={id} snapshot={snapshot} onActivate={activate} disabled={paused}>
@@ -74,6 +76,26 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       </div>
       {!snapshot.speech.available && <p className="helper-note">No local speech voice is available in this browser. Your message stays visible on screen; Motif never uses a remote voice.</p>}
       {assisted && <p className="helper-note">Assisted mode does not use or verify a facial movement.</p>}
+      <details className="helper-details">
+        <summary>Jump to a phrase group</summary>
+        <nav className="group-tabs" aria-label="Helper shortcuts to phrase groups">
+          {[{ id: 'top', label: 'Main list' }, ...snapshot.vocabulary.groups.map((group) => ({ id: group.id, label: group.name }))].map((tab) => (
+            <button key={tab.id} type="button" className="button button-quiet" disabled={paused} onClick={() => session.openGroup(tab.id)}>{tab.label}</button>
+          ))}
+        </nav>
+      </details>
+      <details className="helper-details">
+        <summary>Edit phrases</summary>
+        {paused
+          ? <>
+              <p className="helper-note">{snapshot.approvedModels.length && snapshot.profiles.available
+                ? 'Changes are kept on this device automatically, with Last setup.'
+                : snapshot.approvedModels.length ? 'This browser cannot keep changes; they last until this page closes.'
+                  : 'Changes are kept on this device only once a movement setup is approved.'}</p>
+              <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
+            </>
+          : <p className="helper-note">Pause scanning first, so nothing can be selected while phrases change. Resume then starts from the main list if anything changed.</p>}
+      </details>
       <div className="helper-details">
         <button type="button" className="helper-toggle" aria-expanded={diagnostics} aria-controls="helper-diagnostics" onClick={() => setDiagnostics(!diagnostics)}>
           <span>Camera diagnostics</span><span aria-hidden="true">{diagnostics ? '−' : '+'}</span>
@@ -88,7 +110,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       <EvidencePanel snapshot={snapshot} />
       <details className="helper-details">
         <summary>Saving and the start screen</summary>
-        {snapshot.profiles.available && <p className="helper-note">Your setup is saved on this device automatically: movement settings, controls, phrases, scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
+        {snapshot.profiles.available && <p className="helper-note">Your setup is saved on this device automatically: movement settings, controls, phrase groups (including {snapshot.vocabulary.groups[0]?.phrases.length ?? 0} favourites), scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
         {assisted && !snapshot.approvedModels.length && (
           <div className="button-row">
             <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>

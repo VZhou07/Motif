@@ -57,8 +57,8 @@ describe('effort and observed use (R8)', () => {
     for (let i = 0; i < 4; i += 1) h.step(REST, 'missing'); // tracking loss mid-dwell
     h.run(600);
     expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 1, unfinished: 1 });
-    h.selectByGesture('phrase:0');
-    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 2, unfinished: 1 });
+    h.selectByGesture('phrase:g1:0'); // two holds: open Quick, then Yes (R14)
+    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 3, unfinished: 1 });
   });
 
   it('does not count a hold cancelled by another movement joining', () => {
@@ -116,20 +116,20 @@ describe('reporting a tiring movement (R8)', () => {
   it('is offered only with two or more movements', () => {
     const one = new Harness();
     one.setUpToCommunication();
-    one.session.selectTarget('helper');
-    expect(one.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring'); // no longer a Helper item
-    one.session.selectTarget('change-controls');
+    one.selectByGesture('more');
+    expect(one.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring'); // tiring moved to Change controls
+    one.selectByGesture('change-controls');
     expect(decisionIds(one)).not.toContain('report-tiring');
     const two = twoStep();
-    two.session.selectTarget('helper');
+    two.stepTo('more');
     expect(two.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring');
-    two.session.selectTarget('change-controls');
+    two.stepTo('change-controls');
     expect(decisionIds(two)).toContain('report-tiring');
   });
 
   it('lets the person name the movement, then recommends controls that leave it unused', () => {
     const h = twoStep();
-    h.stepTo('phrase:2');
+    h.stepTo('phrase:g2:0');
     const [brow, mouth] = h.snap.approvedModels;
     h.stepTo('change-controls');
     h.selectByGesture('report-tiring');
