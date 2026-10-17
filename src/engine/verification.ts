@@ -61,7 +61,7 @@ export function evaluatePositiveAttempt(
       reasons.push(`No recognition of “${label}” occurred during Action.`)
       if (expectedModel && Number.isFinite(peak)) {
         const unit = expectedModel.feature.startsWith('head') ? '°' : ''
-        reasons.push(`Observed peak ${peak.toFixed(3)}${unit}; activation needs ${expectedModel.activationThreshold.toFixed(3)}${unit}. Longest unambiguous hold ${Math.round(longestSoloMs)} ms; required ${expectedModel.activationMs} ms. This measurement does not establish that fresh rest armed the recognizer.`)
+        reasons.push(`Observed peak ${peak.toFixed(3)}${unit}; activation needs ${expectedModel.activationThreshold.toFixed(3)}${unit}. Longest unambiguous hold ${Math.round(longestSoloMs)} ms; required ${expectedModel.activationMs} ms. This measurement does not show that you were fully at rest before the movement.`)
       }
     } else if (observed.length > 1) {
       reasons.push(`Detected ${observed.length} recognitions during Action; one “${label}” recognition is required. Relax between holds.`)
