@@ -116,8 +116,10 @@ describe('reporting a tiring movement (R8)', () => {
   it('is offered only with two or more movements', () => {
     const one = new Harness();
     one.setUpToCommunication();
+    one.session.selectTarget('helper'); // controls live in the Helper panel
     expect(one.snap.scan?.targets.map((target) => target.id)).not.toContain('tiring');
     const two = twoStep();
+    two.session.selectTarget('helper');
     expect(two.snap.scan?.targets.map((target) => target.id)).toContain('tiring');
   });
 

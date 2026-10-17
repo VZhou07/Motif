@@ -99,7 +99,7 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterB.selectByGesture('finish-practice', MOUTH);
     expect(laterB.snap.scanMode).toBe('auto');
     laterB.selectByGesture('phrase:0', MOUTH);
-    expect(laterB.snap.message).toEqual(['Coffee please', 'Yes']);
+    expect(laterB.snap.message).toEqual(['Yes']); // Speak emptied the message
 
     // Zero gestures: assisted Space only.
     const helper = new Harness({ profiles: store() });
@@ -159,6 +159,9 @@ describe('noise, lighting and flicker (R10)', () => {
     h.run(20_000);
     expect(used(h) - before).toBe(1); // one action for the whole shifted period, never repeated
     h.noise = null;
+    // The one shifted action may have paused or opened Helper; undo either.
+    if (h.snap.scan?.paused) h.session.resume();
+    if (h.snap.helperOpen) h.session.selectTarget('close-helper');
     h.selectByGesture('phrase:3');
     expect(h.snap.message.at(-1)).toBe('Please help me');
   });

@@ -212,6 +212,7 @@ describe('Motif app', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch)' }));
+    act(() => h.session.selectTarget('helper'));
     act(() => h.session.selectTarget('practice'));
     expect(h.session.getSnapshot().stage).toBe('practice');
     expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();

@@ -290,6 +290,7 @@ describe('back to start from assisted input (R16)', () => {
 
   it('is refused during assisted practice', () => {
     const h = assisted();
+    h.session.selectTarget('helper');
     h.session.selectTarget('practice');
     expect(h.snap.stage).toBe('practice');
     expect(h.session.returnToStart()).toBe(false);
