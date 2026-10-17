@@ -2,6 +2,12 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Current task — merge origin/main into ux-simplify (R18)
+
+- User ran `git pull` and got divergent branches; chose "Combine both" (main's phrase groups/Favourites/caregiver + my message bar/Helper/confirmations). Base `ux-simplify` 9dade52; `origin/main` 24e9c6b (119 commits, 857 tests). First merge attempt aborted (14 conflicting files); nothing lost.
+- Design: reasoning.md R18 revisions 1-2, APPROVED. Criteria: UX_ACCEPTANCE.md M1-M12, MH. State: implementing (developer a7a8cb8d does the merge and integration; QA ae97aab9 starts after the merge compiles and owns `src/app/ux-merge.acceptance.test.ts`).
+- `.env.local` holds the two VITE_SUPABASE_* values the user pasted (gitignored; never commit). Nothing pushed.
+
 ## Current task — branch ux-simplify (fewer pages)
 
 - User: "so many pages … simple and intuitive … fix it". Branch `ux-simplify` off `ux-comm-screen` at `b2adf7c` (513 tests). Practice stays required (plan.md decision kept; shown on the Talk screen).
