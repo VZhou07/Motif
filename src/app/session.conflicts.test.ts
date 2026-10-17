@@ -73,7 +73,7 @@ describe('Open mouth plus head controls with Rest preparation (R15)', () => {
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.cycles.at(-1)!.negative).toMatchObject({ passed: true, eventCount: 0 });
     h.session.setSpokenPrompts(false);
-    for (const id of ['comfortable', 'map:0', 'approve-mapping']) h.selectByGesture(id, MOUTH);
+    h.selectByGesture('approve-comfortable', MOUTH); // R18: one approve screen
     h.stepTo('finish-practice', physicalMotion(head.label, head), MOUTH);
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.mapping?.mode).toBe('step');

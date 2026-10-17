@@ -17,9 +17,7 @@ function ready(): Harness {
 function twoGestureStep(): Harness {
   const h = ready();
   h.addMovement(OPEN_MOUTH, (label) => MOVES[label ?? ''] ?? REST);
-  h.selectByGesture('comfortable');
-  h.selectByGesture('map:0');
-  h.selectByGesture('approve-mapping');
+  h.selectByGesture('approve-comfortable'); // R18: adding approves from the comfort screen
   h.stepTo('finish-practice');
   expect(h.snap.scanMode).toBe('step');
   return h;
@@ -75,7 +73,9 @@ describe('one select movement, automatic scanning', () => {
     h.selectByGesture('more');
     expect(ids(h).indexOf('recalibrate')).toBe(8);
     h.selectByGesture('recalibrate');
-    expect(h.snap.stage).toBe('recalibrate-confirm');
+    expect(h.snap.stage).toBe('communication'); // asks first, inside the Helper (R18)
+    expect(levelKind(h)).toBe('recalibrate');
+    expect(ids(h)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
   });
 
   it('a phrase returns to the main list with Speak highlighted, in one announcement', () => {

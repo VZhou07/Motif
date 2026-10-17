@@ -324,8 +324,8 @@ describe('Continue within an hour of the checks (R17)', () => {
     expect(h.snap.cycles.at(-1)?.heldOut).toHaveLength(4);
     expect(h.snap.cycles.at(-1)?.negative?.passed).toBe(true);
     expect(h.snap.approvedModels).toEqual([]);
-    h.selectByGesture('comfortable');
-    approveSaved(h);
+    h.selectByGesture('approve-saved', BROW, 60_000, 600, 0);
+    expect(h.snap.stage).toBe('practice');
     expect(lastSetup(store).checks?.policyVersion).toBe(1);
   });
 
@@ -587,8 +587,7 @@ describe('restoring a profile (R7)', () => {
     h.session.setCamera('running');
     expect(h.session.restoreProfile('Person A')).toBe(true);
     recheck(h);
-    h.selectByGesture('comfortable', MOUTH);
-    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    h.selectByGesture('approve-saved', MOUTH, 60_000, 600, 0);
     expect(h.snap.stage).toBe('practice');
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual([]);
     expect(h.snap.announcement).toMatch(/Your phrases were replaced by the ones saved with “Person A”\.$/);
@@ -598,8 +597,7 @@ describe('restoring a profile (R7)', () => {
     const { storage } = savedPersonA();
     const h = restoreOn(storage);
     recheck(h);
-    h.selectByGesture('comfortable', MOUTH);
-    h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
+    h.selectByGesture('approve-saved', MOUTH, 60_000, 600, 0);
     expect(h.snap.announcement).not.toMatch(/phrases were replaced/);
   });
 

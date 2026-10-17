@@ -30,9 +30,7 @@ function ready(options: ConstructorParameters<typeof Harness>[0] = {}): Harness 
 function addAndApprove(h: Harness, choice: MovementChoice): void {
   if (h.snap.scanMode === 'step') h.stepTo('more'); else h.selectByGesture('more');
   h.addMovement(choice, perform);
-  h.selectByGesture('comfortable');
-  h.selectByGesture('map:0');
-  h.selectByGesture('approve-mapping');
+  h.selectByGesture('approve-comfortable'); // R18: adding approves from the comfort screen
   h.stepTo('finish-practice');
 }
 
@@ -67,7 +65,7 @@ describe('undo and say again', () => {
     expect(h.spoken).toEqual([]);
     h.click('phrase:g1:2');
     h.click('speak');
-    h.click('clear');
+    h.click('clear'); h.click('clear-yes'); // Clear asks first (R18)
     h.click('say-again');
     expect(h.spoken).toEqual(['Thank you', 'Thank you']);
     expect(h.snap.message).toEqual([]);
@@ -127,25 +125,25 @@ describe('save to Favourites', () => {
     h.click('save-favourite');
     expect(h.snap.announcement).toBe('Nothing to save yet. Add a phrase first.');
     expect(h.snap.level?.kind).toBe('more');
-    h.click('clear');
+    h.click('clear'); h.click('clear-yes'); // Clear asks first (R18)
     askToSave(h, 'phrase:g1:0');
     h.click('confirm-favourite');
     expect(h.snap.announcement).toBe('Saved to Favourites. It is kept on this device only once a movement setup is approved.');
     h.click('save-favourite'); // same message again
     expect(h.snap.announcement).toBe('“Yes” is already in Favourites.');
     expect(h.snap.level?.kind).toBe('more');
-    h.click('clear');
+    h.click('clear'); h.click('clear-yes'); // Clear asks first (R18)
     const long = ['phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g2:2', 'phrase:g2:0'];
     askToSave(h, ...long);
     expect(h.snap.message.join('. ').length).toBeGreaterThan(VOCABULARY_LIMITS.phraseMax);
     expect(h.snap.announcement).toBe('A phrase can be at most 120 characters.');
     expect(h.snap.level?.kind).toBe('more');
-    h.click('clear');
+    h.click('clear'); h.click('clear-yes'); // Clear asks first (R18)
     const pool = ['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2'];
     for (let i = 0; favourites(h).length < VOCABULARY_LIMITS.phrases; i += 1) {
       askToSave(h, pool[i % 6]!, pool[Math.floor(i / 6) % 6]!);
       if (h.snap.level?.kind === 'confirm') h.click('confirm-favourite');
-      h.click('clear');
+      h.click('clear'); h.click('clear-yes'); // Clear asks first (R18)
     }
     const full = [...favourites(h)];
     askToSave(h, 'phrase:g1:1', 'phrase:g1:1', 'phrase:g1:1');

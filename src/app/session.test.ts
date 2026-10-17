@@ -270,7 +270,7 @@ describe('communication safety', () => {
     const model = h.snap.approvedModel;
     h.selectByGesture('recalibrate');
     expect(h.snap.stage).toBe('communication');
-    expect(h.snap.scan?.targets.map((target) => target.id)).toEqual(['recalibrate-no', 'recalibrate-yes']);
+    expect(h.snap.scan?.targets.map((target) => target.id)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
     h.selectByGesture('recalibrate-no', BROW, 60_000, 3_000, 0);
     expect(h.snap.confirmingRecalibrate).toBe(false);
     expect(h.snap.stage).toBe('communication');
@@ -738,7 +738,7 @@ describe('multiple gestures (R6)', () => {
     h.stepTo('phrase:g1:2');
     h.stepTo('speak');
     expect(h.spoken).toEqual(['Thank you']);
-    h.stepTo('phrase:0');
+    h.stepTo('phrase:g1:0');
     h.stepTo('clear'); // behind Helper, then confirmed
     h.stepTo('clear-yes');
     expect(h.snap.message).toEqual([]);

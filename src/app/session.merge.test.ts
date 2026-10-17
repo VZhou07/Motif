@@ -84,7 +84,7 @@ describe('one autosave rule while a setup is approved (R19)', () => {
   it('a setup-stage edit during recalibration is kept at once', () => {
     const { h, storage } = withFavourite();
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     h.run(10_500);
     expect(h.snap.stage).toBe('choose');
     expect(h.session.editVocabulary({ kind: 'remove-phrase', group: 'favourites', index: 0 }).ok).toBe(true);
