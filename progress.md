@@ -2,7 +2,14 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
-## Current task — branch ux-comm-screen (communication screen)
+## Current task — branch ux-simplify (fewer pages)
+
+- User: "so many pages … simple and intuitive … fix it". Branch `ux-simplify` off `ux-comm-screen` at `b2adf7c` (513 tests). Practice stays required (plan.md decision kept; shown on the Talk screen).
+- Slice A (views, copy, progress bar, mapping cards; no stage-machine change): reasoning.md "UX simplify, slice A" revision 1; criteria U1-U12, UH. State: implementing (design revision 2 APPROVED).
+- Slice B (planned, session): one approve screen for restore/add/recalibrate, recalibrate confirm inside Helper, tiring inside Change controls.
+- Agents: reviewer ae8ac905 (design), developer a7a8cb8d, QA ae97aab9 (owns `src/ux-simplify.acceptance.test.tsx`).
+
+## Previous task — branch ux-comm-screen (communication screen)
 
 - User approved the mockup (https://claude.ai/artifact/W8t4tg1TKfoiHHrk9SZ4Cr) and asked to build it, with Change controls, Add a movement and the other important helper options prominent. Branch `ux-comm-screen` off `ux-landing` at `1e17e06`. Baseline: tsc clean, vitest 34 files/461, build OK.
 - Design: reasoning.md "UX comm screen" revision 1. Criteria: UX_ACCEPTANCE.md C1-C14 + CH.

@@ -89,3 +89,23 @@ Design: reasoning.md "UX comm screen". Mockup the user approved: https://claude.
 
 ### Result (round 1 of 3)
 Software verified: C1-C11, C13-C16 PASS (51 acceptance tests: 40 session, 11 UI); C12 PASS in assisted mode at 1470×762, 1280×720 and 390×844 (QA screenshots, same-origin frames; camera never started). Coordinator rerun: vitest 36 files/513 PASS, tsc clean, build OK. Mutations caught: refresh without stage/scanner guard, Yes before Keep it, Undo clearing everything, no scan-list guard, no focus on open. Developer deviations accepted: diagnostics toggle is a button with `aria-expanded`; the no-voice note is in the Helper panel; Harness gesture selections open Helper for a moved control (C5/C7 use `selectTarget` directly). Not clicked in the browser: "Done, back to start screen" from the panel (covered by existing App tests). **Human acceptance pending:** CH.
+
+# Branch ux-simplify, slice A: one setup screen, plainer copy
+
+Design: reasoning.md "UX simplify, slice A". Baseline 513 tests. QA owns `src/ux-simplify.acceptance.test.tsx`; the developer may not edit it.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| U1 | TEST | No setup screen shows "STEP" or the old 3-step stepper. Where the bar is shown (reasoning.md slice A revision 2, B1) it lists the flow's segments (Rest, Movement, Record, Checks, Everyday, Approve; adding: no Rest; restoring: Rest, Re-check, Everyday, Approve) with at most one `aria-current="step"`; it is hidden on tiring, recalibrate-confirm and Change controls mapping/confirm. |
+| U2 | TEST | `setupProgress` unit tests cover the whole table: every stage × flow (first, add, recalibrate, restoring, quick restore straight to Approve) and every failure kind; passed segments carry no "done" claim. |
+| U3 | TEST | No setup screen text, evidence details included, matches `/armed|interruptions|restarts|×\s*rest|Saved profile/i`. With interruptions > 0 the capture screen says "Paused N time(s) because your face wasn't clear"; "Communication is off while recording." stays. |
+| U4 | TEST | Choose: the lead is one sentence; each tile has a signal meter with an accessible label (none yet when no signal; none < 1.5; some 1.5 to < 3; strong ≥ 3, boundaries tested) and "Seen now" at ≥ 3; no rhythm, "Next:" or head-direction developer paragraphs; clicking a tile still starts training. |
+| U5 | TEST | Setup failed, for every failure kind: reasons shown; exactly one primary action (record-again, else Redo rest for baseline, Look again for discovery, else another movement); no paragraph listing the options. |
+| U6 | TEST | Mapping: each proposal is a card with a mode heading and one chip per movement; "Recommended" and "In use now" badges match `recommendation` and the current mapping; card ids and scan order equal the previous decision order; Keep current setup is not primary. |
+| U7 | TEST | Practice shows "Practice · nothing is spoken" and a "Start talking" button that finishes practice. |
+| U8 | TEST | Setup camera panel: diagnostics and signal dashboard hidden until "Details" is expanded (`aria-expanded` false → true); beeps toggle visible on capture stages. |
+| U9 | TEST | Every setup stage lead is at most 140 characters. |
+| U10 | TEST | Failure reasons, accidental-selection counts with the observation disclaimer, and "nothing turns on until you approve" wording are still present where they were. |
+| U11 | TEST | tsc, full vitest and build pass; existing tests change only for removed copy, the removed stepper, or renamed labels ("Start talking"). |
+| U12 | TEST | Accessible names on every control; new text ≥ 14px (stylesheet checks). |
+| UH | HUMAN | With the camera: setup feels like one flow, the progress bar matches what you are doing, the signal meter and "Seen now" help pick a movement. |
