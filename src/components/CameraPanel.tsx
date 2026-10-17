@@ -21,6 +21,15 @@ export function trackingLabel(snapshot: SessionSnapshot): string {
   return 'Looking for a clear face';
 }
 
+const actionLabels = { select: 'Selects', next: 'Moves next', previous: 'Moves back', pause: 'Pauses or resumes' } as const;
+
+/** What an approved movement does now; unmapped movements still make simultaneous input wait (R6 B3). */
+export function actionLabel(snapshot: SessionSnapshot, id: string): string {
+  if (snapshot.inputMode === 'assisted') return 'Not in use';
+  const action = snapshot.mapping?.assignments[id];
+  return action ? actionLabels[action] : 'Not used';
+}
+
 const runtimeLabels = { unarmed: 'waiting for rest', neutral: 'resting', armed: 'ready', pending: 'confirming movement', held: 'release to rest' } as const;
 
 export function CameraPanel({ snapshot, videoRef, onStart, onStop }: CameraPanelProps) {
@@ -28,6 +37,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop }: CameraPanel
   const running = snapshot.camera === 'running';
   const tracked = running && snapshot.tracking === 'tracked';
   const model = snapshot.approvedModel;
+  const models = snapshot.approvedModels;
   return (
     <aside className="camera-sidebar" aria-label="Camera and movement feedback">
       <div className="camera-card">
@@ -57,8 +67,10 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop }: CameraPanel
       </div>
       {model && (
         <div className="learned-controls">
-          <h2>Your movement</h2>
-          <div><span>{model.label}</span><strong>{snapshot.inputMode === 'assisted' ? 'Not in use' : 'Selects'}</strong></div>
+          <h2>{models.length === 1 ? 'Your movement' : 'Your movements'}</h2>
+          {models.map((approved) => (
+            <div key={approved.id}><span>{approved.label}</span><strong>{actionLabel(snapshot, approved.id)}</strong></div>
+          ))}
           {snapshot.runtime && <div><span>Recognizer</span><strong>{runtimeLabels[snapshot.runtime.phase]}</strong></div>}
         </div>
       )}

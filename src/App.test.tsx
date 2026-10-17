@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
-import { Harness } from './app/session.test-support';
+import { BROW, Harness, MOUTH, REST } from './app/session.test-support';
 import type { LocalSpeech } from './app/speech';
 import { TrackerError } from './tracker';
 
@@ -12,6 +12,20 @@ function fakeTracker(start: (...args: never[]) => Promise<void> = async () => {}
 
 function localSpeech(h: Harness): LocalSpeech {
   return { ...h.speech, refreshVoices: () => {} };
+}
+
+const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
+
+/** Communication with brow selecting and mouth moving next (step scanning). */
+function twoMovements(): Harness {
+  const h = new Harness();
+  h.setUpToCommunication();
+  h.addMovement(OPEN_MOUTH, (label) => (label === 'Open mouth' ? MOUTH : label ? BROW : REST));
+  h.selectByGesture('comfortable');
+  h.selectByGesture('map:0');
+  h.selectByGesture('approve-mapping');
+  h.stepTo('finish-practice');
+  return h;
 }
 
 function setHidden(value: boolean) {
@@ -124,5 +138,15 @@ describe('Motif app', () => {
     fireEvent.click(screen.getByRole('button', { name: /assisted input/i }));
     fireEvent.keyDown(window, { code: 'Space', key: ' ' });
     expect(h.snap.message).toEqual(['Yes']);
+  });
+
+  it('lists every approved movement with what it does', () => {
+    const h = twoMovements();
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    const panel = document.querySelector('.learned-controls')!;
+    expect(panel.querySelector('h2')?.textContent).toBe('Your movements');
+    expect([...panel.querySelectorAll('div > span')].map((node) => node.textContent)).toEqual(expect.arrayContaining(['Raise left outer eyebrow', 'Open mouth']));
+    expect(panel.textContent).toMatch(/Raise left outer eyebrowSelects/);
+    expect(panel.textContent).toMatch(/Open mouthMoves next/);
   });
 });
