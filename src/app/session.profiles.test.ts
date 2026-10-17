@@ -329,4 +329,15 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.baseline).not.toBeNull();
   });
+
+  it('re-approving the saved controls through Choose different controls is not a change', () => {
+    const { storage } = savedPersonA();
+    const h = restoreOn(storage);
+    recheck(h);
+    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different');
+    h.selectByGesture('map:0'); // the same controls as saved: brow selects, mouth moves next
+    h.selectByGesture('approve-mapping');
+    expect(h.snap.profiles).toMatchObject({ active: 'Person A', unsaved: false });
+  });
 });
