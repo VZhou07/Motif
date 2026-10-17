@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { createLocalProfileStore } from './app/profiles';
 import { Harness } from './app/session.test-support';
 import type { LocalSpeech } from './app/speech';
 
@@ -124,5 +125,15 @@ describe('communication levels on screen', () => {
     expect(button('Open Quick, 3 phrases')).toBeTruthy();
     expect(screen.queryByText('Edit phrases (helper)')).toBeNull();
     expect(screen.queryByRole('button', { name: 'More options' })).toBeNull();
+  });
+
+  it('the paused editor says changes cannot be kept when this browser blocks storage (R19)', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => null) });
+    h.setUpToCommunication();
+    show(h);
+    act(() => h.session.selectTarget('pause'));
+    fireEvent.click(screen.getByText('Edit phrases (helper)'));
+    expect(screen.getByText('This browser cannot keep changes; they last until this page closes.')).toBeTruthy();
+    expect(screen.queryByText(/Changes are kept on this device automatically/)).toBeNull();
   });
 });
