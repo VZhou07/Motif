@@ -86,3 +86,6 @@ Design: reasoning.md "UX comm screen". Mockup the user approved: https://claude.
 | C16 | TEST | Focus: opening Helper focuses the panel heading; Close helper returns focus to the Helper button; the Clear confirmation focuses its question; Keep it and Yes return focus to the Helper button. |
 | C14 | TEST | The saved profile never contains the message, lastSpoken or panel state. |
 | CH | HUMAN | With a real camera: the screen is easy to follow, the Movement seen light matches the movement, and a helper finds the options. |
+
+### Result (round 1 of 3)
+Software verified: C1-C11, C13-C16 PASS (51 acceptance tests: 40 session, 11 UI); C12 PASS in assisted mode at 1470×762, 1280×720 and 390×844 (QA screenshots, same-origin frames; camera never started). Coordinator rerun: vitest 36 files/513 PASS, tsc clean, build OK. Mutations caught: refresh without stage/scanner guard, Yes before Keep it, Undo clearing everything, no scan-list guard, no focus on open. Developer deviations accepted: diagnostics toggle is a button with `aria-expanded`; the no-voice note is in the Helper panel; Harness gesture selections open Helper for a moved control (C5/C7 use `selectTarget` directly). Not clicked in the browser: "Done, back to start screen" from the panel (covered by existing App tests). **Human acceptance pending:** CH.

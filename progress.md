@@ -6,7 +6,7 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software sc
 
 - User approved the mockup (https://claude.ai/artifact/W8t4tg1TKfoiHHrk9SZ4Cr) and asked to build it, with Change controls, Add a movement and the other important helper options prominent. Branch `ux-comm-screen` off `ux-landing` at `1e17e06`. Baseline: tsc clean, vitest 34 files/461, build OK.
 - Design: reasoning.md "UX comm screen" revision 1. Criteria: UX_ACCEPTANCE.md C1-C14 + CH.
-- State: implementing. Design revision 2 APPROVED. Developer agent (resumed a7a8cb8d) owns source + existing tests; QA agent (resumed ae97aab9) owns the two acceptance files. Next: developer (session, CommunicationView, HelperPanel, CameraPanel, styles, existing tests) and QA (owns `src/app/ux-comm.acceptance.test.ts`, `src/ux-comm-ui.acceptance.test.tsx`) in parallel → QA verification → commit in small pieces (no push).
+- State: **software verified; human acceptance pending (CH).** Design revision 2 APPROVED; developer commits ceb41fc, f77e76e, b6110dd, 9365806; QA round 1 PASS (51 acceptance tests, 5 mutations caught, C12 screenshots). Coordinator: vitest 36 files/513, tsc clean, build OK. Next: user tries it with the camera; then PR if wanted. Nothing pushed.
 
 ## Latest focused task — merge of main into cat-features (R17)
 
