@@ -151,7 +151,7 @@ export function ChooseView({ snapshot, session }: ViewProps) {
       <label className="text-field">Name for this movement <span>(optional)</span>
         <input value={name} maxLength={60} placeholder={selected ? 'My comfortable movement' : 'Choose a movement above first'} disabled={!selected} onChange={(event) => setName(event.target.value)} />
       </label>
-      <div className="button-row">
+      <div className="button-row discovery-row">
         <button type="button" className="button" disabled={snapshot.camera !== 'running'} onClick={() => session.startDiscovery()}>Not sure? Find my movements</button>
       </div>
       <div className="button-row">
