@@ -69,7 +69,7 @@ Setup before starting: `npm ci`, `npm run setup:assets`, `npm run build`, `npm r
 
 | # | Steps | Expected | Observed | Pass/Fail | Date | Browser | Device |
 |---|---|---|---|---|---|---|---|
-| 7a.1 | Save on this device with a name; check DevTools → Application → Local Storage. | Only `motif.profiles` with movement numbers, controls, phrases, scan speed; no images or messages. | | | | | |
+| 7a.1 | Approve a movement (the setup is kept automatically as Last setup; there is no named Save button since main's start-screen change); check DevTools → Application → Local Storage. | Only `motif.profiles` with movement numbers, controls, phrase groups including Favourites, scan speed, summary resting numbers and check times; no images or messages. | | | | | |
 | 7a.2 | Reload; Restore the profile. | Rest check, a re-check of each movement and the everyday check run before "Approve these controls". | | | | | |
 | 7a.3 | Restore after moving the camera or changing lighting a lot. | Either passes the re-checks or fails honestly ("does not fit today's rest"). | | | | | |
 | 7a.4 | Delete one profile; Delete all. | Each asks for confirmation; removed from Local Storage. | | | | | |

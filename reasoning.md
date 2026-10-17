@@ -942,8 +942,14 @@ One merge commit (staged file by file, never `-a`; `git diff --cached` must excl
 
 R18 mapping note: on ethan-features, comments saying "R14" in `vocabulary.ts`, `navigation.ts`, `PhraseEditor.tsx`, the level/composer code in `session.ts` and the C1 tests mean R18; elsewhere "R14" means the wink design.
 
+### R19 implementation notes (recorded after r19_testing)
+- Restore announcement wording: "Your phrases were replaced by the ones saved with “<name>”." (announced only when the in-memory vocabulary differs from the restored one), replacing the draft's "Phrases from this session were replaced by the saved setup's", which was untrue for phrases loaded from Last setup.
+- The automatic-save note on the communication screen is shown only with an approved movement setup and available storage; main showed it in assisted-only mode, where nothing is saved. The paused editor says changes are not kept when storage is unavailable.
+- Main's browser check had not been updated for its Get started screen; it now uses Get started / Continue and a version 1 "Last setup" seed (named profiles are no longer listed on the start screen).
+
 ### R19 review record
 | Revision | Reviewer | Findings / resolution | Verdict |
 | --- | --- | --- | --- |
 | R19 revision 1 | r19_review | B1 a fresh setup after reload / failed Continue / back to start overwrote saved favourites despite "kept on this device"; B2 draft still described main's removed Save panel and did not list C1 assertions being reversed. Notes n1–n7. (Two earlier runs were cut off by session restarts.) | BLOCKING |
+| R19 implementation | r19_testing (testing review) | tsc, vitest 599, build, browser 83/83 PASS; 23 mutants, 3 survived. B1 quick Continue restoring saved phrases untested (M11) → test added, now caught. M23 → unreadable-entry test added. M16 equivalent (Delete only offered with nothing approved). Non-blocking 1–4 and 6 fixed (editor copy guarded by storage, ux-record filter narrowed to `.phrase-editor`, corrupt-payload text tightened, notes above, ACCEPTANCE 7a.1). | BLOCKING → fixed |
 | R19 revision 2 | r19_review (re-check) | B1/B2 resolved; n1–n7 adopted. Conditions folded in before implementation: stale revision 1 lines removed; Delete resets the in-memory vocabulary. Non-blocking: seeding uses first readable entry, defaults on unreadable/blocked storage (adopted). | APPROVED (conditions applied) |
