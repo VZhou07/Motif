@@ -5,7 +5,10 @@ import { createLocalProfileStore } from './profiles';
 import { MotifSession } from './session';
 import { createLocalSpeech, type LocalSpeech } from './speech';
 
-/** Adapters are injectable for tests only; the app itself always builds the real camera tracker. */
+/**
+ * Tests inject fake adapters. The app's Root supplies one long-lived session and speech per page so
+ * leaving for the caregiver route keeps unsaved setup; the real camera tracker is always built here.
+ */
 export interface MotifRuntime {
   session: MotifSession;
   tracker: Pick<FaceTracker, 'start' | 'stop'>;
@@ -35,13 +38,14 @@ export function useMotif(runtime?: Partial<Runtime>) {
     // Profiles live in this browser's storage and are written only by an explicit Save (R7).
     const profiles = createLocalProfileStore(() => window.localStorage);
     const session = runtime?.session ?? new MotifSession({ speech, profiles, cues });
-    if (runtime?.session) session.setCueAudio(cues);
     return { speech, cues, session, tracker: runtime?.tracker ?? new FaceTracker() };
   });
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);
   const [cueStatus, setCueStatus] = useState(() => cueSnapshot(cues));
 
   useEffect(() => {
+    // Attach on every mount: StrictMode and route remounts rerun effects, not the initializer.
+    session.setCueAudio(cues);
     const clock = window.setInterval(() => session.tick(performance.now()), 100);
     const visibility = () => session.setHidden(document.hidden, performance.now());
     const keydown = (event: KeyboardEvent) => {
@@ -67,6 +71,9 @@ export function useMotif(runtime?: Partial<Runtime>) {
       synth?.removeEventListener?.('voiceschanged', voices);
       epochRef.current += 1;
       tracker.stop();
+      // A kept session must not scan, speak or arm while its surface is gone.
+      session.setHidden(true, performance.now());
+      speech.cancel();
       cues.close();
       session.setCueAudio(null);
       session.setCamera('off');
