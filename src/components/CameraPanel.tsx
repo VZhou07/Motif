@@ -9,6 +9,8 @@ export interface CameraPanelProps {
   videoRef: RefObject<HTMLVideoElement | null>;
   onStart: () => void;
   onStop: () => void;
+  /** The start screen has its own Get started button; the panel's would duplicate it. */
+  hideStart?: boolean;
   cueStatus?: CueAudioStatus;
   onCuesEnabled?: (enabled: boolean) => void;
   children?: ReactNode;
@@ -37,7 +39,7 @@ export function actionLabel(snapshot: SessionSnapshot, id: string): string {
 
 const runtimeLabels = { unarmed: 'waiting for rest', neutral: 'resting', armed: 'ready', pending: 'confirming movement', held: 'release to rest' } as const;
 
-export function CameraPanel({ snapshot, videoRef, onStart, onStop, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
+export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
   const [open, setOpen] = useState(false);
   const running = snapshot.camera === 'running';
   const tracked = running && snapshot.tracking === 'tracked';
@@ -67,7 +69,7 @@ export function CameraPanel({ snapshot, videoRef, onStart, onStop, cueStatus, on
         <div className="camera-actions">
           {running
             ? <button type="button" className="button button-quiet" onClick={onStop}>Stop camera</button>
-            : <button type="button" className="button button-quiet" disabled={snapshot.camera === 'loading'} onClick={onStart}>
+            : hideStart ? null : <button type="button" className="button button-quiet" disabled={snapshot.camera === 'loading'} onClick={onStart}>
                 {snapshot.camera === 'loading' ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Start camera'}</button>}
         </div>
         {onCuesEnabled && <label className="camera-help" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10 }}>
