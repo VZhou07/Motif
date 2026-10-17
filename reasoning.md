@@ -323,6 +323,8 @@ Pure (`profiles.test.ts`): round trip; each rejection above (including `null` th
 | --- | --- | --- | --- |
 | R7 revision 1 | r7_review | B1 restore had no typed state/approval gate (approveMapping only gated candidates; mappingSet empty; captureTrial needed choice); B2 no exit at mapping/mapping-confirm, dead record-again in comfort; B3 dwell bounds contradicted `isGestureModel`; B4 Save could silently drop unreadable entries. Rest-compatibility rule and revalidation plan judged correct/adequate. All resolved in revision 2. | CHANGES REQUIRED |
 | R7 revision 2 | r7_review (re-review) | B1–B4 resolved against current code; no new blockers. Non-blocking: edit stale revision-1 lines, separate failure kind for profile mismatch, spell out evidence type changes, Delete-all hint, storage-unavailable restore test; adopted. | APPROVED |
+| R7 implementation (`fb0fdc4`) | w7a_test_review | Ran tsc, vitest 188, build, browser-check 12/12 itself; code matched R7 rev 2 everywhere checked; 27 of 40 mutants killed. BLOCKING (tests only): unmapped re-check count, another-movement exit from restore comfort, rest rule using only the center, approvedBaseline after restore not pinned. | BLOCKING ISSUES |
+| R7 implementation (`fa56d76`) | w7a_test_review (re-check) | Tests `589654f` (+ parser boundaries, valid-mapping duplicate cases), `264baa2`/`fa56d76` assignment-order fix. Ran tsc, vitest 212, build, browser-check 12/12; all 10 previous survivors killed. Non-blocking: order test did not exercise the sort — strengthened in `95c780e` (reverse-ordered saved keys; mutant now killed). Unreachable defence-in-depth guards noted. | PASS — software verified; human acceptance pending |
 
 ## R8 — W7b: observed evidence, effort and mapping recommendations (revision 2)
 
