@@ -159,7 +159,7 @@ describe('noise, lighting and flicker (R10)', () => {
     expect(h.snap.message).toEqual([]);
     h.noise = () => ({ browOuterUpLeft: model.activationThreshold + 0.05 });
     h.run(20_000);
-    expect(used(h) - before).toBeLessThanOrEqual(1);
+    expect(used(h) - before).toBe(1); // one action for the whole shifted period, never repeated
     h.noise = null;
     h.selectByGesture('phrase:3');
     expect(h.snap.message.at(-1)).toBe('Please help me');
@@ -176,6 +176,13 @@ describe('noise, lighting and flicker (R10)', () => {
     }
     expect(used(h)).toBe(before);
     expect(h.snap.message).toEqual([]);
+    // Movements that start inside each short burst: still no time to rest, arm and dwell.
+    for (let burst = 0; burst < 30; burst += 1) {
+      for (let i = 0; i < 4; i += 1) h.step(REST, gaps[burst % gaps.length]);
+      h.run(50);
+      h.run(350, BROW);
+    }
+    expect(used(h)).toBe(before);
     h.run(1_000);
     h.run(800, BROW);
     h.run(1_200);
