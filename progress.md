@@ -33,7 +33,8 @@ Plain-language summary: [STATUS.md](STATUS.md). Build Goal is ACTIVE (full P0, t
 | W0/W1/WF1/WF2 | Reached. |
 | W2–W5 (camera, calibration, one-gesture communication, first slice) | Software verified; human acceptance pending (real webcam, live values, anatomical/head-direction labels, comfort, speech audibility). Reviews: r5_review → r5_rereview APPROVED; w2_w4_test_review → fixes → w2_w4_recheck PASS. |
 | W6 remaining P0 (multi-gesture) | TESTING (session 3 coordinator owns `src/app/session.test.ts`, `src/app/session.ts`, `src/components/**`, `src/App.test.tsx`). R6 revision 2 APPROVED (r6_review → r6_rereview). Code partially done (below); W6 tests and independent testing review still needed. |
-| W7a profiles/recalibration → W7b scoring/recommendations → W7c discovery | Authorized, not started. Each needs its own reasoning revision + independent review before code. |
+| W7a profiles/recalibration | REVIEWING (R7 revision 1 under `r7_review`). |
+| W7b scoring/recommendations → W7c discovery | Authorized, not started. Each needs its own reasoning revision + independent review before code. |
 | W8 hardening | Authorized, not started. Human checks stay pending. |
 
 ## W6 status (R6 revision 2)
@@ -49,7 +50,7 @@ Done and committed:
 1. DONE (session 3): W6 session tests (`describe('multiple gestures (R6)')`, 13 tests: add/cross-check/negative, interfering candidate, duplicate refusal, simultaneous movements, step mode, next across a boundary in fallback, idle fallback counting, previous, pause, one-movement mapping, Change controls/Keep current, Use previous, 4-movement reachability, 3-movement auto mapping, assisted, recalibration with a set). No session bugs found. Commits `b48b127`, `75f2ad1`, `5b9edcb`.
 2. DONE: UI follow-ups `aa5db2e` (camera panel lists movements + actions), `3dcd476` (chooser disables used movements while adding), `c7e4e7f` (evidence labels cross-checks; evidence also shown on the comfort screen; App test scans mapping proposals).
 3. IN PROGRESS: full checks at `c7e4e7f`: tsc PASS, vitest 12 files/129 PASS, build PASS, browser-check 12/12 PASS. Independent testing review `w6_test_review` (read-only) running. Then record results in `reasoning.md` (R6 table), here, and `plan.md` (W6 software verified; human acceptance pending).
-4. W7a: write R7 (local profiles: opt-in Save, named profiles, Delete, version/schema validation, nonfinite rejection, disarmed restore → rest check → revalidation → mapping confirmation; saved phrases; never video/frames/messages) in `reasoning.md`, get independent review, then implement in small commits. Then W7b, W7c, W8 per `plan.md`.
+4. W7a: R7 revision 1 (profiles) written in `reasoning.md` (`d2ba0e4`, `abe06ec`). Independent reasoning review `r7_review` (read-only) running. No profile code yet. After APPROVED: implement in small commits — `src/app/profiles.ts` + `profiles.test.ts` first, then session wiring (`session.ts`, `types.ts`, session tests), then UI (`SetupViews`, `CommunicationView`, `useMotif`, App tests). Then W7b, W7c, W8 per `plan.md`.
 
 ## Known notes and risks
 
