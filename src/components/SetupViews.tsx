@@ -133,29 +133,49 @@ export function CaptureView({ snapshot, session }: ViewProps) {
   );
 }
 
+export type SignalLevel = 'none yet' | 'none' | 'some' | 'strong';
+/** Live signal against your own rest: not a recommendation and not proof of intention. */
+export function signalLevel(deviation: number | null): SignalLevel {
+  if (deviation === null || !Number.isFinite(deviation)) return 'none yet';
+  return deviation >= 3 ? 'strong' : deviation >= 1.5 ? 'some' : 'none';
+}
+const METER_BARS: Record<SignalLevel, number> = { 'none yet': 0, none: 0, some: 2, strong: 3 };
+
+function SignalMeter({ level }: { level: SignalLevel }) {
+  return (
+    <span className="signal-meter" role="img" aria-label={`Signal: ${level}`}>
+      {[0, 1, 2].map((bar) => <span key={bar} className={bar < METER_BARS[level] ? 'meter-on' : ''} />)}
+    </span>
+  );
+}
+
 export function ChooseView({ snapshot, session }: ViewProps) {
   const regions = [...new Set(MOVEMENT_OPTIONS.map((option) => option.region))];
   // While adding, movements already in the approved set are refused by the session; show that up front.
   const inUse = new Set(snapshot.adding ? snapshot.approvedModels.map((model) => `${model.feature}:${model.direction}`) : []);
   return (
     <>
-      <Heading eyebrow="STEP 2 · FIND YOUR MOVEMENT" title={<>A movement that<br /><em>works for you.</em></>}
-        lead="Click any movement you can comfortably repeat and hold until the Rest cue; recording starts right away. The number shows how strongly it registers compared with your own rest." />
-      <p className="helper-copy">The rhythm alternates: 5 seconds of Rest, then 5 seconds of Action. Stay relaxed during Rest; make and hold your movement during Action. The camera overlay shows what Motif is measuring.</p>
+      <Heading eyebrow="FIND YOUR MOVEMENT" title={<>A movement that<br /><em>works for you.</em></>}
+        lead="Click a movement you can repeat comfortably and recording starts right away." />
       {(snapshot.recalibrating || snapshot.adding) && <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />}
       {snapshot.adding && <p className="status-notice">Adding a movement to: {snapshot.mappingLabel}. Movements you already use cannot be chosen twice.</p>}
       {regions.map((region) => (
         <fieldset className="feature-fieldset" key={region}>
           <legend>{region}</legend>
+          {region === 'Head' && <p className="helper-copy">Left and right mean your own sides.</p>}
           <div className="feature-grid">
             {MOVEMENT_OPTIONS.filter((option) => option.region === region).map((option) => {
               const deviation = liveDeviation(snapshot.baseline, snapshot.frame, option.feature, option.direction);
+              const level = signalLevel(deviation);
               const key = `${option.feature}:${option.direction}`;
               const used = inUse.has(key);
               return (
                 <button key={key} type="button" className="button feature-button" disabled={used || snapshot.camera !== 'running'}
                   onClick={() => session.chooseMovement({ feature: option.feature, direction: option.direction, label: option.label })}>
-                  {option.label}<span>{used ? 'already in use' : deviation === null ? '—' : `${Math.max(0, deviation).toFixed(1)}× rest`}</span>
+                  {option.label}
+                  {used ? <span>already in use</span> : (
+                    <span className="signal-row"><SignalMeter level={level} />{level === 'strong' ? <strong className="seen-now">Seen now</strong> : level === 'none yet' ? 'No signal' : null}</span>
+                  )}
                 </button>
               );
             })}
@@ -169,7 +189,6 @@ export function ChooseView({ snapshot, session }: ViewProps) {
         <button type="button" className="button button-quiet" onClick={() => session.cancel()}>Stop setup</button>
       </div>
       {snapshot.camera !== 'running' && <p className="helper-copy" role="status">Waiting for the camera before you can record.</p>}
-      <p className="helper-copy">Next: three practice attempts, two separate checks, then ten seconds of everyday activity. Head-direction labels are calculated from the camera geometry and still need confirmation on real hardware.</p>
       <SetupOptions snapshot={snapshot} session={session} />
     </>
   );

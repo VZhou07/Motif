@@ -64,3 +64,6 @@
 .setup-progress li{font-size:14px;font-weight:600;padding:8px 14px;border-radius:20px;border:1px solid #cbd8cc;color:#3f5a4b;background:transparent}
 .setup-progress .progress-passed{background:#e9f0e4;border-color:#cbd8cc}
 .setup-progress .progress-current{background:#205e45;border-color:#205e45;color:#fff}
+.feature-button .signal-row{display:inline-flex;align-items:center;gap:8px;font-size:14px}
+.signal-meter{display:inline-flex;gap:3px;align-items:flex-end}.signal-meter>span{display:inline-block;width:8px;height:14px;border-radius:2px;background:#cbd8cc}.signal-meter>span:nth-child(1){height:8px}.signal-meter>span:nth-child(2){height:11px}.signal-meter>span.meter-on{background:#205e45}
+.seen-now{font-size:14px;color:#1d5d45}

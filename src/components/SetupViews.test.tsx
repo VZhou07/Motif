@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import App from '../App';
 import { BROW, Harness } from '../app/session.test-support';
-import { CaptureView, ChooseView } from './SetupViews';
+import { CaptureView, ChooseView, signalLevel } from './SetupViews';
 
 function renderApp(h: Harness) {
   return render(<App runtime={{
@@ -118,11 +118,23 @@ describe('calibration pacing presentation (R13)', () => {
     expect(announcer?.textContent).not.toMatch(/\d/);
   });
 
-  it('explains the same two-cue rhythm before recording', () => {
+  it('keeps the choose screen to one short sentence before recording', () => {
     const h = new Harness();
     render(<ChooseView snapshot={h.snap} session={h.session} />);
-    expect(screen.getByText(/5 seconds of Rest, then 5 seconds of Action/)).toBeTruthy();
+    expect(screen.getByText(/recording starts right away/)).toBeTruthy();
     expect(screen.queryByText(/hold for about two seconds/)).toBeNull();
-    expect(screen.getByText(/hold until the Rest cue/)).toBeTruthy();
+    expect(screen.queryByText(/5 seconds of Rest/)).toBeNull();
+  });
+});
+
+describe('signal meter levels', () => {
+  it('maps live deviation to none yet, none, some and strong at exact boundaries', () => {
+    expect(signalLevel(null)).toBe('none yet');
+    expect(signalLevel(Number.NaN)).toBe('none yet');
+    expect(signalLevel(-2)).toBe('none');
+    expect(signalLevel(1.49)).toBe('none');
+    expect(signalLevel(1.5)).toBe('some');
+    expect(signalLevel(2.99)).toBe('some');
+    expect(signalLevel(3)).toBe('strong');
   });
 });
