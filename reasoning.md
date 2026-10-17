@@ -716,9 +716,17 @@ Human acceptance (pending, needs a person): whether grouped scanning is actually
 - B3: `CONTAINER_VERSION` (1) split from entry `PROFILE_VERSION` (2); per-entry migration, byte-preservation and mixed-container tests; older builds reject only v2 entries.
 - M1 full-suite rule, `reach(id)` helper and per-commit test/browser updates; M2 practice routing; M3 one Resume rule; M4 empty Favourites does not open; M5 snapshot/type changes named in the order; M6 id pattern and max+1; M7 privacy wording, favourites count on Save, restore announcement; M8 tests added; M9 Clear has no undo (documented), Speak-after-pick left for human check; M10 corrected counts, plan.md Communication row pointer.
 
+### Implementation notes (C1 build; routine, no design change per c1_testing)
+
+- Version 1 migration drops repeated phrases (case-insensitive) because a group cannot hold the same phrase twice; otherwise such a profile would be rejected outright. Stored bytes are unchanged until the entry is saved again.
+- Group names must be unique (case-insensitive), so announcements and helper shortcuts are unambiguous.
+- Group ids are one more than the highest current number. Correction to the text above: removing the highest-numbered group lets its id be used again; a removed id below the highest is never reused. This is harmless because edits happen only while paused, Resume after any change rebuilds at top, and phrase ids resolve against the current vocabulary.
+- Re-validation on confirm stays as defence in depth but cannot be reached today: the only way the vocabulary changes on the confirm level is a paused edit, and the Resume rule then drops the confirm level first. The planned C1e test "re-validation rejects a duplicate" is therefore replaced by a test that the Resume rule drops the pending confirmation and nothing is added twice (`session.composer.test.ts` "is refused while scanning…").
+
 ### R14 review record
 
 | Revision | Reviewer | Findings / resolution | Verdict |
 | --- | --- | --- | --- |
+| C1 implementation | c1_testing (testing review) | tsc, vitest 475, build, browser 83/83 PASS; 23 mutants, 5 survived. B1: auto-return resets after a selection and after `openGroup`/`setTargets` untested → two tests added, both mutants now caught. N1 fallback-from-confirm test added; N2/N3 recorded above; N7 README wording fixed. | BLOCKING → fixed, re-check requested |
 | R14 revision 2 | r14_review (re-check) | B1–B3 resolved; no new blockers. Notes: suspension reset vs freeze, reset only on a real flip, leftover stage wording, function name, byte-identical wording, confirm-level cancels, `setPhrase` test, pass count, cross-build duplicate names (README line in C1g). All wording fixed in place. | APPROVED |
 | R14 revision 1 | r14_review | B1 confirm stage loses routed mapping (any movement would save); B2 time-based auto-return can cancel a latched dwell and skips assisted; B3 shared container/entry version makes all saved profiles unreadable. M1–M10 non-blocking. All resolved in revision 2. | BLOCKING |
