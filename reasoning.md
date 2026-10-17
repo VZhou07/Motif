@@ -597,3 +597,39 @@ Test exact5s Rest↔Action cycles across all training/held-out/cross-check/profi
 | R13 revision 1 | overlay_review | Read actual written design and implementation boundaries; no blockers. Boundary frame is already filtered but excluded from completed training; no held-out movement enters fitting. Pin continuous phase timing, exact neutral-only overlap and factual failure reports. | APPROVED |
 | R13 revision 2 | overlay_review | Full-recording explicit Action-window verification and failed-model diagnostics; pin `phase === 'armed' && neutral` on the last pre-Action frame; diagnostic model copy overlay-only. | APPROVED |
 | R13 revision 2 implementation | r13_testing | Ran tsc, vitest 353, build, browser 67/67. BLOCKING: pending-at-boundary fixture completed the dwell in Rest. Fixture changed to 150 ms pre-Action hold so the last Rest frame is still pending, one event inside Action, then rest; must fail with `Fresh rest did not arm before Action.` Recheck PASS (8/8 verification tests, tsc). Coordinator: 353 tests, typecheck, build. | PASS — software verified; real-user calibration/comfort pending |
+
+## R14 — Back to start, and one-hour reuse of recent checks (revision 1)
+
+User request (2026-10-17, awake and directing): (a) after saving, a helper button returns to the start screen; (b) restoring the profile just left skips the rest check if it passed within the last hour, and skips re-checking any saved movement verified within the last hour; older checks run again. This changes the plan.md rule "rest/revalidation precede arming a restored profile" only for checks that already passed in this same page session less than an hour ago.
+
+### Back to start (already implemented, uncommitted)
+- `MotifSession.returnToStart()` is helper-only (plain button, not scanned) and refused unless the approved setup is saved and unchanged since saving. It cancels speech/cues, clears every setup/communication field to constructor defaults (models, mapping, baseline, message, phrases, cycles, evidence, scan speed, input mode), keeps camera/tracking state, and enters `welcome`. Restore is then allowed because nothing is approved.
+
+### Recent-check memory (contract)
+- Session timestamps use `this.clock()` (performance.now in the app; fake clock in tests). `RECENT_CHECK_MS = 60 * 60 * 1000`.
+- `baselineAt`: set when a rest check completes. `approvedBaselineAt` set wherever `approvedBaseline = baseline` is set, and `baseline = approvedBaseline` copies it back (keep current, cancel).
+- `checkedAt: Map<modelKey, number>`: set to now for every model in the set when a cycle reaches `verified` (after held-out/re-checks AND the everyday-activity check). `modelKey` is the canonical JSON of the saved model fields (id, label, feature, direction, baselineCenter, thresholds, timings), so a changed model never matches.
+- `returnToStart()` stores `recent = { name, baseline: approvedBaseline, baselineAt: approvedBaselineAt }`. The `checkedAt` map survives `returnToStart()`; nothing is written to storage. A page reload forgets everything (full checks).
+
+### Restore decision
+- Reuse applies only when restoring the same profile name that `returnToStart()` just left (`sameName`), on this page. Another profile always gets full checks (a different person may be seated).
+- Rest: if `recent.baselineAt` is within the hour, skip the rest recording; use `recent.baseline` and `recent.baselineAt`, still run the existing rest-fit (misfit) test against the saved models. Otherwise run the normal 10 s rest check.
+- Movements: `verifyPlan` includes only saved models whose `checkedAt` is missing or older than an hour (2 attempts if mapped, as now). The everyday-activity check runs when at least one movement was re-checked. If none needed re-checking, the restored cycle becomes `verified` with `verifiedIds` = all saved model ids, no attempts, a movement label stating it was checked within the last hour, and the flow skips the comfort question and goes straight to the saved-controls confirmation.
+- Original check times carry forward (a skipped check does not refresh its time), so the hour always counts from the real check.
+- Mapping confirmation (explicit approval) and practice before speaking are always kept. Fresh neutral/rearming after every stage change is unchanged.
+
+### Failure modes
+- Different person within the hour: other profile names never reuse; same name is the helper's responsibility (stated next to the button).
+- Changed lighting/position within the hour: the everyday check and practice still precede speaking only when movements are re-checked; with full skip, the practice stage (not spoken) and rearming still apply. Accepted by the user's explicit request.
+- Clock: `performance.now` is monotonic; a negative or non-finite age is treated as stale.
+
+### Tests
+- Session: back-to-start reset and refusal (done); restore within the hour skips rest and re-checks → mapping-confirm → practice; after 61 minutes full checks; rest older than an hour but a movement added within the hour: rest check runs, only the older movement is re-checked, then the everyday check; other profile name gets full checks; reload (new session) gets full checks; a skipped restore keeps the original times so a second return after the hour runs full checks.
+
+### Revision 2 changes (resolving r14_review)
+- B1: `checkedAt` is stamped only for ids with a passing positive attempt in this cycle (`cycle.heldOut` entries with `passed`, by `expectedId`), and only once the everyday check passes. Skipped movements keep their original time; a full skip stamps nothing. A trained/added movement is stamped the same way (its held-out attempts and cross-checks pass, then the everyday check).
+- B2: `recent` is cleared whenever a rest check starts that is not the reuse restore (`beginBaseline`), whenever a different profile is restored, and on assisted input. Both rest and movement reuse require `recent` present with the same name; without it, every check runs. `checkedAt` is only consulted under that gate.
+- `baselineAt`/`approvedBaselineAt` are copied at every site that copies `baseline`/`approvedBaseline` (captureBaseline, approveMapping ×2, keepCurrent, useAssisted, returnToStart). A missing baseline or non-finite/negative/≥ one hour age is stale (exactly 60 minutes is stale).
+- The skip path does not call `beginBaseline()`: it repeats its resets (close open cycle, clear candidate/diagnostic/report), sets `restoring`, uses `recent.baseline`, and calls `beginRecheck()` without stamping a new rest time.
+- `modelKey` is built from `MODEL_KEYS` order. Evidence text for a skipped cycle states that no attempts or everyday check ran this time ("checked within the last hour; not repeated"). The helper text next to the button says the same person must restore within the hour to skip the checks.
+- Added tests: partial restore stamping (B1); reuse cleared by an intervening rest check, failed setup, or another profile (B2); exactly 60 minutes stale; nothing armed before approval on the full-skip path; rest-fit failure with a reused baseline is still reported.

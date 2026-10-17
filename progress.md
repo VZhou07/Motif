@@ -2,6 +2,13 @@
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Latest focused task — save panel, Back to start, one-hour check reuse (R14)
+
+- User (awake, 2026-10-17) asked: save panel should visibly finish; a button returns to the start screen after saving; restoring the same profile within an hour should not repeat the rest check or movement checks done within that hour. Base `ba15850`, uncommitted working tree.
+- State: **software verified; human acceptance pending.** R14 revision 1 NOT APPROVED (B1 skipped checks refreshed times; B2 stale memory after other activity) → revision 2 APPROVED by the independent reasoning reviewer before code. Independent testing review: first FAIL (5 untested rules: exact hour, partial stamping, reuse gate, assisted clear, reused-rest mismatch, reused rest time) → tests added → re-check PASS (tsc exit 0; vitest 31 files/370 PASS; build PASS; mutations M1–M10 each caught; M4 equivalent).
+- Files: `src/app/session.ts` (returnToStart, restore reuse, isRecent, stampChecks), `src/app/profiles.ts` (modelKey), `src/components/ProfileViews.tsx`, `src/App.test.tsx`, `src/app/session.profiles.test.ts`, docs. Committed as small local commits after `ba15850` (see `git log`); nothing pushed; no processes left running.
+- Pending person check: save → Done, back to start screen → restore within and after an hour with a real camera.
+
 ## Latest focused task — camera diagnostics and Rest / Action cues (R13)
 
 - User reported calibration still fails; requested camera overlay, Rest↔Action beeps, Rest/Action only at five seconds each. Base `2ee25cf`. Focused task; overall Goal stays paused.
