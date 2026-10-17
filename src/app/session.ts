@@ -10,7 +10,7 @@ import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMa
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
 import { buildLevel, effectiveLevel, isConfirmLevel, isGroupLevel, type Level, type LevelContext } from './navigation';
-import { applyEdit, defaultVocabulary, type Vocabulary, type VocabularyEdit } from './vocabulary';
+import { addFavourite, addProblem, applyEdit, defaultVocabulary, FAVOURITES_ID, type Vocabulary, type VocabularyEdit } from './vocabulary';
 import { buildProfile, createMemoryProfileStore, type ProfileList, type ProfileStore, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
@@ -590,6 +590,7 @@ export class MotifSession {
     const valid = validateMapping(set, pending.assignments);
     if (!valid.ok) { this.enterMapping(); this.announce(valid.reasons[0] ?? 'Those controls are not valid.'); return; }
     const restored = this.restoring;
+    let replacedFavourites = false;
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
@@ -597,6 +598,8 @@ export class MotifSession {
         || cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index])) return;
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
+      const kept = restored.profile.vocabulary.groups[0]?.phrases ?? [];
+      replacedFavourites = (this.vocabulary.groups[0]?.phrases ?? []).some((phrase) => !kept.some((entry) => sameName(entry, phrase)));
       this.vocabulary = restored.profile.vocabulary;
       this.intervalMs = restored.profile.scanIntervalMs;
     } else if (this.candidate) {
@@ -624,7 +627,8 @@ export class MotifSession {
       this.refreshProfiles();
     }
     this.enterPractice();
-    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.`);
+    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.${
+      replacedFavourites ? ' Favourites from this session were replaced by the saved profile’s.' : ''}`);
   }
 
   private usePrevious(): void {
@@ -759,7 +763,11 @@ export class MotifSession {
 
   /** Conventional helper edit of the phrase vocabulary during setup; returns the plain reason when refused. */
   editVocabulary(edit: VocabularyEdit): Result<Vocabulary> {
-    if (!['welcome', 'choose', 'setup-failed'].includes(this.stage)) return { ok: false, reasons: ['Phrases can be edited during setup.'] };
+    // During use, only while paused, so the scanner can never select something being edited (R14).
+    const pausedUse = this.stage === 'communication' && this.scanner?.snapshot.paused === true;
+    if (!['welcome', 'choose', 'setup-failed'].includes(this.stage) && !pausedUse) {
+      return { ok: false, reasons: ['Phrases can be edited during setup, or while communication is paused.'] };
+    }
     const result = applyEdit(this.vocabulary, edit);
     if (result.ok) this.vocabulary = result.value;
     this.publish();
@@ -905,7 +913,8 @@ export class MotifSession {
     if (result.ok) {
       this.activeProfile = built.value.name;
       this.activeSignature = this.signature();
-      this.announce(`Saved “${built.value.name}” on this device. Only movement settings, controls, phrases and scan speed were saved.`);
+      const favourites = built.value.vocabulary.groups[0]?.phrases.length ?? 0;
+      this.announce(`Saved “${built.value.name}” on this device, including ${favourites} favourite${favourites === 1 ? '' : 's'}. Only movement settings, controls, phrases and scan speed were saved.`);
     } else this.announce(result.reason);
     this.publish();
     return result;
@@ -1151,8 +1160,9 @@ export class MotifSession {
   /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
   private fallBackToAutomatic(): void {
     this.stepFallback = true;
+    const confirming = isConfirmLevel(this.level);
     if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
-    this.announce('No movement for a minute, so scanning is now automatic, starting from the main list. Your select movement still selects; helpers can use the buttons.');
+    this.announce(`${confirming ? 'Not saved. ' : ''}No movement for a minute, so scanning is now automatic, starting from the main list. Your select movement still selects; helpers can use the buttons.`);
   }
 
   private pauseScan(nowMs: number): void {
@@ -1168,9 +1178,10 @@ export class MotifSession {
     this.idleValidMs = 0;
     this.scanner?.setPaused(false, nowMs);
     const changed = this.pausedVocabulary !== null && this.pausedVocabulary !== this.vocabulary;
+    const dropped = changed && isConfirmLevel(this.level);
     this.pausedVocabulary = null;
     this.setLevel(changed ? 'top' : this.level, nowMs);
-    this.announce(changed ? 'Resumed at the main list because the phrases changed.' : 'Resumed.');
+    this.announce(changed ? `Resumed at the main list because the phrases changed.${dropped ? ' Not saved.' : ''}` : 'Resumed.');
   }
 
   private activate(id: string, nowMs: number): void {
@@ -1196,6 +1207,11 @@ export class MotifSession {
     switch (id) {
       case 'more': this.setLevel('more', nowMs); this.announce('More options.'); break;
       case 'speak': this.speakMessage(); break;
+      case 'undo': this.undoLast(); break;
+      case 'say-again': this.sayAgain(); break;
+      case 'save-favourite': this.askToSaveFavourite(nowMs); break;
+      case 'confirm-favourite': this.confirmFavourite(nowMs); break;
+      case 'cancel-favourite': this.setLevel('top', nowMs); this.announce('Not saved.'); break;
       case 'clear': this.message = []; this.announce('Message cleared.'); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
@@ -1226,6 +1242,43 @@ export class MotifSession {
     this.idleWraps = 0;
     this.scanner?.setInterval(this.intervalMs, nowMs);
     this.announce(`Scanning every ${(this.intervalMs / 1_000).toFixed(1)} seconds.`);
+  }
+
+  private undoLast(): void {
+    const last = this.message.at(-1);
+    if (last === undefined) { this.announce('Nothing to undo.'); return; }
+    this.message = this.message.slice(0, -1);
+    this.announce(`Removed “${last}”.`);
+  }
+
+  /** Repeats the last spoken text; it lives in memory only and is never stored. */
+  private sayAgain(): void {
+    const text = this.lastSpoken;
+    if (!text) { this.announce('Nothing has been spoken yet.'); return; }
+    const spoken = this.speech.speak(text);
+    this.announce(spoken ? `Speaking again: ${text}` : `Local speech is not available on this device. Your message is shown on screen: ${text}`);
+  }
+
+  /** Checks first, so the person is never asked to confirm something that cannot be saved. */
+  private askToSaveFavourite(nowMs: number): void {
+    if (!this.message.length) { this.announce('Nothing to save yet. Add a phrase first.'); return; }
+    const text = this.message.join('. ');
+    const problem = addProblem(this.vocabulary, FAVOURITES_ID, text);
+    if (problem) { this.announce(problem); return; }
+    this.setLevel({ confirm: text }, nowMs);
+    this.announce(`Save “${text}” to Favourites? Select Save to confirm, or Cancel.`);
+  }
+
+  /** Re-validated on confirm; a rejection changes nothing and nothing is ever evicted. Storage waits for profile Save. */
+  private confirmFavourite(nowMs: number): void {
+    if (!isConfirmLevel(this.level)) return;
+    const result = addFavourite(this.vocabulary, this.level.confirm);
+    if (result.ok) this.vocabulary = result.value;
+    this.setLevel('top', nowMs);
+    if (!result.ok) { this.announce(`Not saved: ${result.reasons[0] ?? 'this cannot be saved.'}`); return; }
+    this.announce(this.hasApproved
+      ? 'Saved to Favourites for this session. Save your profile to keep it.'
+      : 'Saved to Favourites until this page is closed.');
   }
 
   private speakMessage(): void {
