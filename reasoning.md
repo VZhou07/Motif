@@ -440,3 +440,39 @@ Pure (`discovery.test.ts`): rest only → none; a repeated mouth opening → one
 | --- | --- | --- | --- |
 | R9 revision 1 | r9_review | B1 grouping chained through shared channels (opposite directions and independent movements could merge); B2 channels outside `MOVEMENT_OPTIONS` gave jargon labels. Units, hysteresis, safety, privacy and accessibility confirmed sound. Resolved in revision 2 with the non-blocking items adopted. | CHANGES REQUIRED |
 | R9 revision 2 | r9_review (re-review) | B1/B2 resolved; thresholds, time/segment rules and session changes checked against the code; no new blockers. Non-blocking (stale text, Candidate type, scanned "use instead", broad-channel ranking) adopted. | APPROVED |
+
+## R10 — W8: demo and accessibility hardening (revision 1)
+
+Status: DRAFT, awaiting independent reasoning review before any code. Owner: Claude Code coordinator (session 3). Builds on approved R4–R9. No new product behaviour: W8 adds automated evidence, small robustness fixes the checks reveal, run instructions, documented limits and a manual acceptance checklist. Human/hardware criteria stay pending.
+
+### Automated evidence to add
+
+1. **Demo Person A and Person B without code changes (session integration, `src/app/demo.test.ts`).** Person A: one movement (brow), automatic scanning, saved as "Person A". Person B: two movements (mouth selects, cheek puff moves next), step scanning, edited phrase, saved as "Person B". A fresh session on the same storage restores A, communicates and speaks; another fresh session restores B, steps and speaks; B then approves a one-movement fallback (mouth alone) and still communicates. A third session uses assisted Space with no movement at all (zero gestures). Only public session APIs and the shared in-memory storage are used.
+2. **Noise and lighting-like drift (session).** Deterministic pseudo-random jitter (fixed-seed LCG, ±1.5× the rest noise used in fixtures) on every coefficient plus a slow brightness-like drift (small common offset ramp) during rest: calibration either succeeds and then 60 s of noisy rest in communication selects nothing, or it fails with an honest reason — never an action without a held movement. A noisy held movement still selects exactly once per hold.
+3. **Tracking flicker (session).** Alternating short tracked/missing bursts (multiple faces, missing, stale) for 30 s in communication with movement attempts in between produce no action and no catch-up; after stable tracking and fresh neutral, one hold selects once.
+4. **Browser checks (`scripts/browser-check.mjs`, fake camera only):**
+   - model asset blocked (route abort for the `.task` file) → a visible model-load error, assisted input still available, no external requests;
+   - `localStorage` that throws (init script) → the app loads, welcome renders, the saved-profiles area says storage is unavailable only if relevant, no console errors;
+   - speech absent (headless voices are empty; additionally stub `speechSynthesis.getVoices` to `[]`) → after assisted selection and Speak, the "no local speech voice" explanation is visible and the message text stays on screen;
+   - focus visibility: after Tab, the focused control has a non-`none` outline or a box-shadow;
+   - contrast: computed text/background pairs for body text, primary and quiet buttons, the scan highlight and status notices meet WCAG AA 4.5:1 (3:1 for ≥ 24 px or bold ≥ 18.66 px), computed in-page from `getComputedStyle` (walking up to the first opaque background);
+   - target size: every visible enabled button on welcome and assisted communication is at least 44 × 44 CSS px;
+   - reload: after assisted selections, a reload starts clean (no message, nothing persisted).
+5. **Accessible names (RTL).** Every rendered button and form control on each reachable screen in the existing App tests has a non-empty accessible name; exactly one polite live region exists.
+
+Each failing check found here is fixed as a small separate commit (style tokens, sizes, labels or guards), not by weakening the check.
+
+### Documentation
+
+- `README.md`: what Motif is and is not (not a medical device or emergency detector), requirements (desktop Chrome/Edge, webcam, Node ≥ 22.12 for development), setup (`npm ci`, `npm run setup:assets`), run (`npm run dev`, `npm run build` + `npm run preview`), checks (typecheck, tests, browser check with the fake camera and the bundled-Chromium fallback), privacy (local inference, no uploads, opt-in profiles storing only movement settings/controls/phrases/scan speed), supported environment and limitations (English only; one person in view; head-direction labels mathematically derived pending real-camera confirmation; local voices only; synthetic tests do not establish real-world accuracy; no independent first-run setup; observed counts are not accuracy).
+- `ACCEPTANCE.md`: the precise manual acceptance checklist for a person with a real webcam, grouped by checkpoint (W2 camera/values/labels, W3 rest + one movement, W4 communication/speech, W5 first-slice flow, W6 two+ movements, W7a save/reload/restore, W7b effort/tiring/recommendation, W7c discovery, W8 Person A/B demo, permission errors, lighting, fatigue, keyboard, contrast, reduced motion, network/storage inspection). Each item: steps, expected result, and blank "observed / date / browser / device" fields. It states that nothing in it has been observed yet.
+- `STATUS.md` and `progress.md` updated; `plan.md` W8 status "software verified; human acceptance pending" only after the independent testing review passes.
+
+### Failure modes addressed
+
+Demo needing code edits (A/B via profiles only); noise or flicker producing actions (tests); blocked storage or model assets crashing the app (browser checks); missing speech hiding the message (check); invisible focus, low contrast, small targets (checks + fixes); overstated claims in docs (README limits section, ACCEPTANCE pending fields).
+
+### R10 review record
+
+| Revision | Reviewer | Findings / resolution | Verdict |
+| --- | --- | --- | --- |
