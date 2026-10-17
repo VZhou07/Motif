@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { createLocalProfileStore, createMemoryStorage, PROFILE_KEY } from './app/profiles';
 import { BROW, Harness, MOUTH, REST } from './app/session.test-support';
 import type { LocalSpeech } from './app/speech';
 import { TrackerError } from './tracker';
@@ -183,5 +184,46 @@ describe('Motif app', () => {
     h.run(61_000);
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(document.querySelector('.control-hint')?.textContent).toMatch(/scanning is automatic for now/);
+  });
+
+  it('saves the approved setup from communication, offering Replace for an existing name', () => {
+    const storage = createMemoryStorage();
+    const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    h.setUpToCommunication();
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByText(/Never saved: video, camera images, your messages/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Profile name'), { target: { value: 'Alex' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
+    expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
+    expect(JSON.parse(storage.data.get(PROFILE_KEY)!).profiles[0].name).toBe('Alex');
+    fireEvent.click(screen.getByRole('button', { name: 'Save on this device' }));
+    expect(screen.getByRole('status').textContent).toMatch(/already exists/);
+    fireEvent.click(screen.getByRole('button', { name: 'Replace “Alex”' }));
+    expect(screen.getByRole('status').textContent).toBe('Saved “Alex”.');
+  });
+
+  it('lists saved profiles on the welcome screen with restore and confirmed delete', () => {
+    const storage = createMemoryStorage();
+    const first = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    first.setUpToCommunication();
+    first.session.saveProfile('Alex');
+    first.session.saveProfile('Sam');
+    const raw = JSON.parse(storage.data.get(PROFILE_KEY)!);
+    storage.setItem(PROFILE_KEY, JSON.stringify({ ...raw, profiles: [...raw.profiles, { broken: true }] }));
+    const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    expect(screen.getByText('1 saved profile could not be read and was ignored.')).toBeTruthy();
+    const restore = screen.getByRole('button', { name: 'Restore “Alex”' }) as HTMLButtonElement;
+    expect(restore.disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete “Sam”' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep it' }));
+    expect(screen.getByRole('button', { name: 'Delete “Sam”' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete “Sam”' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, delete “Sam”' }));
+    expect(screen.queryByText('Sam')).toBeNull();
+    act(() => h.session.setCamera('running'));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore “Alex”' }));
+    expect(h.snap.stage).toBe('baseline');
+    expect(h.snap.restoring).toBe('Alex');
   });
 });
