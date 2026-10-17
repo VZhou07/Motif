@@ -73,6 +73,8 @@ Official references: [Codex subagents](https://developers.openai.com/codex/subag
 ## Git rules
 
 - Local commits during the approved build are explicitly authorized after meaningful chunks pass required automated checks and independent review. Use the existing Git author identity; if absent, leave work uncommitted, record the reason, and continue useful work. Do not invent an identity. Keep each commit message to ONE short, descriptive subject of a few words: `Fix gesture rearming`, `Add baseline calibration`, `Refactor feature processor`, or `Update game state`.
+- User instruction (2026-10-17): commit MORE OFTEN in SMALLER, focused chunks (one module, refactor, feature step, test set, or doc update per commit), not one large checkpoint commit. Commit each small chunk as soon as its relevant tests and typecheck pass; independent reviews still gate marking a checkpoint reached, and review fixes land as further small commits.
+- User instruction (2026-10-17, later): the earlier single large commit `Add guided calibration app` was undone at the user's request and rebuilt as a series of small verified commits with an identical final tree. Never bundle a whole checkpoint into one commit again. That was a one-time, user-requested rewrite of unpushed local history; otherwise the no-rewrite/no-amend rule below still applies.
 - No commit body, submessage, trailers, signatures, or `Co-authored-by` attribution to the agent. Do not add agent attribution in code or documentation.
 - NEVER push. The user will push. Do not publish, deploy, open a PR, rewrite history, or amend existing commits unless separately requested.
 - Preserve unrelated user changes. Do not change global Git configuration.
