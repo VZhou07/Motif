@@ -1,5 +1,13 @@
 # Motif technical handoff
 
+## STAGING BRANCH — all open PRs merged (2026-10-17)
+
+- Branch `staging` in worktree `/root/home/eso/Projects/Motif-staging`, from `origin/main` `e2d5871`. Merged in order: #7 `origin/feature/request-relay` `1e94ede`, #9 `origin/feature/participant-requests` `c699747`, #10 `origin/feature/caregiver-dashboard` `9b9afa4`, #8 `origin/ethan-features` `4c52f6b`. PRs #1–#6 were already in `main`. Local unpushed `ethan-features` commit `75f2ce9` (adds `@supabase/ssr` and a caret `supabase-js` range) was NOT merged; `request-relay` already pins `@supabase/supabase-js` 2.118.0.
+- First three merged without conflicts. `ethan-features` conflicted in `README.md`, `STATUS.md`, `plan.md`, `src/app/profiles.ts`, `src/app/session.ts`; resolved by keeping both sides (`CONTAINER_VERSION` 1 + `PROFILE_VERSION` 2 + `VERIFICATION_POLICY_VERSION` 1; both import lines; both plan items; care-aware privacy text plus phrase-group storage text).
+- Semantic break after the merge: 5 R15 tests (`session.conflicts.test.ts` 2, `CalibrationPreparation.test.tsx` 3) assumed the flat phrase list; they passed before the `ethan-features` merge. Commit `187293a` opens Quick before the long-hold check (plus an announcement assertion, shown to fail if a second action fires) and reaches Add movement through More.
+- Results at `187293a`: `npx tsc --noEmit` PASS; `npx vitest run` 62 files / 857 tests PASS; `npm run build` PASS (ignored runtime assets copied from the main checkout). `npm run test:browser` not run.
+- Not done: participant request controller/panel/pairing are merged but not wired (`docs/workstreams/participant-requests/integration.md` steps 1–8, Agent 3); browser companion not built; hosted Supabase and two-device checks pending; camera checks pending. Independent testing review of the merged tree: see below when recorded.
+
 ## SHARED BASE READY — Agents 1, 2 and 4 may start (2026-10-17)
 
 - **Common base commit: `2055e1c` on branch `feature/request-relay`** is the verified source tree; branch from the tip of `feature/request-relay`, where every commit after `2055e1c` changes documentation only and leaves every source file identical. Local only; nothing pushed. Earlier Agent 3 commits are NOT a valid base: the merge of committed `main` and the frozen browser command port only exist from `2055e1c` onward.
