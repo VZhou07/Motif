@@ -1,6 +1,6 @@
-# Proposed connected caregiver demo
+# Selected connected caregiver demo plan
 
-Status: planning proposal, not approved implementation scope. Separate movement-to-action assignments are already confirmed. Remote requests, a backend, and browser-extension control expand the earlier local-only scope and require the user's selection before building. Keep the original checkout and the communication teammate's active work untouched.
+Status: the user selected **caregiver requests plus a limited browser companion prototype**, including real two-device delivery and deliberately sent request metadata, while camera/calibration data remains local. This supersedes the earlier no-backend/no-external-control scope for these bounded features only. It is an approved product direction; detailed engineering designs, contracts and technical reviews still precede implementation. No implementation agents, external services or deployments have been started. Keep the original checkout and the communication teammate's active work untouched.
 
 ## Product loop
 
@@ -8,7 +8,7 @@ Motif helps a person use comfortable movements to communicate a need, receive ac
 
 First real demo: person A selects Send water request; caregiver on another device sees A's alias and request, acknowledges it, and A sees that acknowledgment. Person B sends a different request and remains distinct. A then uses a supported webpage and returns to communication using the available input.
 
-## Recommended MVP defaults for approval
+## MVP defaults within the selected scope
 
 - One care group with one caregiver and multiple paired participant devices; use demonstration aliases rather than medical records.
 - Four request types: water, bathroom assistance, help changing position, and general assistance. Local speech/composition remains usable independently of network delivery.
@@ -17,7 +17,7 @@ First real demo: person A selects Send water request; caregiver on another devic
 - The caregiver dashboard remains open during the demo. It has an explicit Enable sound control and connection status; background/locked-phone push is excluded from the first slice.
 - Transmit only pairing/auth traffic and the deliberately selected request's ID, participant alias/ID, kind, status, revision and timestamps. No video, landmarks, gesture streams, calibration profiles, browsing history or automatically uploaded composition.
 - Retain requests for the demo session and allow the caregiver to clear/revoke the group afterward. Cross-session history/analytics is deferred. Retention and revocation must be implemented server-side, not merely hidden in the UI.
-- A small HTTPS backend provides real two-device delivery. Transport/provider choice is a coordinator decision before implementation: a same-origin app/API is preferred; a hosted service needs an exact reviewed origin exception. No service creation or deployment is authorized by this proposal.
+- A small HTTPS backend provides real two-device delivery. Transport/provider choice is a coordinator decision before implementation: a same-origin app/API is preferred; a hosted service needs an exact reviewed origin exception. External account creation, paid services and deployment still require their applicable approval; local preparation and scoped feature work do not require another product-scope question.
 - Browser controls are Chrome-only for the first prototype: Scroll up/down, Back and Return to communication, on explicitly supported ordinary pages. Arbitrary OS control, sensitive form actions and automatic emergency detection are excluded.
 
 ## Four concurrent owners
@@ -51,7 +51,7 @@ Fallback: keep Motif visibly docked beside a supported webpage, with an extensio
 
 ## Checkpoints and merge order
 
-- [ ] C0: User selects connected scope, browser scope and request-only network policy. Record the actual hackathon rules when available.
+- [x] C0: User selected caregiver requests plus a limited browser companion prototype and request-only networking. Event identified as Hack the Valley; public theme/rules checked. Detailed hacker-package conditions remain unverified.
 - [ ] C1: One reconciled passing base; versioned contracts committed; four disjoint owners/branches named; each branch can run checks. Reviewed designs precede code.
 - [ ] C2: Tiny vertical slice: real Water request across two devices, correct caregiver acknowledgment back to sender. Integrate early while dashboard/input work continues.
 - [ ] C3: Multiple participants, scoped pairing, cancellation, replay/reconnect and delivery-state tests. Privacy text/policies/tests updated for deliberate requests while camera processing and model-telemetry blocking remain local.
@@ -65,6 +65,10 @@ Motif uses pretrained machine-learning face detection, landmark and expression/b
 
 Suggested pitch: On-device AI turns each person's comfortable movements into personalized controls for communication and caregiver requests.
 
-Specific prize eligibility is pending the actual event's rules, including sponsor API requirements and permission to continue pre-existing work. Technical AI use alone does not establish eligibility.
+User identified **Hack the Valley 11 (October 16–18, 2026)**. Its public AI for Social Impact theme covers practical AI applications and emphasizes transparency and measurable impact; no LLM requirement was found in that theme or the public rules. Motif appears to fit that theme based on its real computer-vision input, but this is an inference rather than an organizer eligibility decision. Devpost refers participants to the hacker package for detailed category descriptions. Keep those details unverified until supplied.
+
+Public rules allow up to four members and public libraries/APIs, and require project work within the event window. They list an initial submission on October 17 at 9 PM ET and final submission October 18 at 10 AM ET, while the page header says 8 AM. Plan conservatively for 8 AM and have the team verify the discrepancy; do not invent one definitive deadline. AI-track eligibility is separate from sponsor prizes with specific API requirements.
+
+Event sources checked 2026-10-17: [Hack the Valley themes](https://hackthevalley.io/), [Devpost overview/category details](https://hack-the-valley-11.devpost.com/), [official public rules](https://hack-the-valley-11.devpost.com/rules).
 
 Primary feasibility sources: [MediaPipe Face Landmarker](https://developers.google.com/edge/mediapipe/solutions/vision/face_landmarker), [Chrome side panels](https://developer.chrome.com/docs/extensions/reference/api/sidePanel), [Chrome activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab).
