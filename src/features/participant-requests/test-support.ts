@@ -13,8 +13,12 @@ import { asIdentity, createCareDatabase, rpc, type DatabaseIdentity } from '../.
 export interface Faults {
   /** Every transport call rejects like a dropped connection. */
   offline: boolean;
-  /** The next N list calls reject (for "stored but the reload failed"). */
+  /** The next N list calls reject. */
   failLists: number;
+  /** After the next successful send RPC, the client's reload list fails (stored, but not confirmed). */
+  failListAfterSend: boolean;
+  /** RPCs with this name reject like a dropped connection, before reaching the database. */
+  failRpc: string | null;
   /** When set, RPCs with this name wait for the gate before reaching the database. */
   hold: { name: string; gate: Promise<void> } | null;
 }
@@ -26,6 +30,10 @@ export interface Device {
   /** Fires an SDK-style auth event without changing the credential (e.g. hourly token refresh). */
   tokenRefresh(): void;
   credential(): CareCredential | null;
+  /** Another tab changed the shared browser session: adopt that credential and fire an auth event. */
+  adopt(credential: CareCredential | null): void;
+  /** Sign this device in as a caregiver account (pre-provisioned demo account). */
+  signInCaregiver(owner: Caregiver): void;
 }
 
 export interface Caregiver { identity: DatabaseIdentity; groupName: string }
@@ -80,7 +88,8 @@ export async function createCareWorld() {
     let current: CareCredential | null = null;
     const callbacks = new Set<() => void>();
     const emit = () => { for (const callback of callbacks) callback(); };
-    const faults: Faults = { offline: false, failLists: 0, hold: null };
+    const faults: Faults = { offline: false, failLists: 0, failListAfterSend: false, failRpc: null, hold: null };
+    let armedListFailure = false;
     const identityFor = (token: string): DatabaseIdentity => {
       const identity = tokens.get(token);
       if (!identity) throw new CareError('request_failed', 'The care service refused this operation (401). Refresh your account and try again.');
@@ -107,12 +116,14 @@ export async function createCareWorld() {
       rpc: async (name, args, token) => {
         if (faults.offline) throw new TypeError('Failed to fetch');
         if (faults.hold?.name === name) await faults.hold.gate;
+        if (faults.offline || faults.failRpc === name) throw new TypeError('Failed to fetch');
         if (!/^motif_[a-z_]+$/.test(name)) throw new Error('Unexpected RPC name.');
         const keys = Object.keys(args);
         if (!keys.every((key) => /^p_[a-z_]+$/.test(key))) throw new Error('Unexpected RPC argument.');
         const call = `select public.${name}(${keys.map((key, index) => `${key} => $${index + 1}`).join(', ')}) as result`;
         try {
           const [row] = await asIdentity<{ result: unknown }>(db, identityFor(token), call, keys.map((key) => args[key]));
+          if (name === 'motif_send_request' && faults.failListAfterSend) { faults.failListAfterSend = false; armedListFailure = true; }
           return row!.result;
         } catch (error) {
           if (error instanceof CareError) throw error;
@@ -121,6 +132,7 @@ export async function createCareWorld() {
       },
       list: async (table, token) => {
         if (faults.offline) throw new TypeError('Failed to fetch');
+        if (armedListFailure) { armedListFailure = false; throw new TypeError('Failed to fetch'); }
         if (faults.failLists > 0) { faults.failLists -= 1; throw new TypeError('Failed to fetch'); }
         if (table !== 'participants' && table !== 'care_requests') throw new Error('Unexpected table.');
         // PostgREST returns JSON, so timestamps arrive as strings exactly as in the real adapter.
@@ -130,7 +142,16 @@ export async function createCareWorld() {
       },
     };
     const client = new CareService(transport);
-    const result: Device = { client, transport, faults, tokenRefresh: emit, credential: () => current };
+    const result: Device = {
+      client, transport, faults, tokenRefresh: emit, credential: () => current,
+      adopt: (credential) => { current = credential; emit(); },
+      signInCaregiver: (owner) => {
+        const token = `token-caregiver-${owner.identity.id}`;
+        tokens.set(token, owner.identity);
+        current = { token, userId: owner.identity.id!, anonymous: false };
+        emit();
+      },
+    };
     devices.push(result);
     return result;
   }
