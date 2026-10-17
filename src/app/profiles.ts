@@ -27,8 +27,13 @@ export interface StoredProfile {
   scanIntervalMs: number;
 }
 
+/** Same model, same key: the saved fields in a fixed order (R14 recent-check memory). */
+export function modelKey(model: GestureModel): string {
+  return JSON.stringify(MODEL_KEYS.map((key) => model[key as keyof GestureModel]));
+}
+
 const PROFILE_KEYS = ['version', 'featureSchema', 'name', 'models', 'mapping', 'phrases', 'scanIntervalMs'];
-const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
+export const MODEL_KEYS = ['id', 'label', 'feature', 'direction', 'baselineCenter', 'activationThreshold', 'releaseThreshold', 'activationMs', 'releaseMs'];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
