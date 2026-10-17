@@ -171,7 +171,7 @@ describe('Motif app', () => {
     act(() => h.selectByGesture('comfortable'));
     const proposals = [...document.querySelectorAll('[data-scan-id^="map:"]')].map((node) => node.textContent);
     expect(proposals).toHaveLength(4);
-    expect(proposals[0]).toMatch(/Raise left outer eyebrow selects · Open mouth moves next/);
+    expect(proposals[0]).toMatch(/Raise left outer eyebrow: Select.*Open mouth: Move next/);
     act(() => { while (h.highlightedId() !== 'map:1') h.step(); });
     expect(document.querySelector('[aria-current="true"]')?.getAttribute('data-scan-id')).toBe('map:1');
     act(() => h.selectByGesture('map:1'));
@@ -276,7 +276,7 @@ describe('Motif app', () => {
     expect(screen.getByRole('button', { name: '“Open mouth” is tiring' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '“Open mouth” is tiring' }));
     expect(h.snap.stage).toBe('mapping');
-    expect(screen.getByLabelText('Why this is recommended').textContent).toMatch(/Open mouth is left unused because you reported it tiring once/);
+    expect(screen.getByText('Why recommended').closest('details')!.textContent).toMatch(/Open mouth is left unused because you reported it tiring once/);
     const [brow, mouth] = h.snap.approvedModels;
     fireEvent.change(screen.getByLabelText('Open mouth'), { target: { value: 'select' } });
     fireEvent.change(screen.getByLabelText('Raise left outer eyebrow'), { target: { value: 'pause' } });
@@ -296,8 +296,7 @@ describe('Motif app', () => {
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Explore/);
     const start = h.now;
     act(() => h.run(20_500, (now) => ((now - start - 500) % 4_000 >= 0 && (now - start - 500) % 4_000 < 1_000 ? MOUTH : REST)));
-    const list = screen.getByRole('list', { name: 'Noticed movements' });
-    expect(list.textContent).toMatch(/Open mouth — seen 5 times/);
+    expect(screen.getByRole('button', { name: 'Open mouth' }).textContent).toMatch(/Open mouth.*seen 5 times/);
     expect(screen.getByText(/not proof of what you meant/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Open mouth' }));
     expect(h.snap.stage).toBe('training');

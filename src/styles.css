@@ -67,3 +67,14 @@
 .feature-button .signal-row{display:inline-flex;align-items:center;gap:8px;font-size:14px}
 .signal-meter{display:inline-flex;gap:3px;align-items:flex-end}.signal-meter>span{display:inline-block;width:8px;height:14px;border-radius:2px;background:#cbd8cc}.signal-meter>span:nth-child(1){height:8px}.signal-meter>span:nth-child(2){height:11px}.signal-meter>span.meter-on{background:#205e45}
 .seen-now{font-size:14px;color:#1d5d45}
+
+/* Mapping cards and discovery choices (UX simplify A): text 14px or larger. */
+.proposal-list{flex-direction:column;align-items:stretch}
+.comm-screen .proposal-card,.proposal-card{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;min-height:84px;padding:16px 20px;width:100%}
+.proposal-card strong{font-size:16px}
+.proposal-chips{display:flex;flex-wrap:wrap;gap:8px}
+.proposal-chip{font-size:14px;padding:4px 12px;border-radius:14px;background:#e9f0e4;border:1px solid #cbd8cc;font-weight:500}
+.proposal-badges{display:flex;gap:8px}.proposal-badge{font-size:14px;font-weight:650;padding:2px 10px;border-radius:12px;background:#205e45;color:#fff}
+.proposal-card-static h2{font-size:18px}
+.discovery-choice{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;width:100%;padding:14px 20px}
+.discovery-choice span{font-size:14px;font-weight:450}.discovery-note{color:#3d5c4f}
