@@ -1,6 +1,6 @@
 import { deriveWinks, FEATURE_IDS, type FeatureFrame, type FeatureId } from '../domain/types';
 import type { ProfileStore } from './profiles';
-import { MotifSession } from './session';
+import { MotifSession, type RequestPort } from './session';
 import type { MovementChoice, SessionSnapshot, SpeechPort } from './types';
 
 export type Values = Partial<Record<FeatureId, number>>;
@@ -33,8 +33,8 @@ export class Harness {
   readonly session: MotifSession;
   stepMs = 50;
 
-  constructor(options: { profiles?: ProfileStore } = {}) {
-    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles });
+  constructor(options: { profiles?: ProfileStore; requests?: RequestPort } = {}) {
+    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles, requests: options.requests });
   }
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }
