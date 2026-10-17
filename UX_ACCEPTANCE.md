@@ -74,7 +74,11 @@ Software verified: 3.1-3.7 PASS (19 acceptance tests), 3.8 PASS (tsc, 431 tests,
 | H.5 | TEST | The hold is kept in the autosaved setup and is unchanged after Continue (quick and re-check), after renaming, and after "same movement" recalibration. |
 | H.6 | TEST | The approve screen preview and the camera panel's movement list state the hold with the movement (for example "long hold, 0.8 s"). |
 | H.7 | TEST | With automatic scanning at 2 s, a 1.5 s hold that starts on one target selects that target, not the next one. |
-| H.9 | TEST | When the person lets go before the hold completes (`released`), the scan resumes with the time that was left at latch start (minimum 0.5 s). Committed selections, suspend, pause, target or interval changes, and tracking-loss cancels (`invalid`, `band`, `conflict`) still restart the full interval. |
+| H.9 | TEST | When the person lets go before the hold completes (`released`, or `band` on the way down), the scan resumes with the time that was left at latch start (minimum 0.5 s). Committed selections, suspend, pause, target or interval changes, and tracking-loss or conflicting-movement cancels (`invalid`, `conflict`) still restart the full interval. |
 | H.10 | TEST | Ordinary blinks (pending for less than half the hold) do not count as unfinished uses; a release after at least half the hold does. |
 | H.8 | TEST | tsc, full vitest and build pass; baseline 431 tests. |
 | H.H | HUMAN | With the real camera: set up "Close left eye (hold)" with Auto. Normal blinking for a minute selects nothing; a deliberate long close selects. |
+
+### Slice H result (rounds: 2 of 3)
+Software verified: H.1-H.10 PASS (25 acceptance tests; suite 456/456, tsc, build). Round 1 found that a let-go reaches the runtime as a `band` cancel, so the resume-remaining-time path was unreachable; fixed by treating `band` like `released`. Mutations caught: no 0.5 s minimum, `fitGesture` ignoring the hold, eye default of 250 ms, released-only routing. Not covered: a `conflict` cancel restart (needs two competing approved movements; existing code path unchanged). The >300 ms guard on unfinished counting is a deliberate compatibility choice, not tested.
+**Human acceptance pending:** H.H (real camera: ordinary blinking for a minute selects nothing; a deliberate long close selects).
