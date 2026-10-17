@@ -37,9 +37,18 @@ export class Harness {
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }
 
+  /** Optional additive signal noise or offset applied on top of every tracked frame (hardening tests). */
+  noise: ((t: number) => Values) | null = null;
+
   step(values: Values = REST, tracking: FeatureFrame['tracking'] = 'tracked'): void {
     this.now += this.stepMs;
-    this.session.ingest(tracking === 'tracked' ? frameAt(this.now, values) : { timestampMs: this.now, tracking, values: {} }, this.now);
+    let frame = frameAt(this.now, values);
+    if (this.noise) {
+      const added = this.noise(this.now);
+      frame = { ...frame, values: { ...frame.values } };
+      for (const [id, delta] of Object.entries(added) as Array<[FeatureId, number]>) frame.values[id] = frame.values[id]! + delta;
+    }
+    this.session.ingest(tracking === 'tracked' ? frame : { timestampMs: this.now, tracking, values: {} }, this.now);
     this.session.tick(this.now);
   }
 
