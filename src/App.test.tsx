@@ -213,6 +213,25 @@ describe('Motif app', () => {
     expect(screen.getByRole('button', { name: 'Restore “Alex”' })).toBeTruthy();
   });
 
+  it('offers back to start inside assisted input started from the start screen', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch) instead' }));
+    expect(h.session.getSnapshot().stage).toBe('communication');
+    fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
+    expect(h.session.getSnapshot()).toMatchObject({ stage: 'welcome', inputMode: 'gesture' });
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+  });
+
+  it('hides back to start during assisted practice', () => {
+    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
+    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch) instead' }));
+    act(() => h.session.selectTarget('practice'));
+    expect(h.session.getSnapshot().stage).toBe('practice');
+    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
+  });
+
   it('offers back to start only once the current setup is saved', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
     h.setUpToCommunication();

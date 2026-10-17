@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { createLocalProfileStore, createMemoryStorage, parseProfile, PROFILE_KEY, type ProfileStore } from './profiles';
 import { BROW, HEAD_WOBBLE, Harness, MOUTH, REST, type Values } from './session.test-support';
 
@@ -146,6 +146,46 @@ describe('back to start after saving', () => {
     expect(h.session.returnToStart()).toBe(false);
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(1);
+  });
+});
+
+describe('back to start from assisted input (R15)', () => {
+  function assisted(): Harness {
+    const h = new Harness({ profiles: storeFor().store });
+    h.session.setPhrase(0, 'Hello');
+    h.session.useAssisted();
+    expect(h.snap).toMatchObject({ stage: 'communication', inputMode: 'assisted' });
+    return h;
+  }
+
+  it('returns to the start screen, clears the message, keeps phrases, and Space or a target no longer acts', () => {
+    const h = assisted();
+    h.session.selectTarget('phrase:1');
+    expect(h.snap.message).toHaveLength(1);
+    const cancel = vi.spyOn(h.speech, 'cancel');
+    expect(h.session.returnToStart()).toBe(true);
+    expect(cancel).toHaveBeenCalled();
+    expect(h.snap).toMatchObject({ stage: 'welcome', inputMode: 'gesture', message: [], lastSpoken: null, scan: null });
+    expect(h.snap.phrases[0]).toBe('Hello');
+    expect(h.snap.announcement).toBe('Back at the start screen. Nothing was saved.');
+    h.session.switchPress(h.now);
+    h.session.selectTarget('phrase:0');
+    expect(h.snap.message).toEqual([]);
+  });
+
+  it('is refused during assisted practice and for an unsaved approved setup in assisted input', () => {
+    const h = assisted();
+    h.session.selectTarget('practice');
+    expect(h.snap.stage).toBe('practice');
+    expect(h.session.returnToStart()).toBe(false);
+    expect(h.snap.stage).toBe('practice');
+
+    const set = new Harness({ profiles: storeFor().store });
+    set.setUpToCommunication();
+    set.session.useAssisted();
+    expect(set.session.returnToStart()).toBe(false);
+    expect(set.snap.stage).toBe('communication');
+    expect(set.snap.approvedModels).toHaveLength(1);
   });
 });
 
