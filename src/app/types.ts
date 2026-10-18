@@ -148,6 +148,8 @@ export interface SessionSnapshot {
   confirmingRecalibrate: boolean;
   /** True for 1 s after a recognised movement in communication or practice (gesture mode only). */
   movementSeen: boolean;
+  /** Phrase groups and Favourites are shown (off by default for now, R19). */
+  phraseGroups: boolean;
   /** On the first-movement comfort screen: what Approve will turn on (null elsewhere). */
   comfortPreview: { label: string; mode: 'auto' | 'step'; parts: Array<{ label: string; action: 'select' | 'next' | 'previous' | 'pause' }> } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */

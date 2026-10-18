@@ -1752,7 +1752,7 @@ export class MotifSession {
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
       proposals: this.stage === 'mapping' ? this.proposalCards() : [],
-      helperOpen: this.isRoutedStage() && this.level === 'more', confirmingClear: isClearLevel(this.level), confirmingRecalibrate: isRecalibrateLevel(this.level), movementSeen: this.movementSeen(),
+      helperOpen: this.isRoutedStage() && this.level === 'more', confirmingClear: isClearLevel(this.level), confirmingRecalibrate: isRecalibrateLevel(this.level), movementSeen: this.movementSeen(), phraseGroups: this.phraseGroups,
       comfortPreview: this.comfortPreview(),
     };
     for (const listener of this.listeners) listener();

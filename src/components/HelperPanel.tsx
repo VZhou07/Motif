@@ -77,14 +77,14 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       </div>
       {!snapshot.speech.available && <p className="helper-note">No local speech voice is available in this browser. Your message stays visible on screen; Motif never uses a remote voice.</p>}
       {assisted && <p className="helper-note">Assisted mode does not use or verify a facial movement.</p>}
-      <details className="helper-details">
+      {snapshot.phraseGroups && <details className="helper-details">
         <summary>Jump to a phrase group</summary>
         <nav className="group-tabs" aria-label="Helper shortcuts to phrase groups">
           {[{ id: 'top', label: 'Main list' }, ...snapshot.vocabulary.groups.map((group) => ({ id: group.id, label: group.name }))].map((tab) => (
             <button key={tab.id} type="button" className="button button-quiet" disabled={paused} onClick={() => session.openGroup(tab.id)}>{tab.label}</button>
           ))}
         </nav>
-      </details>
+      </details>}
       <details className="helper-details">
         <summary>Edit phrases</summary>
         {paused
@@ -93,7 +93,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
                 ? 'Changes are kept on this device automatically, with Last setup.'
                 : snapshot.approvedModels.length ? 'This browser cannot keep changes; they last until this page closes.'
                   : 'Changes are kept on this device only once a movement setup is approved.'}</p>
-              <PhraseEditor vocabulary={snapshot.vocabulary} onEdit={(edit) => session.editVocabulary(edit)} />
+              <PhraseEditor vocabulary={snapshot.vocabulary} hideFavourites={!snapshot.phraseGroups} onEdit={(edit) => session.editVocabulary(edit)} />
             </>
           : <p className="helper-note">Pause scanning first, so nothing can be selected while phrases change. Resume then starts from the main list if anything changed.</p>}
       </details>
@@ -111,7 +111,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       <EvidencePanel snapshot={snapshot} />
       <details className="helper-details">
         <summary>Saving and the start screen</summary>
-        {snapshot.profiles.available && <p className="helper-note">Your setup is saved on this device automatically: movement settings, controls, phrase groups (including {favouriteCount} favourite{favouriteCount === 1 ? '' : 's'}), scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
+        {snapshot.profiles.available && <p className="helper-note">Your setup is saved on this device automatically: movement settings, controls, {snapshot.phraseGroups ? `phrase groups (including ${favouriteCount} favourite${favouriteCount === 1 ? '' : 's'})` : 'phrases'}, scan speed and when your checks last passed. Never video, camera images or your messages.</p>}
         {assisted && !snapshot.approvedModels.length && (
           <div className="button-row">
             <button type="button" className="button" onClick={() => session.returnToStart()}>Done, back to start screen</button>

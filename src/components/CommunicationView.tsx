@@ -4,6 +4,13 @@ import { Icon } from './Icon';
 import { ScanButton, ScanHint } from './ScanBoard';
 import type { ViewProps } from './SetupViews';
 
+/** Visible group tile text: the name with the count as a quiet second line. The accessible name keeps the long form. */
+function GroupTileText({ snapshot, id, fallback }: { snapshot: ViewProps['snapshot']; id: string; fallback: string }) {
+  const group = snapshot.vocabulary.groups.find((entry) => `group:${entry.id}` === id);
+  if (!group) return <span>{fallback}</span>;
+  return <span className="group-tile-text"><span>{group.name}</span><span className="tile-count">{group.phrases.length ? `${group.phrases.length} phrase${group.phrases.length === 1 ? '' : 's'}` : 'No phrases yet'}</span></span>;
+}
+
 export function CommunicationView({ snapshot, session }: ViewProps) {
   const scan = snapshot.scan;
   const practice = snapshot.stage === 'practice';
@@ -90,12 +97,13 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           ? <HelperPanel snapshot={snapshot} session={session} />
           : (
             <>
-              <h2 className="level-heading">{where}</h2>
-              <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : practice ? 'Practice phrases' : 'Phrase groups'}>
+              {snapshot.phraseGroups && <h2 className="level-heading">{where}</h2>}
+              <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : practice ? 'Practice phrases' : snapshot.phraseGroups ? 'Phrase groups' : 'Phrases'}>
                 {tiles.map((target, index) => (
                   <ScanButton key={target.id} id={target.id} snapshot={snapshot} onActivate={activate} className="phrase-tile" disabled={paused || confirmingClear}
                     label={target.kind === 'group' ? target.label : practice ? `Practice: ${target.label}` : `Add “${target.label}” to message`}>
-                    <span className="phrase-number">{String(index + 1).padStart(2, '0')}</span><span>{target.label}</span>
+                    <span className="phrase-number">{String(index + 1).padStart(2, '0')}</span>
+                    {target.kind === 'group' ? <GroupTileText snapshot={snapshot} id={target.id} fallback={target.label} /> : <span>{target.label}</span>}
                   </ScanButton>
                 ))}
               </div>

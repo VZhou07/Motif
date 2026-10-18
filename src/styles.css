@@ -99,3 +99,4 @@
 .discovery-choice span{font-size:14px;font-weight:450}.discovery-note{color:#3d5c4f}
 .comm-screen .muted{opacity:.6}
 .pause-banner{display:flex}.pause-banner .pause-card{display:flex;gap:16px;align-items:center;max-width:none;padding:12px 20px;text-align:left}.pause-banner h2,.pause-banner p{margin:0}
+.group-tile-text{display:flex;flex-direction:column;gap:2px}.tile-count{font-size:14px;font-weight:450;color:#3d5c4f}
