@@ -22,12 +22,12 @@ Use **two browsers or profiles that do not share sign-in** (for example a normal
 1. Start Motif: `npm run dev`, then open `http://127.0.0.1:5173/`.
 2. **Caregiver window:** open `http://127.0.0.1:5173/#/caregiver`, sign in. Under People, **Add person** (for example "Alex"), then **Create invitation**. The code works once and expires in 10 minutes.
 3. **Person window:** open `http://127.0.0.1:5173/`. Open **Caregiver requests: pair this device**, type the code, **Pair this device**. It says who requests go to.
-4. **Person window:** **Get started**, rest for the short check, pick a movement (for example tilting the head), **Approve and practice**, then finish practice. The main list now shows **Ask caregiver** after Pause.
+4. **Person window:** **Get started**, rest for the short check, pick a movement (for example tilting the head), then **Approve and start**. The main list now shows **Ask caregiver** after Pause. No camera on that device? **Use assisted input (Space switch)** on the start screen works too: Space selects the highlighted item.
 5. Select **Ask caregiver**, then **Ask for water**. The person's screen says it is sending, then sent.
 6. **Caregiver window:** the request appears within about 2 seconds; the tab title shows `(1) Caregiver dashboard · Motif`. Press **Acknowledge** — the person's screen says it was acknowledged — then **Mark complete**.
 7. Optional: pair a second person in a **different browser or profile** (a second incognito window shares the first one's sign-in) and send **Ask for general help** to show two people kept apart.
 
-Requests can also be sent with a helper's mouse: the request buttons under the message work like the scanned ones (not while paused).
+Requests can also be sent with a helper's mouse: open **Ask caregiver** and click a request button (not while paused).
 
 ## If something goes wrong
 
@@ -38,7 +38,7 @@ Requests can also be sent with a helper's mouse: the request buttons under the m
 | Pairing: "That invitation code is not valid or has expired" | Codes work once for 10 minutes. Create a new one. |
 | Pairing: "Signed in as a caregiver" | This window holds the caregiver account. Use another browser/incognito for the person. |
 | Sign-in: "That e-mail and password do not match" / "not confirmed yet" | Check the account under Authentication → Users. |
-| No **Ask caregiver** tile | The device is not paired, or you are in Practice. Finish practice; check the pairing card. |
+| No **Ask caregiver** tile | The device is not paired. Open **Caregiver requests: pair this device** on the start screen or inside **Helper**. |
 | Request card says "Not confirmed — it may not have reached your caregiver" | The service could not be reached. Press **Retry** or select it again; the same request is reused, never duplicated. |
 
 ## After the demo

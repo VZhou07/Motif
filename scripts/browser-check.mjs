@@ -201,6 +201,8 @@ try {
   await startCamera(page);
   await page.getByText('Live · local').waitFor({ timeout: 45_000 });
   check('local model and fake camera start (Get started)', true);
+  // Diagnostics sit behind Details since e70b1c0.
+  await page.getByRole('button', { name: 'Details' }).click();
   await page.getByRole('button', { name: 'Movement signal dashboard' }).click();
   await page.getByText(/Tracking: missing\./).waitFor({ timeout: 20_000 });
   check('real inference runs and reports no face in the synthetic pattern', true);
