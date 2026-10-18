@@ -1189,3 +1189,10 @@ User, after seeing the merged board: "not intuitive … adding the new things to
 
 ### Tests
 Rows F1-F6 in UX_ACCEPTANCE.md. QA owns `src/app/ux-flat.acceptance.test.ts`.
+
+### Revision 2 (review of revision 1: APPROVED with notes; notes adopted)
+- App-level tests that render `App` without a supplied session now run flat: the developer lists every such test whose assertions change and adapts it (or passes a grouped session where grouped behaviour is the point).
+- Flat mode: the Helper's Edit phrases does not offer the Favourites group (so nothing can be added to a hidden group); already-saved favourites stay stored and untouched.
+- Flat mode: the saving note does not mention "phrase groups (including N favourites)" (it lists movement settings, controls, phrases, scan speed and check times).
+- F5 also checks the number of phrase tiles equals the flat phrase count, including after an edit.
+- **Review verdict:** reviewer ae8ac905: R19 revision 1 APPROVED with notes; adopted here.
