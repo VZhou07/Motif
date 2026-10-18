@@ -1,0 +1,21 @@
+/* Feature-scoped styles for the Browser controls card. Compact: usable in a ~400 px side panel. */
+.ba-panel{max-width:100%;min-width:0;border:1px solid #cbd8cc;border-radius:14px;padding:14px;background:#fffefa;color:#163e33;font-size:14px;line-height:1.5}
+.ba-panel h2{font-size:16px;margin:0 0 4px}
+.ba-identity{margin:0 0 8px;color:#355f4b;font-size:13px}
+.ba-state{margin:0 0 10px;font-weight:600;color:#1d5d45}
+.ba-status{min-height:44px;margin:0 0 10px;padding:8px 10px;border-radius:10px;background:#eaf0e3;color:#264d38;font-size:13px;overflow-wrap:anywhere}
+.ba-list{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:6px}
+.ba-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:8px 10px;border:1px solid #d6e0cf;border-radius:10px;background:#f6f7f2}
+.ba-list .ba-last{border-color:#8fb39a}
+.ba-hint{color:#4a6256;font-size:12px}
+.ba-mapping{margin:0 0 12px;color:#355f4b;font-size:12px}
+.ba-helper{border-top:1px solid #dce3d9;padding-top:10px}
+.ba-helper summary{min-height:44px;display:flex;align-items:center;font-weight:600;color:#1d5d45;cursor:pointer}
+.ba-helper label{display:block;font-size:12px;font-weight:600;margin:6px 0 4px}
+.ba-helper input{width:100%;min-height:44px;border:1px solid #bfcfb6;border-radius:10px;padding:8px 10px;background:#fffefa;color:#234e36;font-size:14px}
+.ba-chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.ba-button{min-height:44px;min-width:44px;padding:8px 14px;border-radius:10px;border:1px solid #cbd8c9;background:#fdfefa;color:#214c38;font-size:13px;font-weight:600}
+.ba-button-primary{background:#205e45;border-color:#205e45;color:#ffffff}
+.ba-note{margin:8px 0 0;color:#4a6256;font-size:12px}
+.ba-notice{padding:14px;border:1px solid #d7af88;border-radius:12px;background:#fff0e1;color:#803d17;font-size:14px}
+@media (max-width:420px){.ba-panel{padding:10px}.ba-list li{padding:8px}}
