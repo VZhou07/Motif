@@ -428,7 +428,8 @@ describe('M10 caregiver code and secrets', () => {
   const git = (command: string) => execSync(`git ${command}`, { encoding: 'utf8', cwd: process.cwd() });
 
   it('M10 the caregiver, Root and care client code is unchanged from origin/main', () => {
-    expect(git('diff origin/main --stat -- src/care src/Root.tsx src/features').trim()).toBe('');
+    // Pinned to the merge commit (main was its second parent) so later reviewed changes to these files do not fail it.
+    expect(git('diff 1578bab^2 1578bab --stat -- src/care src/Root.tsx src/features').trim()).toBe('');
   });
 
   it('M10 no secret file or key appears in the merge commit (the only .env file is the example with empty values)', () => {
