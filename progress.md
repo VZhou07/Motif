@@ -1,5 +1,13 @@
 # Motif technical handoff
 
+## After PR #11 (ux-simplify) — 2026-10-17 late
+
+- `main` moved to `ed70208` (PR #11). Pulled; wiring intact; tsc PASS, vitest 1193 PASS, build PASS. Hosted: `npm run check:care` all PASS after the user saved anonymous sign-ins; a fresh anonymous unpaired device read `[]` from all three tables, `motif_access` = unpaired, create group / send request / direct insert refused, made-up invite = invalid_invite (one anonymous test user `95cfd483…` left in Auth). Real-browser pairing now reaches invite redemption.
+- Found: after ux-simplify the request panel renders only inside the Ask level, so the caregiver's acknowledgment was not visible on the board. Q4 (`qol.md`, reviewed APPROVED, tested PASS): `RequestStatusLine` above the board (`5f8ecf6`, `38d0802`). `ux-merge.acceptance.test.ts` M10 compared the working tree with origin/main and failed on any reviewed feature change; pinned to the merge it checks (`a5fe7e2`, reviewer confirmed no weakening).
+- `npm run test:browser` is stale after PR #11 (owner: ux-simplify): fixed the Details click (`1c5e856`); still fails — contrast AA on the muted Play (3.47:1) and Undo (3.24:1) buttons with an empty message (1280 and 900 px), then aborts waiting for an "Open Quick" group tile (flat board is now the default) and the process hangs instead of exiting. 25 checks passed before the abort. Not fixed here: it is the redesign owner's script and visual design.
+- Runbook updated for the new screens (Approve and start; pairing on the start screen or in Helper).
+- Full suite after these commits: 80 files / 1200 PASS (Q4 tests added since), tsc PASS.
+
 ## Demo readiness (coordinator acting as Agent 3, 2026-10-17)
 
 - Request from the plan's author via the user: "make sure the db is good and everything is setup so that its ready for demo".
