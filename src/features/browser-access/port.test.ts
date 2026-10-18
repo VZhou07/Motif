@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BrowserCommand } from '../../care/browser-contract';
 import { FakeChrome } from './fake-chrome.test-support';
 import { createBrowserCommandPort, type BrowserPort, type PortHost } from './port';
@@ -236,5 +236,64 @@ describe('cross-account', () => {
     const direct = await chrome.deliver({ type: 'motif/command', v: 1, panelId: 'panel-1', command: { ...aCommand, accessEpoch: host.access }, ttlMs: 600 },
       { id: chrome.id, url: `chrome-extension://${chrome.id}/sidepanel.html`, origin: `chrome-extension://${chrome.id}`, frameId: 0 });
     expect(direct).toMatchObject({ ok: true, result: { status: 'rejected', reason: 'stale-access-epoch' } });
+  });
+});
+
+describe('a transport that throws synchronously ("Extension context invalidated.")', () => {
+  let broken = false;
+  const unhandled: unknown[] = [];
+  const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+  beforeEach(() => { broken = false; unhandled.length = 0; process.on('unhandledRejection', onUnhandled); });
+  afterEach(() => { process.off('unhandledRejection', onUnhandled); });
+  const make = () => createBrowserCommandPort(host, { send: (message) => { if (broken) throw new Error('Extension context invalidated.'); return chrome.runtime.sendMessage(message); } }, { panelId: 'panel-2' });
+
+  it('execute resolves to a rejected worker-unavailable result and drops the binding', async () => {
+    const p = make();
+    expect(await p.bind({ tabId: 7, windowId: 1, origin: SITE })).toEqual({ ok: true });
+    broken = true;
+    await expect(p.execute(cmd('scroll-down'))).resolves.toMatchObject({ status: 'rejected', reason: 'worker-unavailable' });
+    expect(p.binding).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(unhandled).toEqual([]);
+  });
+  it('release never throws, and neither does a release after a failed bind', async () => {
+    const p = make();
+    await p.bind({ tabId: 7, windowId: 1, origin: SITE });
+    broken = true;
+    expect(() => p.release()).not.toThrow();
+    expect(p.binding).toBeNull();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(unhandled).toEqual([]);
+  });
+  it('bind resolves to worker-unavailable, and the abort path (person changed mid-bind) does not throw', async () => {
+    broken = true;
+    expect(await make().bind({ tabId: 7, windowId: 1, origin: SITE })).toEqual({ ok: false, reason: 'worker-unavailable' });
+    broken = false;
+    let finish!: (value: unknown) => void;
+    let calls = 0;
+    const p = createBrowserCommandPort(host, { send: (message) => { calls += 1; if (calls > 1) throw new Error('Extension context invalidated.'); void message; return new Promise((resolve) => { finish = resolve; }); } });
+    const pending = p.bind({ tabId: 7, windowId: 1, origin: SITE });
+    host.access += 1;
+    finish({ ok: true });
+    await expect(pending).resolves.toEqual({ ok: false, reason: 'stale-access-epoch' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(unhandled).toEqual([]);
+  });
+});
+
+describe('release() while a command is in flight', () => {
+  it('resolves the pending command as invalidated and ignores the late reply', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => { open = resolve; });
+    const original = chrome.scriptResult;
+    chrome.scriptResult = async () => { await gate; return original(); };
+    const pending = port.execute(cmd('scroll-down'));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    port.release();
+    await expect(pending).resolves.toMatchObject({ status: 'rejected', reason: 'invalidated' });
+    open();
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(port.binding).toBeNull();
+    expect(await port.execute(cmd('scroll-down'))).toMatchObject({ reason: 'not-bound' });
   });
 });

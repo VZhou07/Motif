@@ -18,7 +18,7 @@ class FakeCare implements CareIdentitySource {
   set(patch: Partial<IdentityState>, bump = true) { this.identity = { ...this.identity, ...patch, epoch: this.identity.epoch + (bump ? 1 : 0) }; this.listeners.forEach((l) => l()); }
 }
 
-interface Rig { chrome: FakeChrome; session: ToySession; care: FakeCare; port: BrowserPort; controller: BrowserController; say: string[]; clock: { now: number } }
+interface Rig { breakTransport: () => void; chrome: FakeChrome; session: ToySession; care: FakeCare; port: BrowserPort; controller: BrowserController; say: string[]; clock: { now: number } }
 let rig: Rig;
 let stop: () => void;
 
@@ -30,11 +30,19 @@ function build(overrides: Partial<ControllerDeps> = {}, wrapChrome?: (chrome: Fa
   const session = new ToySession();
   const care: CareIdentitySource = overrides.care ?? new FakeCare();
   const clock = { now: 50_000 };
-  const port = createBrowserCommandPort(createPortHost(session, care, () => clock.now), { send: (m) => chrome.runtime.sendMessage(m) }, { panelId: 'panel-1' });
+  let broken = false;
+  const port = createBrowserCommandPort(createPortHost(session, care, () => clock.now), { send: (m) => { if (broken) throw new Error('Extension context invalidated.'); return chrome.runtime.sendMessage(m); } }, { panelId: 'panel-1' });
   const say: string[] = [];
   const controller = new BrowserController({ session, port, chrome: wrapChrome ? wrapChrome(chrome) : chrome, now: () => clock.now, announce: (t) => say.push(t), care, ...overrides });
   stop = controller.start();
-  return { chrome, session, care: care as FakeCare, port, controller, say, clock };
+  return { breakTransport: () => { broken = true; }, chrome, session, care: care as FakeCare, port, controller, say, clock };
+}
+/** Records every result the port produces, in order. */
+function recordResults(r: Rig) {
+  const results: Array<{ status: string; reason?: string }> = [];
+  const original = r.port.execute;
+  r.port.execute = async (command) => { const result = await original(command); results.push(result); return result; };
+  return results;
 }
 async function browse(r: Rig = rig) {
   r.session.highlight('browse');
@@ -309,24 +317,41 @@ describe('identity', () => {
     await flush();
     expect(rig.session.scope).toBe('communication');
   });
-  it('A\'s in-flight command cannot run as B, and B must choose Browse again', async () => {
+  it('A\'s in-flight command is invalidated when B appears; B must choose Browse again and only then can scroll', async () => {
     let open!: () => void;
     const gate = new Promise<void>((resolve) => { open = resolve; });
     const original = rig.chrome.scriptResult;
     rig.chrome.scriptResult = async () => { await gate; return original(); };
+    const results = recordResults(rig);
     rig.session.highlight('browser:scroll-down');
     rig.session.select();
     await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(rig.chrome.executed).toHaveLength(1); // A's scroll is already inside Chrome: the unavoidable residual
     rig.care.set({ participantId: 'B', alias: 'Bea' });
+    await flush();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ status: 'rejected', reason: 'invalidated' });
+    expect(rig.port.binding).toBeNull();
+    expect(rig.session.scope).toBe('communication');
     open();
     await flush();
-    expect(rig.port.binding).toBeNull();
-    rig.session.highlight('phrase:0');
-    expect(rig.session.scope).toBe('communication');
-    await pick('browser:scroll-down').catch(() => {}); // not in communication scope: no such tile
-    expect(rig.chrome.executed.length).toBeLessThanOrEqual(1); // only the pre-switch A scroll could have started
+    expect(rig.chrome.executed).toHaveLength(1); // nothing further ran for A
+    rig.chrome.scriptResult = original;
     await browse();
     expect(rig.port.binding).toMatchObject({ identityKey: 'participant:B' });
+    await pick('browser:scroll-down');
+    expect(rig.chrome.executed).toHaveLength(2);
+  });
+  it('a participant change WITHOUT an epoch bump (poll-failure style) refuses A\'s command strictly', async () => {
+    rig.care.set({ participantId: 'B', alias: 'Bea' }, false);
+    // Before the deferred reconcile even runs, the port itself refuses a valid-looking command from the old binding.
+    const now = rig.clock.now;
+    const result = await rig.port.execute({ version: 1, id: 'same-epoch', action: 'scroll-down', inputEpoch: rig.session.getInputEpoch(), accessEpoch: rig.care.identity.epoch, issuedAtMs: now, expiresAtMs: now + 600 });
+    expect(result).toMatchObject({ status: 'rejected', reason: 'identity-changed' });
+    await flush();
+    expect(rig.chrome.executed).toHaveLength(0);
+    expect(rig.port.binding).toBeNull();
+    expect(rig.session.scope).toBe('communication');
   });
   it('no tab data reaches the care backend', async () => {
     const spy = vi.fn();
@@ -404,5 +429,95 @@ describe('lifecycle', () => {
     expect(rig.port.binding).toBeNull();
     expect(rig.session.tiles()).not.toContain('browse');
     stop = () => {};
+  });
+});
+
+
+describe('commands cut off while running', () => {
+  beforeEach(async () => { await browse(); });
+  const events: Record<string, (r: Rig) => void> = {
+    'tab removed': (r) => r.chrome.onRemoved.fire(7),
+    'tab replaced': (r) => r.chrome.onReplaced.fire(9, 7),
+    'permission removed': (r) => r.chrome.onPermissionsRemoved.fire({ origins: [`${SITE}/*`] }),
+    'another tab activated': (r) => r.chrome.onActivated.fire({ tabId: 8, windowId: 1 }),
+    'navigated elsewhere': (r) => r.chrome.onUpdated.fire(7, { url: 'https://example.com/' }, { id: 7 }),
+    'Return selected by the person': (r) => { r.session.returnToCommunication(); },
+  };
+  it.each(Object.keys(events))('%s while a scroll is in flight invalidates it and releases', async (name) => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => { open = resolve; });
+    const original = rig.chrome.scriptResult;
+    rig.chrome.scriptResult = async () => { await gate; return original(); };
+    const results = recordResults(rig);
+    rig.session.highlight('browser:scroll-down');
+    rig.session.select();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    events[name]!(rig);
+    await flush();
+    expect(results).toHaveLength(1);
+    expect(results[0]).toMatchObject({ status: 'rejected', reason: 'invalidated' });
+    expect(rig.port.binding).toBeNull();
+    expect(rig.session.scope).toBe('communication');
+    open();
+    await flush();
+    expect(rig.controller.getState().phase).toBe('idle');
+  });
+});
+
+describe('fail-closed ordering and direct notices', () => {
+  it('notifyHidden directly ends control and clears the worker', async () => {
+    await browse();
+    rig.controller.notifyHidden();
+    expect(rig.controller.getState()).toMatchObject({ phase: 'idle', code: 'hidden' });
+    expect(rig.session.scope).toBe('communication');
+    expect(rig.port.binding).toBeNull();
+    await flush();
+    expect(rig.chrome.store.has('motif.binding')).toBe(false);
+  });
+  it('cancels the in-flight command synchronously, but changes scope only after the session finished', async () => {
+    stop();
+    const queue: Array<() => void> = [];
+    const r = build({ defer: (callback) => { queue.push(callback); } });
+    rig = r;
+    const run = () => { while (queue.length) queue.shift()!(); };
+    r.session.highlight('browse');
+    r.session.select();
+    await flush();
+    run();
+    expect(r.session.scope).toBe('browser');
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => { open = resolve; });
+    const original = r.chrome.scriptResult;
+    r.chrome.scriptResult = async () => { await gate; return original(); };
+    const now = r.clock.now;
+    const pending = r.port.execute({ version: 1, id: 'x1', action: 'scroll-down', inputEpoch: r.session.getInputEpoch(), accessEpoch: r.care.identity.epoch, issuedAtMs: now, expiresAtMs: now + 600 });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    r.session.frame('missing');
+    // No deferred work has run: the scope is untouched, yet the in-flight command is already cancelled.
+    expect(r.session.scope).toBe('browser');
+    await expect(Promise.race([pending, new Promise((resolve) => setTimeout(() => resolve('still pending'), 20))])).resolves.toMatchObject({ reason: 'invalidated' });
+    expect(r.session.scope).toBe('browser');
+    run();
+    expect(r.session.scope).toBe('communication');
+    open();
+  });
+  it('a throwing transport (Extension context invalidated) still returns to messages without an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      await browse();
+      const spy = vi.spyOn(rig.session, 'returnToCommunication');
+      rig.breakTransport();
+      rig.session.highlight('browser:scroll-down');
+      rig.session.select();
+      await flush();
+      await flush();
+      expect(spy).toHaveBeenCalled();
+      expect(rig.session.scope).toBe('communication');
+      expect(rig.port.binding).toBeNull();
+      expect(rig.controller.getState().code).toBe('worker-unavailable');
+      expect(unhandled).toEqual([]);
+    } finally { process.off('unhandledRejection', onUnhandled); }
   });
 });

@@ -265,6 +265,32 @@ describe('deadline', () => {
   });
 });
 
+describe('deadline checked after every awaited step', () => {
+  // Await order inside a command: 1 binding read, 2 replay-set read, 3 write, 4 tabs.get, 5 tabs.query, 6 permissions.contains, 7 the action itself.
+  it.each([1, 2, 3, 4, 5, 6])('a delay at awaited step %i expires the command and nothing runs', async (step) => {
+    await send(bindMsg());
+    let count = 0;
+    chrome.onAwait = () => { count += 1; if (count === step) clock += 700; };
+    const reply = await send(cmdMsg(cmd('scroll-down'), { ttlMs: 600 }));
+    expect(reasonOf(reply)).toBe('expired');
+    expect(chrome.executed).toHaveLength(0);
+    expect(chrome.goBacks).toHaveLength(0);
+  });
+  it.each([1, 2, 3, 4, 5, 6])('Back: a delay at awaited step %i expires and goBack is never called', async (step) => {
+    await send(bindMsg());
+    let count = 0;
+    chrome.onAwait = () => { count += 1; if (count === step) clock += 700; };
+    expect(reasonOf(await send(cmdMsg(cmd('back'), { ttlMs: 600 })))).toBe('expired');
+    expect(chrome.goBacks).toHaveLength(0);
+  });
+  it('a delay only at the action itself still reports the truth (executed)', async () => {
+    await send(bindMsg());
+    let count = 0;
+    chrome.onAwait = () => { count += 1; if (count === 7) clock += 700; };
+    expect(statusOf(await send(cmdMsg(cmd('scroll-down'), { ttlMs: 600 })))).toBe('executed');
+  });
+});
+
 describe('injected function', () => {
   it('asks the page for a smooth-free scroll of the given fraction and returns numbers', () => {
     const calls: unknown[] = [];
