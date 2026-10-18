@@ -172,3 +172,19 @@ Design: reasoning.md R19. Baseline 1091 tests. QA owns `src/app/ux-flat.acceptan
 
 ### R19 result (round 1 of 3)
 Software verified: F1-F6 PASS (25 acceptance tests: 17 session, 8 UI). Coordinator rerun: vitest 74 files/1126 PASS, tsc clean; QA: build OK. F6 in assisted mode on `localhost:5173` at 1470×762, 1280×720 and 390×844: bar, Speak, Undo, 6 phrase tiles, Pause and Helper visible without scrolling; Helper opens without Favourites or group-jump text. Mutations caught: Favourites phrases in the flat list, autosave dropping favourites, list reordered by message, app default groups on, editor offering Favourites. Equivalent mutant: skipping the save-favourite guard (it is guarded twice and the stale-level fallback also blocks it). Phrase order is now Quick then Needs (Yes, No, Thank you, I need water, Please help me, I am uncomfortable). Turning groups back on: change the `phraseGroups` default in `useMotif`. **Human acceptance pending:** whether the flat board reads clearly with a real person.
+
+# Remove practice; Speak → Play (R20)
+
+Design: reasoning.md R20. Baseline 1126 tests. QA owns `src/app/ux-nopractice.acceptance.test.ts` (+ a .tsx for UI parts).
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| P1 | TEST | Every approval path (first movement, add, recalibrate, Continue with `approve-saved`, quick restore confirm, mapping-confirm Approve) ends in stage `communication`; the `Stage` type, snapshot and scan lists contain no practice (`practice` stage, `finish-practice`, `snapshot.practice`). Approving speaks nothing. |
+| P2 | TEST | After approval by gesture, the approving hold adds no phrase and does not Play; the scanner needs fresh neutral before the next selection; one action per hold unchanged. |
+| P3 | TEST | The Helper (gesture and assisted) has no Practice item; no practice banner or text anywhere on the communication screen; the step-idle fallback and Helper levels work as before. |
+| P4 | TEST | `use-previous` is offered in Change controls (`mapping`) only when a valid previous mapping exists and there is no candidate; it sits after the proposal cards and before `reject`; selecting it opens mapping-confirm and arms nothing until Approve; it is not offered in communication or in a first setup. |
+| P5 | TEST | Use counting (completed/unfinished holds) still happens in communication; the recommendation/scoring tests pass unchanged. |
+| P6 | TEST | The setup progress bar and approval flows are otherwise unchanged (no Practice segment existed after R18's rename; nothing mentions it). |
+| P7 | TEST | The control with id `speak` is labelled "Play" in the message bar, scan target, announcements, hints and accessible names, and no visible "Speak" button label remains; behaviour is unchanged (message moves to Last spoken, speech port called, empty message announces nothing to play). "Last spoken" and "Say it again" text unchanged. |
+| P8 | TEST | tsc, full vitest and build pass; edits to existing tests are limited to practice removal and the Play label, each listed. |
+| PH | HUMAN | With a real camera: approving goes straight to the board and it feels clear that Play speaks aloud. |

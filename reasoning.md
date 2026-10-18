@@ -1196,3 +1196,26 @@ Rows F1-F6 in UX_ACCEPTANCE.md. QA owns `src/app/ux-flat.acceptance.test.ts`.
 - Flat mode: the saving note does not mention "phrase groups (including N favourites)" (it lists movement settings, controls, phrases, scan speed and check times).
 - F5 also checks the number of phrase tiles equals the flat phrase count, including after an edit.
 - **Review verdict:** reviewer ae8ac905: R19 revision 1 APPROVED with notes; adopted here.
+
+
+## R20 — Remove the practice page; "Speak" becomes "Play" (revision 1)
+User: "remove the practice page. instead of Speak, can the button say Play instead". The user's latest instruction overrides the plan.md practice step (plan.md updated). Base `dc7c15c` (1126 tests).
+
+### Design: no practice stage
+- After every approval (`approveMapping`: first movement, add, recalibrate, restore, `approve-saved`, mapping-confirm) the session enters `communication` directly. Announcement: "Approved: <controls>. You're ready to talk. Return to rest before selecting." Nothing is spoken by approving.
+- Remove: Stage `'practice'`, `enterPractice`, `finish-practice`, the Helper `practice` control, `snapshot.practice`, practice branches in `navigation.ts` (`LevelContext.stage` becomes `'communication'` only or the field is dropped), `isRoutedStage` (= communication), the step-idle fallback's practice branch, `activate`'s practice branch, the practice banner/UI in `CommunicationView`, and the setup progress/CameraPanel branches that mention practice. Existing communication behaviour, Helper levels and scoring use-counting (`countUse`) now run in communication only.
+- `use-previous` moves to the `mapping` stage (Change controls): offered when `previousMapping` is set and still valid for `approvedModels` and there is no `candidate`; scan position: after the proposal cards, before `reject`; label "Use previous controls". It calls the existing `usePrevious()` (opens mapping-confirm; nothing arms until Approve). It is no longer offered anywhere else.
+- Safety unchanged: every approval still goes through `approveMapping` guards; the scanner starts suspended/unarmed and requires fresh neutral after approval, so the approving hold can never also select a phrase or Play; Play still needs its own explicit selection, and Undo/Clear-confirm remain. Accepted trade-off (user's choice): the first use of a new setup is on the live board, so an early accidental Play speaks aloud.
+- Docs: plan.md Communication row and W4 line note the removal (user scope change).
+
+### Design: Speak → Play
+- Visible and accessible label of the control with id `speak` becomes "Play" everywhere: message-bar button, scan target label (`CONTROL_LABELS`, `navigation.ts` overrides), hint text ("Select Play …"), announcements about the action ("Nothing to play yet. Add a phrase first."), Helper copy. The internal id `speak`, the speech port, `speakMessage` behaviour (message moves to `lastSpoken` and is emptied) and "Last spoken" status text are unchanged. "Say it again" is not renamed (offered to the user as a follow-up).
+
+### Failure modes
+- Removing a stage must not leave dead branches or unreachable ids (tsc exhaustive switches, `selectTarget` guard, progress mapping).
+- `use-previous` regressions: still validates against `approvedModels`; absent for a first setup; absent during add/recalibrate candidate flows.
+- The approving hold must not leak into communication (test with the gesture harness).
+- Tests of other branches' behaviour change only where practice or the "Speak" label is replaced; each is listed.
+
+### Tests
+Rows P1-P8 in UX_ACCEPTANCE.md. QA owns `src/app/ux-nopractice.acceptance.test.ts`.
