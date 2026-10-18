@@ -53,7 +53,7 @@ export function WelcomeView({ snapshot, session, onStartCamera, onGetStarted }: 
                 ? <button type="button" className="button button-primary button-large" onClick={() => void onGetStarted()}>Start the rest check<Icon name="arrow" /></button>
                 : <button type="button" className="button button-primary button-large" disabled={loading} onClick={() => void onGetStarted()}>
                     <Icon name="camera" />{loading ? 'Starting camera…' : snapshot.camera === 'error' ? 'Retry camera' : 'Get started'}<Icon name="arrow" /></button>}
-              <p className="helper-copy">Takes about 1½ minutes: a short rest, then a few practice tries.</p>
+              <p className="helper-copy">Takes about 1½ minutes: a short rest, then a few tries at your movement.</p>
             </div>
             <div className="start-secondary">{assisted}</div>
             {/* Shows only unreadable or blocked saved data, with Delete. */}

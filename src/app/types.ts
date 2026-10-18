@@ -7,7 +7,7 @@ import type { Vocabulary } from './vocabulary';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
-  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'tiring'
+  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'communication' | 'tiring'
   | 'discover' | 'discover-results';
 
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
@@ -120,7 +120,7 @@ export interface SessionSnapshot {
   decisions: ScanTarget[];
   scan: ScanView | null;
   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
-  /** Current communication/practice scan level; null outside those stages (R14). */
+  /** Current communication scan level; null outside that stage (R14). */
   level: LevelView | null;
   /** Phrase groups (Favourites first); deliberately saved settings, never message history (R14). */
   vocabulary: Vocabulary;
@@ -128,7 +128,6 @@ export interface SessionSnapshot {
   lastSpoken: string | null;
   speech: { available: boolean; voiceName: string | null };
   spokenPrompts: boolean;
-  practice: { selections: number; last: string | null };
   /** Text for the polite live region: prompts, notices, and selections only. */
   announcement: string;
   profiles: ProfilesView;
@@ -146,7 +145,7 @@ export interface SessionSnapshot {
   helperOpen: boolean;
   confirmingClear: boolean;
   confirmingRecalibrate: boolean;
-  /** True for 1 s after a recognised movement in communication or practice (gesture mode only). */
+  /** True for 1 s after a recognised movement in communication (gesture mode only). */
   movementSeen: boolean;
   /** Phrase groups and Favourites are shown (off by default for now, R19). */
   phraseGroups: boolean;

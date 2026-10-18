@@ -182,7 +182,7 @@ export function MappingConfirmView({ snapshot, session }: ViewProps) {
   return (
     <>
       <Heading eyebrow="CHECK YOUR CONTROLS" title={<>Turn these<br /><em>controls on?</em></>}
-        lead="Only Approve turns these controls on. You practice first; nothing is spoken in practice." />
+        lead="Only Approve turns these controls on. Nothing is spoken when you approve." />
       <div className="result-card proposal-card-static">
         <h2>{pending ? MODE_HEADINGS[pending.mode] : 'No controls chosen yet'}</h2>
         <ControlChips parts={parts} />
@@ -217,7 +217,7 @@ function CustomControls({ snapshot, session }: ViewProps) {
   );
 }
 
-/** Candidates from free exploration: suggestions only; choosing one starts the usual practice and checks (R9). */
+/** Candidates from free exploration: suggestions only; choosing one starts the usual recording and checks (R9). */
 export function DiscoveryResultsView({ snapshot, session }: ViewProps) {
   const result = snapshot.discovery;
   const candidates = result?.candidates ?? [];

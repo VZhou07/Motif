@@ -76,7 +76,7 @@ export function SignalDashboard({ snapshot }: { snapshot: SessionSnapshot }) {
 
 export function CameraPanel({ snapshot, videoRef, onStart, onStop, hideStart, compact, cueStatus, onCuesEnabled, children }: CameraPanelProps) {
   // While communicating the side panel stays quiet: diagnostics and beeps live in the Helper panel.
-  const quiet = snapshot.stage === 'communication' || snapshot.stage === 'practice';
+  const quiet = snapshot.stage === 'communication';
   const slim = !!compact || quiet;
   const [detailsOpen, setDetailsOpen] = useState(false);
   const running = snapshot.camera === 'running';

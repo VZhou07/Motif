@@ -35,7 +35,7 @@ export const SESSION_LIMITS = {
 export const DECISION_LABELS = {
   comfortable: 'Yes, comfortable and easy',
   'comfortable-effort': 'Comfortable, but it takes effort',
-  'approve-comfortable': 'Approve and practice',
+  'approve-comfortable': 'Approve and start',
   'approve-effort': 'Approve, but it takes effort',
   'effort-choose': 'It takes effort: choose controls',
   'approve-saved': 'Turn on saved controls',
@@ -152,7 +152,6 @@ export class MotifSession {
   private lastMovementAt: number | null = null;
   private movementSeenShown = false;
   private spokenPrompts = false;
-  private practice = { selections: 0, last: null as string | null };
   private announcement = '';
 
   private baselineRecorder: BaselineRecorder | null = null;
@@ -167,7 +166,7 @@ export class MotifSession {
 
   private scanner: ScanController | null = null;
   private scanTargets: ScanTarget[] = [];
-  /** Communication/practice scan level (R14); reset to top on every stage entry. */
+  /** Communication scan level (R14); reset to top on every stage entry. */
   private level: Level = 'top';
   /** Counted scanner wraps (via tick) in a sub-level with nothing in between; two return to top. */
   private idleWraps = 0;
@@ -514,11 +513,12 @@ export class MotifSession {
       }
       case 'tiring': return ['never-mind'];
       case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []),
-        ...(this.changingControls() && this.approvedModels.length > 1 ? ['report-tiring' as const] : []), ...(this.candidate ? ['reject' as const] : []),
+        ...(this.changingControls() && this.approvedModels.length > 1 ? ['report-tiring' as const] : []),
+        ...(!this.candidate && !this.restoring && this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous' as const] : []),
+        ...(this.candidate ? ['reject' as const] : []),
         ...(this.restoring ? ['reject-profile' as const] : [])];
       // With one movement there is only one possible set of controls: offer a different movement instead.
       case 'mapping-confirm': return [this.mappingSet().length === 1 ? 'another-movement' as const : 'choose-different' as const, 'approve-mapping'];
-      case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
       case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'discover', 'keep-current'] : [];
       case 'discover-results': return ['discover-again', 'full-list', ...(keep ? ['keep-current' as const] : [])];
       case 'setup-failed': {
@@ -734,8 +734,9 @@ export class MotifSession {
       this.refreshProfiles();
     }
     this.autoSaveProfile();
-    this.enterPractice();
-    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.${
+    this.enterCommunication();
+    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. You're ready to talk. Return to rest before selecting.${
+      this.previousMapping ? ' Change controls can bring back your previous controls.' : ''}${
       replacedPhrases ? ` Your phrases were replaced by the ones saved with “${restoredName}”.` : ''}`);
   }
 
@@ -959,7 +960,7 @@ export class MotifSession {
     this.discovery = result;
     if ((this.recalibrating || this.adding) && this.hasApproved) this.restrictedScanner(this.approvedModels);
     this.announce(result.candidates.length
-      ? `Noticed ${result.candidates.length} movement${result.candidates.length === 1 ? '' : 's'}. Choosing one starts the usual practice and checks.`
+      ? `Noticed ${result.candidates.length} movement${result.candidates.length === 1 ? '' : 's'}. Choosing one starts the usual recording and checks.`
       : result.reason ?? 'No movement was found.');
   }
 
@@ -987,7 +988,7 @@ export class MotifSession {
     this.announce(`Noted: “${model.label}” is tiring. The recommended controls use it less; nothing changes until you approve.`);
   }
 
-  /** Completed holds and holds released before completion, in practice and communication only. */
+  /** Completed holds and holds released before completion, in communication only. */
   private countUse(completedId: string | undefined, unfinishedId: string | undefined): void {
     const bump = (id: string, key: keyof MovementUse) => {
       const current = this.use[id] ?? { completed: 0, unfinished: 0 };
@@ -1085,7 +1086,7 @@ export class MotifSession {
   /** Explicit, caregiver-assisted Save of the approved setup. Never reachable from the scanner. */
   saveProfile(name: string, replace = false): StoreResult {
     const refuse = (reason: string): StoreResult => { this.announce(reason); this.publish(); return { ok: false, code: 'invalid', reason }; };
-    if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from practice or communication.');
+    if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from the talking screen.');
     const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, vocabulary: this.vocabulary, scanIntervalMs: this.intervalMs, checks: this.storedChecks() });
     if (!built.ok) return refuse(built.reasons[0] ?? 'This setup cannot be saved.');
     const result = this.store.save(built.value, replace);
@@ -1161,7 +1162,6 @@ export class MotifSession {
     this.message = [];
     this.lastSpoken = null;
     this.lastMovementAt = null;
-    this.practice = { selections: 0, last: null };
     this.trials = [];
     this.notice = null;
     this.lastPrompt = null;
@@ -1267,7 +1267,7 @@ export class MotifSession {
       this.cycles.push({ cycle: this.cycles.length + 1, movement: `Your saved setup${note}`, training: null, heldOut: [], negative: null,
         outcome: 'verified', source: 'restored', verifiedIds: [], profile: profile.name, quick: true });
       this.offerSavedControls();
-      this.announce('Your movements were checked within the last hour. Review your saved controls, then approve; practice comes first and nothing is spoken.');
+      this.announce('Your movements were checked within the last hour. Review your saved controls, then approve. Nothing is spoken when you approve.');
       return;
     }
     this.cycles.push({ cycle: this.cycles.length + 1, movement: `Your saved setup${note}`, training: null, heldOut: [], negative: null,
@@ -1324,26 +1324,18 @@ export class MotifSession {
 
   private levelContext(): LevelContext {
     return {
-      stage: this.stage === 'practice' ? 'practice' : 'communication',
       inputMode: this.inputMode,
       timed: this.inputMode === 'assisted' || this.scanMode() === 'auto',
       movements: this.approvedModels.length,
       hasApproved: this.hasApproved,
       groups: this.phraseGroups,
-      decisions: this.stage === 'practice' ? this.decisionTargets(this.allowedDecisions()) : [],
     };
   }
 
   private levelTargets(): ScanTarget[] {
     const context = this.levelContext();
-    this.level = effectiveLevel(this.level, this.vocabulary, context.stage, this.phraseGroups);
+    this.level = effectiveLevel(this.level, this.vocabulary, this.phraseGroups);
     return buildLevel(this.level, this.vocabulary, context);
-  }
-
-  private enterPractice(): void {
-    this.setStage('practice');
-    this.practice = { selections: 0, last: null };
-    this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
   }
 
   private enterCommunication(): void {
@@ -1422,7 +1414,7 @@ export class MotifSession {
     this.publish();
   }
 
-  private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
+  private isRoutedStage(): boolean { return this.stage === 'communication'; }
 
   private isStepping(): boolean { return this.scanDriver === 'gesture' && this.isRoutedStage() && this.scanMode() === 'step'; }
 
@@ -1480,7 +1472,7 @@ export class MotifSession {
   private fallBackToAutomatic(): void {
     this.stepFallback = true;
     const confirming = isConfirmLevel(this.level);
-    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
+    this.enterCommunication();
     this.announce(`${confirming ? 'Not saved. ' : ''}No movement for a minute, so scanning is now automatic, starting from the main list. Your select movement still selects; helpers can use the buttons.`);
   }
 
@@ -1508,20 +1500,10 @@ export class MotifSession {
     if (!this.isRoutedStage()) return;
     this.idleWraps = 0;
     const phrase = this.phraseFor(id);
-    // Navigation and Pause work the same in practice and communication (R14 M2).
     if (id.startsWith('group:')) { this.openLevel(id.slice('group:'.length), nowMs); return; }
     if (id === 'back') { this.setLevel('top', nowMs); this.announce('Main list.'); return; }
     if (id === 'pause') { this.pauseScan(nowMs); return; }
-    if (this.stage === 'practice') {
-      if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
-      if (phrase) {
-        this.practice = { selections: this.practice.selections + 1, last: phrase };
-        this.setLevel('top', nowMs);
-        this.announce(`Practice: selected "${phrase}". Back to the main list.`);
-      }
-      return;
-    }
-    // A phrase goes into the message and the highlight returns to Speak, the likely next step: one announcement.
+    // A phrase goes into the message and the highlight returns to Play, the likely next step: one announcement.
     if (phrase) { this.message = [...this.message, phrase]; this.setLevel('top', nowMs); this.announce(`Added "${phrase}". Back to the main list.`); return; }
     switch (id) {
       case 'more': this.setLevel('more', nowMs); this.announce('More options.'); break;
@@ -1540,7 +1522,6 @@ export class MotifSession {
       case 'clear-yes': this.message = []; this.setLevel('top', nowMs); this.announce('Message cleared.'); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
-      case 'practice': this.enterPractice(); this.announce('Practice: selections are not spoken.'); break;
       case 'change-controls': if (this.hasApproved && this.inputMode === 'gesture') this.enterMapping(); break;
       case 'add-movement':
         if (this.hasApproved && this.inputMode === 'gesture' && this.approvedModels.length < MAX_GESTURES) {
@@ -1590,7 +1571,7 @@ export class MotifSession {
     this.announce(spoken ? `Speaking again: ${text}` : `Local speech is not available on this device. Your message is shown on screen: ${text}`);
   }
 
-  /** The message bar's "Say it again": communication only, never practice or while paused; the scan list is unaffected. */
+  /** The message bar's "Say it again": communication only, only in communication, never while paused; the scan list is unaffected. */
   repeatLast(): void {
     if (this.stage !== 'communication' || !this.scanner || this.scanner.snapshot.paused || !this.lastSpoken) return;
     this.sayAgain();
@@ -1624,7 +1605,7 @@ export class MotifSession {
   }
 
   private speakMessage(): void {
-    if (!this.message.length) { this.announce('Nothing to speak yet. Add a phrase first.'); return; }
+    if (!this.message.length) { this.announce('Nothing to play yet. Add a phrase first.'); return; }
     const text = this.message.join('. ');
     const spoken = this.speech.speak(text);
     this.lastSpoken = text;
@@ -1746,7 +1727,7 @@ export class MotifSession {
         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,
       level: this.levelView(), vocabulary: this.vocabulary, message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
-      spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
+      spokenPrompts: this.spokenPrompts, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       discovery: this.discovery,

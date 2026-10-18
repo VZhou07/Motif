@@ -66,7 +66,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
       )}
       <h3 className="helper-group">Scanning and message</h3>
       <div className="helper-row" role="group" aria-label="Scanning and message">
-        {['slower', 'faster', 'clear', 'save-favourite', 'say-again', 'practice', 'pause'].filter((id) => offered.has(id)).map((id) => {
+        {['slower', 'faster', 'clear', 'save-favourite', 'say-again', 'pause'].filter((id) => offered.has(id)).map((id) => {
           const target = snapshot.scan!.targets.find((candidate) => candidate.id === id)!;
           return (
             <ScanButton key={id} id={id} snapshot={snapshot} onActivate={activate} disabled={paused}>

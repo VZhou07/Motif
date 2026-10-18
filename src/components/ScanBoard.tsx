@@ -35,7 +35,7 @@ export function ScanButton({ id, snapshot, onActivate, children, className = '',
 export function ScanHint({ snapshot }: { snapshot: SessionSnapshot }) {
   const scan = snapshot.scan;
   let text = 'Choose with a click, touch or keyboard (assisted setup).';
-  const operating = snapshot.stage === 'communication' || snapshot.stage === 'practice';
+  const operating = snapshot.stage === 'communication';
   if (scan?.driver === 'gesture') {
     const ready = operating && snapshot.mappingLabel
       ? (snapshot.scanMode === 'step'

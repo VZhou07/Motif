@@ -9,7 +9,6 @@ import { FAVOURITES_ID, type Vocabulary } from './vocabulary';
 export type Level = 'top' | 'more' | { group: string } | { confirm: string } | { clear: true } | { recalibrate: true };
 
 export interface LevelContext {
-  stage: 'communication' | 'practice';
   inputMode: InputMode;
   /** True when the highlight moves on a timer (automatic scanning or assisted Space). */
   timed: boolean;
@@ -18,13 +17,11 @@ export interface LevelContext {
   hasApproved: boolean;
   /** Phrase groups and Favourites on (default true here; the app turns them off for now, R19). */
   groups?: boolean;
-  /** Practice-only setup decisions shown at the top (`use-previous` when allowed). */
-  decisions: readonly ScanTarget[];
 }
 
 export const CONTROL_LABELS: Record<string, string> = {
-  speak: 'Speak', clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
-  practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Start talking',
+  speak: 'Play', clear: 'Clear message', pause: 'Pause', slower: 'Slower scanning', faster: 'Faster scanning',
+  recalibrate: 'Recalibrate',
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
   undo: 'Undo', 'say-again': 'Say it again', 'save-favourite': 'Save message to Favourites',
@@ -63,18 +60,17 @@ function moreControls(context: LevelContext): string[] {
   const speed = context.timed ? ['slower', 'faster'] : [];
   const save = withGroups(context) ? ['save-favourite'] : [];
   if (context.inputMode === 'assisted') {
-    return ['clear', ...save, 'say-again', ...speed, 'practice', context.hasApproved ? 'use-gesture' : 'setup-gesture'];
+    return ['clear', ...save, 'say-again', ...speed, context.hasApproved ? 'use-gesture' : 'setup-gesture'];
   }
-  return ['clear', ...save, 'say-again', ...speed, 'practice', 'change-controls',
+  return ['clear', ...save, 'say-again', ...speed, 'change-controls',
     ...(context.movements < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
 }
 
 /**
- * Targets for one level. A group that no longer exists, or a level practice does not have, falls back to
+ * Targets for one level. A group that no longer exists falls back to
  * the top level; the session then also treats the level as `top`.
  */
 export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelContext): ScanTarget[] {
-  const practice = context.stage === 'practice';
   const grouped = withGroups(context);
   if (isGroupLevel(level) && grouped) {
     const group = vocabulary.groups.find((entry) => entry.id === level.group);
@@ -84,24 +80,22 @@ export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelC
         nav('back'), control('pause'),
       ];
     }
-  } else if (level === 'more' && !practice) {
+  } else if (level === 'more') {
     return [...moreControls(context).map(control), { ...nav('back'), label: 'Close helper' }, control('pause')];
-  } else if (isClearLevel(level) && !practice) {
+  } else if (isClearLevel(level)) {
     return ['clear-no', 'clear-yes', 'pause'].map(control);
-  } else if (isRecalibrateLevel(level) && !practice) {
+  } else if (isRecalibrateLevel(level)) {
     return ['recalibrate-no', 'recalibrate-yes', 'pause'].map(control);
-  } else if (isConfirmLevel(level) && !practice && grouped) {
+  } else if (isConfirmLevel(level) && grouped) {
     return [{ id: 'confirm-favourite', label: `Save “${level.confirm}” to Favourites`, kind: 'control' }, control('cancel-favourite'), control('pause')];
   }
   const tiles = grouped ? groupTargets(vocabulary) : flatTargets(vocabulary);
-  if (practice) return [control('finish-practice'), ...tiles, control('pause'), ...context.decisions];
   return [control('speak'), control('undo'), ...tiles, control('pause'), nav('more')];
 }
 
 /** The level `buildLevel` actually produced, so the session never keeps a level that fell back to top. */
-export function effectiveLevel(level: Level, vocabulary: Vocabulary, stage: LevelContext['stage'], groups = true): Level {
+export function effectiveLevel(level: Level, vocabulary: Vocabulary, groups = true): Level {
   if (!groups && (isGroupLevel(level) || isConfirmLevel(level))) return 'top';
   if (isGroupLevel(level)) return vocabulary.groups.some((group) => group.id === level.group && group.phrases.length) ? level : 'top';
-  if (stage === 'practice' && level !== 'top') return 'top';
   return level;
 }

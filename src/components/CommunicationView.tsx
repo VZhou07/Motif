@@ -13,16 +13,14 @@ function GroupTileText({ snapshot, id, fallback }: { snapshot: ViewProps['snapsh
 
 export function CommunicationView({ snapshot, session }: ViewProps) {
   const scan = snapshot.scan;
-  const practice = snapshot.stage === 'practice';
   const paused = scan?.paused ?? false;
   const activate = (id: string) => session.selectTarget(id);
   const offered = new Set(scan?.targets.map((target) => target.id) ?? []);
   const tiles = scan?.targets.filter((target) => target.kind === 'phrase' || target.kind === 'group') ?? [];
   const nav = scan?.targets.filter((target) => target.kind === 'nav') ?? [];
-  const extras = practice ? (scan?.targets.filter((target) => target.kind === 'decision') ?? []) : [];
   const { helperOpen, confirmingClear, confirmingRecalibrate, message, lastSpoken, level } = snapshot;
   const confirmingFavourite = level?.kind === 'confirm';
-  const panel = !practice && (helperOpen || confirmingRecalibrate);
+  const panel = helperOpen || confirmingRecalibrate;
   const question = useRef<HTMLParagraphElement>(null);
   const previous = useRef({ helperOpen: false, confirmingClear: false });
 
@@ -36,9 +34,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
     }
   }, [helperOpen, confirmingClear]);
 
-  const count = practice
-    ? `${snapshot.practice.selections} practice selection${snapshot.practice.selections === 1 ? '' : 's'}`
-    : `${message.length} phrase${message.length === 1 ? '' : 's'}`;
+  const count = `${message.length} phrase${message.length === 1 ? '' : 's'}`;
   const shown = snapshot.speech.available ? 'Last spoken' : 'Shown on screen';
   const where = level?.kind === 'group' && level.group ? `${level.group.name} · ${level.group.phrases} phrase${level.group.phrases === 1 ? '' : 's'}` : 'Main list';
   const pauseCard = (
@@ -53,17 +49,15 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
     <div className="comm-screen">
       <section className="message-bar" aria-label="Message">
         <div className="message-main">
-          <div className="message-count">{practice ? `Practice · nothing is spoken · ${count}` : `Your message · ${count}`}</div>
+          <div className="message-count">Your message · {count}</div>
           {confirmingClear
             ? <p className="message-ask" ref={question} tabIndex={-1}>Clear the whole message?</p>
             : confirmingFavourite
               ? <p className="message-ask">Save “{level?.confirm}” to Favourites?</p>
-              : practice
-                ? <p className="message-text">{snapshot.practice.last ? `Last: “${snapshot.practice.last}”` : 'Try a phrase.'}</p>
-                : message.length
-                  ? <p className="message-text">{message.join('. ')}</p>
-                  : <p className="message-text message-placeholder">Choose a phrase to start your message.</p>}
-          {!practice && !confirmingClear && !confirmingFavourite && !message.length && lastSpoken && <p className="message-last">{shown}: “{lastSpoken}”</p>}
+              : message.length
+                ? <p className="message-text">{message.join('. ')}</p>
+                : <p className="message-text message-placeholder">Choose a phrase to start your message.</p>}
+          {!confirmingClear && !confirmingFavourite && !message.length && lastSpoken && <p className="message-last">{shown}: “{lastSpoken}”</p>}
         </div>
         <div className="message-actions">
           {confirmingClear && (
@@ -78,17 +72,16 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
               <ScanButton id="cancel-favourite" snapshot={snapshot} onActivate={activate} disabled={paused}>Cancel, do not save</ScanButton>
             </>
           )}
-          {!practice && !confirmingClear && !confirmingFavourite && !confirmingRecalibrate && (
+          {!confirmingClear && !confirmingFavourite && !confirmingRecalibrate && (
             <>
               <ScanButton id="speak" snapshot={snapshot} onActivate={activate} primary={message.length > 0} className={message.length ? '' : 'muted'}
-                disabled={paused || !offered.has('speak')}><Icon name="voice" />Speak</ScanButton>
+                disabled={paused || !offered.has('speak')}><Icon name="voice" />Play</ScanButton>
               <ScanButton id="undo" snapshot={snapshot} onActivate={activate} disabled={paused || !offered.has('undo')} className={message.length ? '' : 'muted'}>Undo</ScanButton>
               {!message.length && lastSpoken && (
                 <button type="button" className="button" disabled={paused} onClick={() => session.repeatLast()}>Say it again</button>
               )}
             </>
           )}
-          {practice && <ScanButton id="finish-practice" snapshot={snapshot} onActivate={activate} primary disabled={paused}>Start talking</ScanButton>}
         </div>
       </section>
       {paused && panel && <div className="pause-banner">{pauseCard}</div>}
@@ -98,10 +91,10 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           : (
             <>
               {snapshot.phraseGroups && <h2 className="level-heading">{where}</h2>}
-              <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : practice ? 'Practice phrases' : snapshot.phraseGroups ? 'Phrase groups' : 'Phrases'}>
+              <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : snapshot.phraseGroups ? 'Phrase groups' : 'Phrases'}>
                 {tiles.map((target, index) => (
                   <ScanButton key={target.id} id={target.id} snapshot={snapshot} onActivate={activate} className="phrase-tile" disabled={paused || confirmingClear}
-                    label={target.kind === 'group' ? target.label : practice ? `Practice: ${target.label}` : `Add “${target.label}” to message`}>
+                    label={target.kind === 'group' ? target.label : `Add “${target.label}” to message`}>
                     <span className="phrase-number">{String(index + 1).padStart(2, '0')}</span>
                     {target.kind === 'group' ? <GroupTileText snapshot={snapshot} id={target.id} fallback={target.label} /> : <span>{target.label}</span>}
                   </ScanButton>
@@ -111,11 +104,6 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           )}
         {paused && !panel && <div className="pause-overlay">{pauseCard}</div>}
       </div>
-      {extras.length > 0 && (
-        <nav className="comm-bottom" aria-label="Controls">
-          {extras.map((target) => <ScanButton key={target.id} id={target.id} snapshot={snapshot} onActivate={activate} disabled={paused}>{target.label}</ScanButton>)}
-        </nav>
-      )}
       {!panel && !confirmingClear && !confirmingFavourite && (
         <nav className="comm-bottom" aria-label="Controls">
           <ScanButton id="pause" snapshot={snapshot} onActivate={activate} disabled={paused}><Icon name="pause" />Pause</ScanButton>

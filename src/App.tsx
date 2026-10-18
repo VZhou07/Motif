@@ -26,7 +26,6 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
     case 'mapping': content = <MappingView {...view} />; break;
     case 'mapping-confirm': content = <MappingConfirmView {...view} />; break;
     case 'tiring': content = <TiringView {...view} />; break;
-    case 'practice':
     case 'communication': content = <CommunicationView {...view} />; break;
   }
   return (

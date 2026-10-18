@@ -179,10 +179,9 @@ export class Harness {
     this.run(11_000, (t) => ({ jawOpen: 0.1 + 0.3 * Math.abs(Math.sin(t / 300)), headYaw: 6 * Math.sin(t / 900) }));
   }
 
-  /** Full setup through comfort, mapping choice + approval and practice, all by gesture. */
+  /** Full setup through comfort, mapping choice + approval, all by gesture. */
   setUpToCommunication(): void {
     this.calibrate();
     this.selectByGesture('approve-comfortable');
-    this.selectByGesture('finish-practice');
   }
 }
