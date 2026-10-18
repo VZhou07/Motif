@@ -5,11 +5,12 @@
 **Also from `main`:** Favourites kept with Last setup, and the caregiver dashboard at `#/caregiver` (needs Supabase settings in `.env.local`; see `docs/supabase-setup.md`). When a caregiver is paired, an **Ask caregiver** button appears beside Helper (requests), and pairing sits in Helper.
 
 **Checked (automated):** see `progress.md` for the latest test, typecheck and build results.
+**Needs you:** in Supabase, anonymous sign-ins must be saved as on (the live setting still says off). Run `npm run check:care`: every line should say PASS. Then follow `docs/demo-runbook.md` (it includes a database check to paste into Supabase). Use a separate browser or incognito window for the caregiver and each person; one browser shares one sign-in.
 
 **Practice page removed:** approving now goes straight to the talking screen, and the button says **Play** instead of Speak. "Use previous" now lives in Change controls.
 
 **Needs you (real camera):** after approving, hold your movement a moment and check nothing is played by accident; Get started starts the rest check by itself; clicking a movement starts recording; the approve screen is clear; blink vs one-eye; Continue within and after an hour; on the talking screen, whether the Movement seen light matches your movement and scanning through Favourites, Helper and Clear feels right.
 
-**Checked:** typecheck, 881 tests, build, 83/83 browser checks; independent testers passed it. The browser companion is left out for now.
+**Checked:** typecheck, 888 tests, build, 83/83 browser checks; independent testers passed it. The browser companion is left out for now.
 
 **Untested:** the real Supabase project end to end, two real devices, and the camera with a real person.

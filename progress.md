@@ -1,5 +1,12 @@
 # Motif technical handoff
 
+## Demo readiness (coordinator acting as Agent 3, 2026-10-17)
+
+- Request from the plan's author via the user: "make sure the db is good and everything is setup so that its ready for demo".
+- Added `supabase/checks/verify-care.sql` (read-only SQL Editor check: RLS, exact read-only policies, table/function privileges incl. truncate, private schema, definer + empty search_path, no Realtime, confirmed group owners, data counts) with `src/care/verify-sql.test.ts` (runs it on the real migration in PGlite; 7 cases, each loosening trips only its own rule). Added `docs/demo-runbook.md` (setup, click-by-click demo, troubleshooting, cleanup).
+- Commits `6a53cd0`, `9a73377`, `7ea3690`, `50bfbd1`. demo_testing PASS at `9a73377`; its N1 (extra/opened policy undetected), N2, N3, N4/N4b (runbook sign-in hazard backwards; second incognito shares sign-in) and N5 fixed in `7ea3690`/`50bfbd1`.
+- Hosted: `npm run check:care` 10 PASS / 1 FAIL — anonymous sign-ins still not saved. `verify-care.sql` not yet run on the hosted project (needs the user in the SQL Editor). Live end-to-end ready: `scratchpad/e2e/live.mjs` (headless assisted participant; needs a fresh invitation code from the user via `MOTIF_INVITE`).
+
 ## W2 — care setup quality of life (coordinator acting as Agent 3, 2026-10-17)
 
 - User asked to "make sure it's working and add any quality of life stuff". Headless Chromium against the hosted project: caregiver route renders sign-in (VITE config parsed); pairing reaches `POST /auth/v1/signup` → 422 `anonymous_provider_disabled` (anonymous sign-ins still off on the project; user must Save the toggle).
