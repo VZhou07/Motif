@@ -6,7 +6,7 @@ import { FAVOURITES_ID, type Vocabulary } from './vocabulary';
  * Two-level communication scanning (R14). The top level is short; phrases sit inside groups and rarer
  * controls inside More. Pause is in every level, and lists never shift while they are scanned.
  */
-export type Level = 'top' | 'more' | { group: string } | { confirm: string } | { clear: true } | { recalibrate: true };
+export type Level = 'top' | 'more' | 'ask' | { group: string } | { confirm: string } | { clear: true } | { recalibrate: true };
 
 export interface LevelContext {
   inputMode: InputMode;
@@ -17,6 +17,8 @@ export interface LevelContext {
   hasApproved: boolean;
   /** Phrase groups and Favourites on (default true here; the app turns them off for now, R19). */
   groups?: boolean;
+  /** Caregiver request targets from the paired device (W1); empty when unpaired or not configured. */
+  requests: readonly ScanTarget[];
 }
 
 export const CONTROL_LABELS: Record<string, string> = {
@@ -25,7 +27,7 @@ export const CONTROL_LABELS: Record<string, string> = {
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
   undo: 'Undo', 'say-again': 'Say it again', 'save-favourite': 'Save message to Favourites',
-  'cancel-favourite': 'Cancel, do not save', favourites: 'Favourites', more: 'Helper', back: 'Back',
+  'cancel-favourite': 'Cancel, do not save', favourites: 'Favourites', more: 'Helper', back: 'Back', ask: 'Ask caregiver',
   'clear-no': 'Keep it', 'clear-yes': 'Yes, clear it', 'recalibrate-no': 'Keep current setup', 'recalibrate-yes': 'Start recalibration',
 };
 
@@ -82,6 +84,8 @@ export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelC
     }
   } else if (level === 'more') {
     return [...moreControls(context).map(control), { ...nav('back'), label: 'Close helper' }, control('pause')];
+  } else if (level === 'ask' && context.requests.length) {
+    return [...context.requests, nav('back'), control('pause')];
   } else if (isClearLevel(level)) {
     return ['clear-no', 'clear-yes', 'pause'].map(control);
   } else if (isRecalibrateLevel(level)) {
@@ -92,11 +96,14 @@ export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelC
   const tiles = grouped ? groupTargets(vocabulary) : flatTargets(vocabulary);
   // Flat board: Favourites is the one group kept, as a button beside Helper.
   const favourites: ScanTarget[] = grouped ? [] : [{ id: `group:${FAVOURITES_ID}`, label: CONTROL_LABELS.favourites!, kind: 'nav' }];
-  return [control('speak'), control('undo'), ...tiles, control('pause'), ...favourites, nav('more')];
+  // Ask comes after Pause so Pause keeps its position whether or not the device is paired (W1).
+  const ask: ScanTarget[] = context.requests.length ? [{ id: 'ask', label: CONTROL_LABELS.ask!, kind: 'nav' }] : [];
+  return [control('speak'), control('undo'), ...tiles, control('pause'), ...ask, ...favourites, nav('more')];
 }
 
 /** The level `buildLevel` actually produced, so the session never keeps a level that fell back to top. */
-export function effectiveLevel(level: Level, vocabulary: Vocabulary, groups = true): Level {
+export function effectiveLevel(level: Level, vocabulary: Vocabulary, groups = true, hasRequests = false): Level {
+  if (level === 'ask') return hasRequests ? level : 'top';
   if (!groups && isGroupLevel(level) && level.group !== FAVOURITES_ID) return 'top';
   if (isGroupLevel(level)) return vocabulary.groups.some((group) => group.id === level.group && group.phrases.length) ? level : 'top';
   return level;

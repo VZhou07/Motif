@@ -60,6 +60,7 @@ function pairingMessage(error: unknown): string {
     case 'already_paired': return 'This device is already paired.';
     case 'wrong_role': return 'Signed in as a caregiver. Sign out before pairing.';
     case 'rate_limited': return 'Too many pairing attempts. Try again later.';
+    case 'anonymous_disabled': return 'Pairing is turned off on the caregiver service. The person who set up Motif needs to allow anonymous sign-ins (see docs/supabase-setup.md).';
     case 'invalid_invite': return 'That invitation code is not valid or has expired. Ask for a new one.';
     default: return 'Pairing did not complete. Check the code or ask for a new one.';
   }

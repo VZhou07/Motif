@@ -1,5 +1,21 @@
 # Motif technical handoff
 
+## W2 — care setup quality of life (coordinator acting as Agent 3, 2026-10-17)
+
+- User asked to "make sure it's working and add any quality of life stuff". Headless Chromium against the hosted project: caregiver route renders sign-in (VITE config parsed); pairing reaches `POST /auth/v1/signup` → 422 `anonymous_provider_disabled` (anonymous sign-ins still off on the project; user must Save the toggle).
+- Design `docs/workstreams/request-relay/qol.md` revision 1: w2_review APPROVED before code. Commits `ae82621` truthful auth/pairing errors, `c171bcd` open-request count in caregiver tab title, `3c9eaa9` `npm run check:care` (read-only setup check), `af07c89` title offline/stale test + script fixes. w2_testing PASS at `3c9eaa9`; follow-ups in `af07c89` (stale-title mutation now caught).
+- `npm run check:care` on the hosted project: 10 PASS, 1 FAIL (anonymous sign-ins). After the user saves the setting, rerun it, then the two-window pair → water → acknowledge test.
+
+## W1 — request wiring (coordinator acting as Agent 3, 2026-10-17)
+
+- Agent 3 offline; user asked the coordinator to finish Agent 3's remaining wiring, without the browser companion (C4 deferred by the user). Branch `feature/request-wiring` from `main` `24e9c6b`; not pushed. Design: `docs/workstreams/request-relay/wiring.md` revision 2 — w1_review BLOCKED revision 1 (B1: identity rebuild undid Pause), APPROVED revision 2.
+- Commits: `f991181` plan, `942b297` Ask level (`navigation.ts`), `6ec874c` session wiring (`RequestPort`, pause-safe rebuild, `selectRequest`, `announceExternal`; `session.requests.test.ts` over real PGlite SQL), `ce066d8` Root/App/views (one controller per participant session on `sharedCareClient()`, panel + pairing card; `CommunicationRequests.test.tsx`).
+- Checks at `ce066d8`: `npx tsc --noEmit` PASS; `npx vitest run` 64 files / 869 PASS; `npm run build` PASS; `npm run test:browser` 83/83 PASS. Mutation: removing the paused guard in `onRequestsChanged` fails the 3 B1 tests.
+- Local `.env.local` renamed from `NEXT_PUBLIC_*` to `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (gitignored; no secret stored here).
+- Hosted project `axjqywgyzjkltexbnhld`: migration applied (tables and RPCs exist and deny signed-out callers); one group "GG" with 3 unpaired participants (from the user's screenshots). Auth settings still report `anonymous_users: false` at 19:53 EDT — user must save the toggle. Not yet observed: hosted pair → send → acknowledge loop, two devices, camera.
+- Independent testing review (w1_testing): FAIL at `ce066d8` on coverage only (B-T1: no test for an unpaused identity change; code correct). Fixed by `8c5b1ea` (revoke and generation-only switch mid-hold, label update, stale reset). Re-check at `8c5b1ea`: **PASS**; the four previously surviving mutations are caught. Full suite 64 files / 873 PASS, tsc PASS; `npm run test:browser` 83/83 at `ce066d8` (no source change since). Open non-blocking: Root wiring has no direct test (N4); Root never disposes the controller (N3, recorded).
+- Known limits: one Auth identity per browser profile (use separate profiles/incognito); two controller announcements in one update — only the last is heard.
+
 ## STAGING BRANCH — all open PRs merged (2026-10-17)
 
 - Branch `staging` in worktree `/root/home/eso/Projects/Motif-staging`, from `origin/main` `e2d5871`. Merged in order: #7 `origin/feature/request-relay` `1e94ede`, #9 `origin/feature/participant-requests` `c699747`, #10 `origin/feature/caregiver-dashboard` `9b9afa4`, #8 `origin/ethan-features` `4c52f6b`. PRs #1–#6 were already in `main`. Local unpushed `ethan-features` commit `75f2ce9` (adds `@supabase/ssr` and a caret `supabase-js` range) was NOT merged; `request-relay` already pins `@supabase/supabase-js` 2.118.0.

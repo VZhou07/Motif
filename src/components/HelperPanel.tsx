@@ -5,7 +5,8 @@ import { Icon } from './Icon';
 import { EvidencePanel } from './ReviewViews';
 import { PhraseEditor } from './PhraseEditor';
 import { ScanButton } from './ScanBoard';
-import type { ViewProps } from './SetupViews';
+import { CaregiverPairingCard, type ViewProps } from './SetupViews';
+import type { ParticipantRequestController } from '../features/participant-requests/controller';
 
 const TILES: Record<string, { label: string; text: string }> = {
   'change-controls': { label: 'Change controls', text: 'Choose what each movement does' },
@@ -17,7 +18,7 @@ const TILES: Record<string, { label: string; text: string }> = {
 const TILE_ORDER = ['change-controls', 'add-movement', 'recalibrate', 'setup-gesture', 'use-gesture'];
 
 /** Everything a helper or the settings need, one level below the communication board. */
-export function HelperPanel({ snapshot, session }: ViewProps) {
+export function HelperPanel({ snapshot, session, requests }: ViewProps & { requests?: ParticipantRequestController | null }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const [diagnostics, setDiagnostics] = useState(false);
   const question = useRef<HTMLParagraphElement>(null);
@@ -76,6 +77,7 @@ export function HelperPanel({ snapshot, session }: ViewProps) {
         })}
       </div>
       {!snapshot.speech.available && <p className="helper-note">No local speech voice is available in this browser. Your message stays visible on screen; Motif never uses a remote voice.</p>}
+      {requests && <CaregiverPairingCard controller={requests} />}
       {assisted && <p className="helper-note">Assisted mode does not use or verify a facial movement.</p>}
       {snapshot.phraseGroups && <details className="helper-details">
         <summary>Jump to a phrase group</summary>

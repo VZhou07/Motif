@@ -25,6 +25,10 @@ Restart `npm run dev` after changing environment files. For a production preview
 4. In Auth user management, create two separate email/password caregiver demo users and ensure their emails are confirmed. Keep passwords private and enter them through the sign-in form or private test harness. Public signup, password recovery and email delivery are outside this slice.
 5. Do not enable care tables in Realtime publications. This foundation uses authorized polling every two seconds, with no Realtime channels, broadcast or WebSocket. Publishing DELETE notifications would not provide the required row privacy.
 
+### Check the setup
+
+Run `npm run check:care` from the project folder. It reads `.env.local`, then asks the configured project, as a signed-out caller, whether e-mail and anonymous sign-ins are on and whether the tables and functions exist and refuse signed-out access. Each line says PASS or FAIL with what to change, and it ends with the Table Editor link. It only reads; it never prints the key and sends it only to the configured project.
+
 The migration creates RLS-protected `care_groups`, `participants` and `care_requests`, private hashed invitations/attempt counters and restricted RPCs. Browser users cannot directly insert/update/delete these tables. The server derives request sender/group from the authenticated session; an alias, URL, local profile or role dropdown cannot grant access.
 
 `clearGroup()` deletes that group's requests, invitations and bound identities' invitation-attempt records, and revokes its participant bindings. It retains the group and revoked participant records so old sessions remain denied. Supabase Auth user records are separate and are not deleted by this RPC. There is no automatic end-of-session purge; use the caregiver's explicit clear/revoke flow after the demo. No video, calibration or message draft belongs in these tables.

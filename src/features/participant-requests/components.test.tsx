@@ -115,6 +115,17 @@ describe('participant pairing view', () => {
     expect(document.body.textContent).not.toContain('b'.repeat(64));
   });
 
+  it('says pairing is turned off on the service instead of blaming the code (W2 Q1)', async () => {
+    const { client } = stand(signedOut());
+    client.pair.mockRejectedValueOnce(new CareError('anonymous_disabled', 'x'));
+    const controller = new ParticipantRequestController({ client });
+    render(<ParticipantPairing controller={controller} />);
+    fireEvent.change(screen.getByLabelText('Invitation code'), { target: { value: 'c'.repeat(64) } });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Pair this device' })); });
+    expect(screen.getByRole('alert').textContent).toContain('Pairing is turned off on the caregiver service.');
+    expect(screen.getByRole('alert').textContent).not.toContain('Check the code');
+  });
+
   it('signs out, clearing this person immediately', async () => {
     const { client } = stand(online([request('00000000-0000-4000-8000-000000000003', 'sent')]));
     const controller = new ParticipantRequestController({ client });

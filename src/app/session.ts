@@ -71,7 +71,18 @@ function actionWindowOf(trial: TrainingTrial): ActionWindow {
   return { startMs: trial.movement[0]?.timestampMs ?? Number.NaN, endMs: trial.restAfter[0]?.timestampMs ?? Number.NaN };
 }
 
-export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'>;
+/**
+ * The caregiver request controller as the session sees it (W1). Only `activate('request:*')` can send;
+ * the session decides when that is reachable and keeps it to the communication stage.
+ */
+export interface RequestPort {
+  readonly view: { readonly targets: readonly { id: string; label: string }[]; readonly identityGeneration: number };
+  activate(id: string): boolean;
+  setActive(active: boolean): void;
+  subscribe(listener: () => void): () => void;
+}
+
+export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'>; requests?: RequestPort;
   /** Phrase groups and Favourites on the board. Off by default for now (R19); saved Favourites are kept either way. */
   phraseGroups?: boolean }
 
@@ -166,6 +177,11 @@ export class MotifSession {
 
   private scanner: ScanController | null = null;
   private scanTargets: ScanTarget[] = [];
+  private readonly requests: RequestPort | null;
+  /** The request ids and identity generation the current scan list was built with (W1). */
+  private requestBuild = { ids: '', generation: -1 };
+  /** Requests changed while paused: Resume starts from a rebuilt main list instead of rebuilding under Pause (W1 B1). */
+  private requestsStale = false;
   /** Communication scan level (R14); reset to top on every stage entry. */
   private level: Level = 'top';
   /** Counted scanner wraps (via tick) in a sub-level with nothing in between; two return to top. */
@@ -184,6 +200,8 @@ export class MotifSession {
     this.store = options.profiles ?? createMemoryProfileStore();
     this.cues = options.cues ?? null;
     this.phraseGroups = options.phraseGroups ?? false;
+    this.requests = options.requests ?? null;
+    this.requests?.subscribe(() => this.onRequestsChanged());
     this.refreshProfiles();
     this.vocabulary = this.savedVocabulary();
     this.publish();
@@ -459,6 +477,8 @@ export class MotifSession {
 
   private setStage(stage: Stage): void {
     this.stage = stage;
+    this.requestsStale = false;
+    this.requests?.setActive(stage === 'communication');
     this.processor.reset();
     this.runtime = null;
     this.scanner = null;
@@ -1329,13 +1349,70 @@ export class MotifSession {
       movements: this.approvedModels.length,
       hasApproved: this.hasApproved,
       groups: this.phraseGroups,
+      requests: this.stage === 'communication' ? this.requestTargets() : [],
     };
   }
 
   private levelTargets(): ScanTarget[] {
     const context = this.levelContext();
-    this.level = effectiveLevel(this.level, this.vocabulary, this.phraseGroups);
+    this.level = effectiveLevel(this.level, this.vocabulary, this.phraseGroups, context.requests.length > 0);
+    const view = this.requests?.view;
+    this.requestBuild = { ids: this.requestIds(), generation: view?.identityGeneration ?? -1 };
     return buildLevel(this.level, this.vocabulary, context);
+  }
+
+  private requestTargets(): ScanTarget[] {
+    return (this.requests?.view.targets ?? []).map((target) => ({ id: target.id, label: target.label, kind: 'control' as const }));
+  }
+
+  private requestIds(): string { return (this.requests?.view.targets ?? []).map((target) => target.id).join(','); }
+
+  /**
+   * Controller updates (W1). A changed target list or identity rebuilds the communication list from the
+   * main list with fresh neutral; under Pause it only marks the list stale so Pause is never undone (B1).
+   * Label-only changes swap labels into a new target array and keep the highlight.
+   */
+  private onRequestsChanged(): void {
+    const view = this.requests?.view;
+    if (!view) return;
+    if (this.stage === 'communication' && this.scanner
+      && (this.requestIds() !== this.requestBuild.ids || view.identityGeneration !== this.requestBuild.generation)) {
+      if (this.scanner.snapshot.paused) { this.requestsStale = true; this.publish(); return; }
+      const confirming = isConfirmLevel(this.level);
+      this.enterCommunication();
+      this.announce(`${confirming ? 'Not saved. ' : ''}${view.targets.length
+        ? 'Caregiver requests are ready. Starting from the main list.'
+        : 'Caregiver requests are no longer available. Starting from the main list.'}`);
+      this.publish();
+      return;
+    }
+    if (this.scanTargets.some((target) => target.id.startsWith('request:'))) {
+      const labels = new Map(view.targets.map((target) => [target.id, target.label]));
+      this.scanTargets = this.scanTargets.map((target) => labels.has(target.id) ? { ...target, label: labels.get(target.id)! } : target);
+    }
+    this.publish();
+  }
+
+  /** The request controller's own status announcements, published even in assisted mode with no frames. */
+  announceExternal(text: string): void {
+    this.announce(text);
+    this.publish();
+  }
+
+  /**
+   * Helper (pointer) shortcut to one request target from any communication level while not paused, like
+   * `openGroup`. Gesture and Space input never use this; they reach requests through the Ask level.
+   */
+  selectRequest(id: string): void {
+    const scanner = this.scanner;
+    if (!scanner || this.stage !== 'communication' || scanner.snapshot.paused || !this.requests) return;
+    if (!this.requests.view.targets.some((target) => target.id === id)) return;
+    const nowMs = this.clock();
+    const confirming = isConfirmLevel(this.level);
+    if (this.level !== 'ask') this.setLevel('ask', nowMs);
+    this.activate(id, nowMs);
+    if (confirming) this.announce(`Not saved. ${this.announcement}`.trim());
+    this.publish();
   }
 
   private enterCommunication(): void {
@@ -1488,11 +1565,15 @@ export class MotifSession {
   private resumeScan(nowMs: number): void {
     this.idleValidMs = 0;
     this.scanner?.setPaused(false, nowMs);
-    const changed = this.pausedVocabulary !== null && this.pausedVocabulary !== this.vocabulary;
+    const phrases = this.pausedVocabulary !== null && this.pausedVocabulary !== this.vocabulary;
+    const requests = this.requestsStale;
+    const changed = phrases || requests;
     const dropped = changed && isConfirmLevel(this.level);
     this.pausedVocabulary = null;
+    this.requestsStale = false;
     this.setLevel(changed ? 'top' : this.level, nowMs);
-    this.announce(changed ? `Resumed at the main list because the phrases changed.${dropped ? ' Not saved.' : ''}` : 'Resumed.');
+    const what = phrases && requests ? 'the phrases and caregiver requests changed' : phrases ? 'the phrases changed' : 'caregiver requests changed';
+    this.announce(changed ? `Resumed at the main list because ${what}.${dropped ? ' Not saved.' : ''}` : 'Resumed.');
   }
 
   private activate(id: string, nowMs: number): void {
@@ -1505,8 +1586,11 @@ export class MotifSession {
     if (id === 'pause') { this.pauseScan(nowMs); return; }
     // A phrase goes into the message and the highlight returns to Play, the likely next step: one announcement.
     if (phrase) { this.message = [...this.message, phrase]; this.setLevel('top', nowMs); this.announce(`Added "${phrase}". Back to the main list.`); return; }
+    // Only an explicit request selection reaches the controller; its own announcement stands (W1).
+    if (id.startsWith('request:')) { if (this.requests?.activate(id)) this.setLevel('top', nowMs); return; }
     switch (id) {
       case 'more': this.setLevel('more', nowMs); this.announce('More options.'); break;
+      case 'ask': this.setLevel('ask', nowMs); this.announce(`Ask your caregiver: ${this.requests?.view.targets.length ?? 0} choices.`); break;
       case 'speak': this.speakMessage(); break;
       case 'undo': this.undoLast(); break;
       case 'say-again': this.sayAgain(); break;

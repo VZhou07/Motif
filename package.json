@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:browser": "node scripts/browser-check.mjs",
     "setup:assets": "node scripts/setup-assets.mjs",
-    "check:assets": "node scripts/setup-assets.mjs --check"
+    "check:assets": "node scripts/setup-assets.mjs --check",
+    "check:care": "node scripts/check-care.mjs"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "1.1.1",

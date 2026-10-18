@@ -164,7 +164,7 @@ export interface ProposalCard {
 }
 
 export interface LevelView {
-  kind: 'top' | 'more' | 'group' | 'confirm' | 'clear' | 'recalibrate';
+  kind: 'top' | 'more' | 'ask' | 'group' | 'confirm' | 'clear' | 'recalibrate';
   group: { id: string; name: string; phrases: number } | null;
   /** The message text waiting for Save to Favourites confirmation. */
   confirm: string | null;

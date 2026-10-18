@@ -94,3 +94,27 @@ describe('real Supabase factory boundary', () => {
     expect(client.snapshot.requests).toEqual([]);
   });
 });
+
+describe('truthful auth errors (W2 Q1)', () => {
+  it.each([
+    ['invalid_credentials', 'invalid_credentials', /do not match a caregiver account/],
+    ['email_not_confirmed', 'email_not_confirmed', /not confirmed yet/],
+    ['over_request_rate_limit', 'rate_limited', /Too many attempts/],
+    ['something_else', 'auth_failed', /could not be completed/],
+  ])('maps sign-in code %s to %s without echoing the provider text', async (code, expected, text) => {
+    const sdk = sdkFixture();
+    sdk.getSession.mockResolvedValue({ data: { session: null }, error: null } as never);
+    sdk.signInWithPassword.mockResolvedValue({ error: { message: 'PROVIDER TEXT', code } } as never);
+    const failure = await make().signIn('a@example.test', 'pw').catch((error: unknown) => error);
+    expect(failure).toMatchObject({ code: expected });
+    expect(String((failure as Error).message)).toMatch(text);
+    expect(String((failure as Error).message)).not.toContain('PROVIDER TEXT');
+  });
+
+  it('reports pairing as turned off when anonymous sign-ins are disabled', async () => {
+    const sdk = sdkFixture();
+    sdk.getSession.mockResolvedValue({ data: { session: null }, error: null } as never);
+    sdk.signInAnonymously.mockResolvedValue({ error: { message: 'Anonymous sign-ins are disabled', code: 'anonymous_provider_disabled' } } as never);
+    await expect(make().pair('code')).rejects.toMatchObject({ code: 'anonymous_disabled' });
+  });
+});

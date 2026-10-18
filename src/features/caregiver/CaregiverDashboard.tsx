@@ -40,6 +40,15 @@ export function CaregiverDashboard({ client, sound: soundPort, clock = systemClo
   const boardVersion = view.kind === 'board' ? view.boardVersion : 0;
   const offline = view.kind === 'board' && view.offline;
   const blocked = view.kind === 'board' && view.stale;
+  // Open-request count in the tab title (W2 Q2): only from a live authorized board, never names.
+  const titleCount = board && !offline && !blocked ? board.outstanding.length : 0;
+  useEffect(() => {
+    const original = document.title;
+    return () => { document.title = original; };
+  }, []);
+  useEffect(() => {
+    document.title = titleCount > 0 ? `(${titleCount}) Caregiver dashboard · Motif` : 'Caregiver dashboard · Motif';
+  }, [titleCount]);
 
   // One chime and one announcement per applied online snapshot with genuinely new requests (replays never re-alert).
   useEffect(() => {

@@ -3,9 +3,9 @@ import { buildLevel, CONTROL_LABELS, effectiveLevel, type Level, type LevelConte
 import { addFavourite, addGroup, defaultVocabulary, type Vocabulary } from './vocabulary';
 
 const gesture = (movements: number, timed = true): LevelContext =>
-  ({ inputMode: 'gesture', timed, movements, hasApproved: true });
+  ({ inputMode: 'gesture', timed, movements, hasApproved: true, requests: [] });
 const assisted = (hasApproved: boolean): LevelContext =>
-  ({ inputMode: 'assisted', timed: true, movements: hasApproved ? 1 : 0, hasApproved });
+  ({ inputMode: 'assisted', timed: true, movements: hasApproved ? 1 : 0, hasApproved, requests: [] });
 const ids = (level: Level, context: LevelContext, vocabulary: Vocabulary = defaultVocabulary()) =>
   buildLevel(level, vocabulary, context).map((target) => target.id);
 
@@ -119,5 +119,29 @@ describe('Helper confirmation levels (R18)', () => {
     expect(buildLevel('top', defaultVocabulary(), gesture(1)).find((target) => target.id === 'more')?.label).toBe('Helper');
     expect(buildLevel('more', defaultVocabulary(), gesture(1)).find((target) => target.id === 'back')?.label).toBe('Close helper');
     expect(buildLevel({ group: 'g1' }, defaultVocabulary(), gesture(1)).find((target) => target.id === 'back')?.label).toBe('Back');
+  });
+});
+
+describe('Ask caregiver level (W1)', () => {
+  const requests = [{ id: 'request:water', label: 'Ask for water', kind: 'control' as const }, { id: 'request:cancel', label: 'Cancel', kind: 'control' as const }];
+  const paired = (): LevelContext => ({ ...gesture(1), requests });
+
+  it('adds Ask after Pause only when paired, so Pause keeps its position', () => {
+    const unpaired = ids('top', gesture(1));
+    const withAsk = ids('top', paired());
+    expect(unpaired).not.toContain('ask');
+    expect(withAsk.indexOf('pause')).toBe(unpaired.indexOf('pause'));
+    expect(withAsk[withAsk.indexOf('pause') + 1]).toBe('ask');
+    expect(withAsk.at(-1)).toBe('more');
+  });
+
+  it('lists the requests with Back and Pause', () => {
+    expect(ids('ask', paired())).toEqual(['request:water', 'request:cancel', 'back', 'pause']);
+    expect(ids('ask', gesture(1))).toEqual(ids('top', gesture(1)));
+  });
+
+  it('falls back to the main list without requests', () => {
+    expect(effectiveLevel('ask', defaultVocabulary(), true, true)).toBe('ask');
+    expect(effectiveLevel('ask', defaultVocabulary(), true, false)).toBe('top');
   });
 });
