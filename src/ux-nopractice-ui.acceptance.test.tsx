@@ -36,8 +36,6 @@ function visible(h: Harness): string {
     .map((el) => `${el.getAttribute('aria-label') ?? ''} ${el.getAttribute('title') ?? ''} ${el.getAttribute('placeholder') ?? ''}`).join(' ');
   return `${document.body.textContent ?? ''} ${attributes} ${h.snap.announcement}`;
 }
-/** The two evidence lines about recorded attempts (scoring.ts) are the one place the word survives. */
-const RECORDING_WORDING = /Weakest practice attempt|Practice strength/;
 const practiceMentions = (text: string) => (text.match(/[^.|:;]*practice[^.|;]*/gi) ?? []).map((part) => part.trim());
 
 describe('P7 Play on screen', () => {
@@ -92,7 +90,7 @@ describe('P3 / P9 no practice text on screen', () => {
     it(`P9 ${name}: no visible practice wording`, () => {
       const h = make();
       mount(h);
-      const found = practiceMentions(visible(h)).filter((part) => !RECORDING_WORDING.test(part) && !/practice (strength|attempt)/i.test(part));
+      const found = practiceMentions(visible(h));
       expect([name, found]).toEqual([name, []]);
     });
   }
@@ -105,13 +103,13 @@ describe('P3 / P9 no practice text on screen', () => {
     expect(screen.getByRole('button', { name: /^Play/ })).toBeTruthy();
   });
 
-  it('P9 the Helper, with evidence and editing opened, mentions practice only in the recorded-attempt evidence lines', () => {
+  it('P9 the Helper, with evidence and editing opened, mentions no practice', () => {
     const h = ready();
     mount(h);
     fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     for (const summary of document.querySelectorAll('summary')) act(() => { (summary.parentElement as HTMLDetailsElement).open = true; });
     const found = practiceMentions(visible(h));
-    expect(found.every((part) => RECORDING_WORDING.test(part))).toBe(true);
+    expect(found).toEqual([]);
     expect(screen.queryByRole('button', { name: /^Practice/ })).toBeNull();
   });
 
