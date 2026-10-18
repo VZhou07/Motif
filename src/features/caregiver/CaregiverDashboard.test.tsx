@@ -391,3 +391,21 @@ describe('keyboard', () => {
     expect(client.transitionRequest).toHaveBeenCalledWith(water.id, 1, 'acknowledged');
   });
 });
+
+describe('tab title (W2 Q2)', () => {
+  it('shows the open-request count, drops it on sign-out and restores the page title on unmount', async () => {
+    document.title = 'Motif — Your movement, your voice';
+    const alex = person('Alex');
+    const { client, unmount } = await mount(snapshot({ participants: [alex], requests: [request(alex), request(alex, { kind: 'help' })] }));
+    expect(document.title).toBe('(2) Caregiver dashboard · Motif');
+    expect(document.title).not.toContain('Alex');
+    emit(client, snapshot({ participants: [alex], requests: [] }));
+    expect(document.title).toBe('Caregiver dashboard · Motif');
+    emit(client, snapshot({ participants: [alex], requests: [request(alex)] }));
+    expect(document.title).toBe('(1) Caregiver dashboard · Motif');
+    emit(client, signedOut());
+    expect(document.title).toBe('Caregiver dashboard · Motif');
+    unmount();
+    expect(document.title).toBe('Motif — Your movement, your voice');
+  });
+});
