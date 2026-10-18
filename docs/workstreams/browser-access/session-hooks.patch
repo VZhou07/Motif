@@ -1,12 +1,13 @@
 diff --git a/src/app/session.browser.test.ts b/src/app/session.browser.test.ts
 new file mode 100644
-index 0000000..88b522c
+index 0000000..f6a6430
 --- /dev/null
 +++ b/src/app/session.browser.test.ts
-@@ -0,0 +1,164 @@
+@@ -0,0 +1,256 @@
 +import { describe, expect, it } from 'vitest';
 +import type { BrowserRequest } from './types';
-+import { Harness, REST } from './session.test-support';
++import { BROW, CHEEK, Harness, MOUTH, PUCKER, REST, type Values } from './session.test-support';
++import type { MovementChoice } from './types';
 +
 +function ready() {
 +  const h = new Harness();
@@ -168,6 +169,97 @@ index 0000000..88b522c
 +  });
 +});
 +
++const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
++const MOVES: Record<string, Values> = { 'Raise left outer eyebrow': BROW, 'Open mouth': MOUTH, 'Pucker lips': PUCKER, 'Puff cheeks': CHEEK };
++const perform = (label: string | null): Values => MOVES[label ?? ''] ?? REST;
++function addAndApprove(h: Harness, choice: MovementChoice): void {
++  h.addMovement(choice, perform);
++  h.selectByGesture('comfortable');
++  h.selectByGesture('map:0');
++  h.selectByGesture('approve-mapping');
++}
++/** Brow selects, mouth moves next (step scanning), in communication. */
++function twoGestureStep(): Harness {
++  const h = new Harness();
++  h.setUpToCommunication();
++  addAndApprove(h, OPEN_MOUTH);
++  h.stepTo('finish-practice');
++  return h;
++}
++
++describe('scope-aware rebuilds and epoch bumps', () => {
++  it('the step-idle fallback to automatic scanning keeps the browser scope and its five tiles', () => {
++    const h = twoGestureStep();
++    h.session.setBrowserSink(() => {});
++    h.stepTo('browse');
++    expect(h.session.enterBrowserScope()).toBe(true);
++    expect(h.snap.scanMode).toBe('step');
++    h.run(61_000);
++    expect(h.snap.stepFallback).toBe(true);
++    expect(h.snap.scope).toBe('browser');
++    expect(ids(h)).toEqual(['browser:scroll-down', 'browser:scroll-up', 'browser:back', 'pause', 'browser:return']);
++  });
++
++  it('leaving the communication stage resets the scope', () => {
++    const { h } = ready();
++    expect(h.session.enterBrowserScope()).toBe(true);
++    (h.session as unknown as { enterPractice(): void }).enterPractice();
++    h.session.refresh();
++    expect(h.snap.stage).toBe('practice');
++    expect(h.snap.scope).toBe('communication');
++    expect(ids(h)).not.toContain('browser:return');
++  });
++
++  it('useAssisted / useGesture rebuilds start in the communication scope', () => {
++    const { h } = ready();
++    expect(h.session.enterBrowserScope()).toBe(true);
++    h.session.useAssisted();
++    expect(h.snap.scope).toBe('communication');
++    expect(ids(h)).toContain('browse');
++  });
++
++  it('every kind of change bumps the input epoch: resume, hidden on and off, scanner rebuild, cancelled hold', () => {
++    const { h } = ready();
++    let epoch = h.session.getInputEpoch();
++    const bumped = (label: string) => { const now = h.session.getInputEpoch(); expect(now, label).toBeGreaterThan(epoch); epoch = now; };
++    h.session.enterBrowserScope(); bumped('enter browser scope');
++    h.session.returnToCommunication(); bumped('return');
++    h.session.setBrowserSink(() => {}); bumped('new sink rebuilds the scanner');
++    h.session.setHidden(true, h.now); bumped('hidden on');
++    h.session.setHidden(false, h.now); bumped('hidden off');
++    h.selectByGesture('pause'); bumped('pause');
++    h.selectByGesture('pause'); bumped('resume');
++    h.step(REST); // let the recognizer settle
++    epoch = h.session.getInputEpoch();
++    h.run(150, BROW); // too short to emit: started, then cancelled
++    h.run(600);
++    bumped('cancelled hold');
++  });
++
++  it('a completed selection does not bump the epoch, so the command it issues stays current', () => {
++    const { h } = ready();
++    h.run(600);
++    const before = h.session.getInputEpoch();
++    h.selectByGesture('phrase:0');
++    expect(h.session.getInputEpoch()).toBe(before);
++  });
++
++  it('browser and Browse ids are rejected in the wrong scope', () => {
++    const { h, requests } = ready();
++    const activate = (id: string) => (h.session as unknown as { activate(id: string, now: number): void }).activate(id, h.now);
++    activate('browser:scroll-down');
++    activate('browser:back');
++    expect(requests).toEqual([]); // communication scope: only Browse is a valid browser id
++    expect(h.session.enterBrowserScope()).toBe(true);
++    activate('browse');
++    expect(requests).toEqual([]);
++    h.session.selectTarget('request:water'); // not a tile of any list
++    h.session.selectTarget('browse'); // not in the browser list
++    expect(requests).toEqual([]);
++    h.session.selectTarget('browser:scroll-down');
++    expect(requests).toEqual(['scroll-down']);
++  });
++});
 diff --git a/src/app/session.ts b/src/app/session.ts
 index 22f10da..7f77c85 100644
 --- a/src/app/session.ts
