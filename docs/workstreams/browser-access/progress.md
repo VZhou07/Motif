@@ -10,6 +10,13 @@ Checks to run per chunk: `npx vitest run src/features/browser-access`, `npx tsc 
 - Last passing checkpoint commit: none for this workstream. Code changes: none. Uncommitted work: none after the design commit.
 - Running processes: none (probe browsers closed). Other worktrees untouched.
 
+## Implementation log (newest last)
+
+- Reasoning rev 2 APPROVED (independent reviewer). Implementing chunks 1-7 only; chunk 8 (real session) waits for Agent 3 applying `session-hooks.patch`.
+- P1 fix to the patch done (`6116e2b`): Pause survives scope switches and sink attach/detach; unchanged sink is a no-op; 17 patch tests (gesture and assisted); still needs Agent 3's independent review.
+- Chunk 1 DONE (`f9e34bc` protocol/origins, `2bb8981` manifest/csp/grant-camera, `ffaecfe` extension build + smoke). Assets copied from the main checkout into gitignored `public/`. Early build-and-boot smoke: whole app boots in the extension under CSP, 0 violations, 0 errors, nothing left the extension.
+- Chunk 2 DONE (`c0df924` worker, fake chrome). Last passing commit: `c0df924`. Next: chunk 3 `port.ts`.
+
 ## Review record
 | Revision | Reviewer | Verdict | Findings and fixes |
 | --- | --- | --- | --- |
