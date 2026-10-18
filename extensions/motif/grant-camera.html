@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; object-src 'none'; style-src 'self'; img-src 'self'; connect-src 'none'; base-uri 'none'" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Allow Motif camera</title>
+  </head>
+  <body>
+    <main>
+      <h1>Allow the camera for Motif</h1>
+      <p>A helper presses the button, then chooses Allow in the browser prompt. The camera is switched off again straight away.</p>
+      <button id="grant" type="button">Allow camera</button>
+      <p id="status" role="status"></p>
+    </main>
+    <script type="module" src="./src/grant-camera.ts"></script>
+  </body>
+</html>
