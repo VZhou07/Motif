@@ -71,7 +71,9 @@ function actionWindowOf(trial: TrainingTrial): ActionWindow {
   return { startMs: trial.movement[0]?.timestampMs ?? Number.NaN, endMs: trial.restAfter[0]?.timestampMs ?? Number.NaN };
 }
 
-export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'> }
+export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'>;
+  /** Phrase groups and Favourites on the board. Off by default for now (R19); saved Favourites are kept either way. */
+  phraseGroups?: boolean }
 
 /**
  * Browser-independent orchestrator (R5). React renders `getSnapshot()` and forwards input.
@@ -171,6 +173,7 @@ export class MotifSession {
   private idleWraps = 0;
   /** The vocabulary when the scan was paused, so Resume can tell whether it changed. */
   private pausedVocabulary: Vocabulary | null = null;
+  private readonly phraseGroups: boolean;
   private runtime: GestureRuntime | null = null;
   private scanDriver: 'gesture' | 'assisted' | 'none' = 'none';
   private intervalMs: number = SESSION_LIMITS.scanDefaultMs;
@@ -181,6 +184,7 @@ export class MotifSession {
     this.wallClock = options.wallClock ?? (() => Date.now());
     this.store = options.profiles ?? createMemoryProfileStore();
     this.cues = options.cues ?? null;
+    this.phraseGroups = options.phraseGroups ?? false;
     this.refreshProfiles();
     this.vocabulary = this.savedVocabulary();
     this.publish();
@@ -1325,13 +1329,14 @@ export class MotifSession {
       timed: this.inputMode === 'assisted' || this.scanMode() === 'auto',
       movements: this.approvedModels.length,
       hasApproved: this.hasApproved,
+      groups: this.phraseGroups,
       decisions: this.stage === 'practice' ? this.decisionTargets(this.allowedDecisions()) : [],
     };
   }
 
   private levelTargets(): ScanTarget[] {
     const context = this.levelContext();
-    this.level = effectiveLevel(this.level, this.vocabulary, context.stage);
+    this.level = effectiveLevel(this.level, this.vocabulary, context.stage, this.phraseGroups);
     return buildLevel(this.level, this.vocabulary, context);
   }
 
@@ -1382,6 +1387,7 @@ export class MotifSession {
 
   /** Opens a group tile; an empty group only announces, so the list the user has learned never shifts. */
   private openLevel(groupId: string, nowMs: number): void {
+    if (!this.phraseGroups) return;
     const group = this.vocabulary.groups.find((entry) => entry.id === groupId);
     if (!group) return;
     if (!group.phrases.length) {
@@ -1398,6 +1404,7 @@ export class MotifSession {
    * A gesture dwell in progress is cancelled with no action. Gesture and Space input never use this.
    */
   openGroup(id: string | 'top'): void {
+    if (!this.phraseGroups) return;
     const scanner = this.scanner;
     if (!scanner || !this.isRoutedStage() || scanner.snapshot.paused) return;
     const nowMs = this.clock();
@@ -1523,7 +1530,7 @@ export class MotifSession {
       case 'say-again': this.sayAgain(); break;
       case 'save-favourite': this.askToSaveFavourite(nowMs); break;
       case 'confirm-favourite': this.confirmFavourite(nowMs); break;
-      case 'cancel-favourite': this.setLevel('top', nowMs); this.announce('Not saved.'); break;
+      case 'cancel-favourite': if (!this.phraseGroups) break; this.setLevel('top', nowMs); this.announce('Not saved.'); break;
       case 'clear':
         if (!this.message.length) { this.announce('Nothing to clear.'); break; }
         this.setLevel({ clear: true }, nowMs);
@@ -1592,6 +1599,7 @@ export class MotifSession {
 
   /** Checks first, so the person is never asked to confirm something that cannot be saved. */
   private askToSaveFavourite(nowMs: number): void {
+    if (!this.phraseGroups) return;
     if (!this.message.length) { this.announce('Nothing to save yet. Add a phrase first.'); return; }
     const text = this.message.join('. ');
     const problem = addProblem(this.vocabulary, FAVOURITES_ID, text);
@@ -1602,6 +1610,7 @@ export class MotifSession {
 
   /** Re-validated on confirm; a rejection changes nothing and nothing is ever evicted. Storage waits for profile Save. */
   private confirmFavourite(nowMs: number): void {
+    if (!this.phraseGroups) return;
     if (!isConfirmLevel(this.level)) return;
     const result = addFavourite(this.vocabulary, this.level.confirm);
     if (result.ok) this.vocabulary = result.value;

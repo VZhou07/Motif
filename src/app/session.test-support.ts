@@ -33,8 +33,8 @@ export class Harness {
   readonly session: MotifSession;
   stepMs = 50;
 
-  constructor(options: { profiles?: ProfileStore } = {}) {
-    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles });
+  constructor(options: { profiles?: ProfileStore; phraseGroups?: boolean } = {}) {
+    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles, phraseGroups: options.phraseGroups ?? true });
   }
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }

@@ -37,7 +37,7 @@ export function useMotif(runtime?: Partial<Runtime>) {
     const cues = runtime?.cues ?? createCueAudio();
     // Profiles live in this browser's storage and are written only by an explicit Save (R7).
     const profiles = createLocalProfileStore(() => window.localStorage);
-    const session = runtime?.session ?? new MotifSession({ speech, profiles, cues });
+    const session = runtime?.session ?? new MotifSession({ speech, profiles, cues, phraseGroups: false });
     return { speech, cues, session, tracker: runtime?.tracker ?? new FaceTracker() };
   });
   const snapshot = useSyncExternalStore(session.subscribe, session.getSnapshot, session.getSnapshot);

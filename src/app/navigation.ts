@@ -1,6 +1,6 @@
 import { MAX_GESTURES } from './mapping';
 import type { InputMode, ScanTarget } from './types';
-import type { Vocabulary } from './vocabulary';
+import { FAVOURITES_ID, type Vocabulary } from './vocabulary';
 
 /**
  * Two-level communication scanning (R14). The top level is short; phrases sit inside groups and rarer
@@ -16,6 +16,8 @@ export interface LevelContext {
   /** Approved movements (gesture input). */
   movements: number;
   hasApproved: boolean;
+  /** Phrase groups and Favourites on (default true here; the app turns them off for now, R19). */
+  groups?: boolean;
   /** Practice-only setup decisions shown at the top (`use-previous` when allowed). */
   decisions: readonly ScanTarget[];
 }
@@ -49,12 +51,21 @@ function groupTargets(vocabulary: Vocabulary): ScanTarget[] {
   }));
 }
 
+/** Flat mode (R19): every phrase except the hidden Favourites group, in order; ids are unchanged. */
+function flatTargets(vocabulary: Vocabulary): ScanTarget[] {
+  return vocabulary.groups.filter((group) => group.id !== FAVOURITES_ID).flatMap((group) =>
+    group.phrases.map((label, index) => ({ id: `phrase:${group.id}:${index}`, label, kind: 'phrase' as const })));
+}
+
+const withGroups = (context: LevelContext) => context.groups !== false;
+
 function moreControls(context: LevelContext): string[] {
   const speed = context.timed ? ['slower', 'faster'] : [];
+  const save = withGroups(context) ? ['save-favourite'] : [];
   if (context.inputMode === 'assisted') {
-    return ['clear', 'save-favourite', 'say-again', ...speed, 'practice', context.hasApproved ? 'use-gesture' : 'setup-gesture'];
+    return ['clear', ...save, 'say-again', ...speed, 'practice', context.hasApproved ? 'use-gesture' : 'setup-gesture'];
   }
-  return ['clear', 'save-favourite', 'say-again', ...speed, 'practice', 'change-controls',
+  return ['clear', ...save, 'say-again', ...speed, 'practice', 'change-controls',
     ...(context.movements < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
 }
 
@@ -64,7 +75,8 @@ function moreControls(context: LevelContext): string[] {
  */
 export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelContext): ScanTarget[] {
   const practice = context.stage === 'practice';
-  if (isGroupLevel(level)) {
+  const grouped = withGroups(context);
+  if (isGroupLevel(level) && grouped) {
     const group = vocabulary.groups.find((entry) => entry.id === level.group);
     if (group && group.phrases.length) {
       return [
@@ -78,15 +90,17 @@ export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelC
     return ['clear-no', 'clear-yes', 'pause'].map(control);
   } else if (isRecalibrateLevel(level) && !practice) {
     return ['recalibrate-no', 'recalibrate-yes', 'pause'].map(control);
-  } else if (isConfirmLevel(level) && !practice) {
+  } else if (isConfirmLevel(level) && !practice && grouped) {
     return [{ id: 'confirm-favourite', label: `Save “${level.confirm}” to Favourites`, kind: 'control' }, control('cancel-favourite'), control('pause')];
   }
-  if (practice) return [control('finish-practice'), ...groupTargets(vocabulary), control('pause'), ...context.decisions];
-  return [control('speak'), control('undo'), ...groupTargets(vocabulary), control('pause'), nav('more')];
+  const tiles = grouped ? groupTargets(vocabulary) : flatTargets(vocabulary);
+  if (practice) return [control('finish-practice'), ...tiles, control('pause'), ...context.decisions];
+  return [control('speak'), control('undo'), ...tiles, control('pause'), nav('more')];
 }
 
 /** The level `buildLevel` actually produced, so the session never keeps a level that fell back to top. */
-export function effectiveLevel(level: Level, vocabulary: Vocabulary, stage: LevelContext['stage']): Level {
+export function effectiveLevel(level: Level, vocabulary: Vocabulary, stage: LevelContext['stage'], groups = true): Level {
+  if (!groups && (isGroupLevel(level) || isConfirmLevel(level))) return 'top';
   if (isGroupLevel(level)) return vocabulary.groups.some((group) => group.id === level.group && group.phrases.length) ? level : 'top';
   if (stage === 'practice' && level !== 'top') return 'top';
   return level;
