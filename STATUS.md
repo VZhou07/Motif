@@ -6,6 +6,8 @@
 
 **Checked (automated):** see `progress.md` for the latest test, typecheck and build results.
 
-**Needs you (real camera):** Get started starts the rest check by itself; clicking a movement starts recording; the approve screen is clear; blink vs one-eye; Continue within and after an hour; on the talking screen, whether the Movement seen light matches your movement and scanning through Favourites, Helper and Clear feels right.
+**Practice page removed:** approving now goes straight to the talking screen, and the button says **Play** instead of Speak. "Use previous" now lives in Change controls.
+
+**Needs you (real camera):** after approving, hold your movement a moment and check nothing is played by accident; Get started starts the rest check by itself; clicking a movement starts recording; the approve screen is clear; blink vs one-eye; Continue within and after an hour; on the talking screen, whether the Movement seen light matches your movement and scanning through Favourites, Helper and Clear feels right.
 
 **Untested:** the real Supabase project, two real devices, and the camera with a real person (camera covered).
