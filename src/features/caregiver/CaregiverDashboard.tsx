@@ -371,7 +371,7 @@ function People({ board, invites, mono, busy, blocked, error, onAdd, onInvite, o
       )}
       {clearing
         ? <div className="cg-confirm" role="group" aria-label="Confirm clearing everything">
-            <p>This removes every person from this group and deletes all open requests. Their devices need new invitations.</p>
+            <p>This removes every person from this group and deletes every request, open and finished. Their devices need new invitations.</p>
             <div className="cg-row">
               <button type="button" className="button" disabled={blocked || busy.has('clear')} onClick={() => { setClearing(false); onClear(); }}>Yes, clear everything</button>
               <button type="button" className="button button-quiet" onClick={() => setClearing(false)}>Keep everything</button>
