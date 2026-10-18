@@ -32,3 +32,11 @@ A headless Chromium run on the box against the hosted project (`axjqywgyzjkltexb
 ## Out of scope
 
 Browser companion; new tables or RPCs; Realtime; any change to who can see what.
+
+## Q4 — Request status visible on the main board (revision 1, added after `ux-simplify`)
+
+Evidence: after PR #11 (`ed70208`), `CommunicationView` renders `ParticipantRequestsPanel` only while the Ask level is open. A request selection returns to the main board (W1 rule), so the caregiver's acknowledgment is announced to the screen-reader live region (`App.tsx` `sr-only`) but not shown; the person must reopen Ask caregiver to see it. The demo's last step ("the person sees the acknowledgment") fails visibly.
+
+- New `RequestStatusLine` in `src/features/participant-requests/` (exported from `index.ts`): reads `useParticipantRequests(controller)`; renders nothing unless the device is paired and has at least one card. Shows the newest card whatever its status (so "Done." stays visible until the next request) plus the newest other OPEN card (pending, failed, sent, acknowledged), at most two lines: `KIND_NAMES[kind]: statusText(card, receiver)` (cards are already newest-first by `seq`). No timers. Not a live region: the session already announces status changes, so this avoids double announcements. No buttons.
+- `CommunicationView`: render it on the main board area when `requests` exists and the Ask level is not open. No scan targets, no buttons, no change to `session`/`navigation`, so scanning order, timing and the redesign are untouched.
+- Tests: component test — paired with a sent card shows "Water: Sent — …"; acknowledged shows the receiver; an older finished card is not shown once a newer request exists; unpaired renders nothing; no buttons inside it; not shown while the Ask level is open (panel shows instead).
