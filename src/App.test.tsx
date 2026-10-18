@@ -23,7 +23,6 @@ function twoMovements(): Harness {
   h.setUpToCommunication();
   h.addMovement(OPEN_MOUTH, (label) => (label === 'Open mouth' ? MOUTH : label ? BROW : REST));
   h.selectByGesture('approve-comfortable');
-  h.stepTo('finish-practice');
   return h;
 }
 
@@ -98,7 +97,7 @@ describe('Motif app', () => {
     expect(current?.textContent).toBe('Record this movement again');
     expect(document.querySelector('.comfort-preview')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
     act(() => h.selectByGesture('approve-comfortable'));
-    expect(screen.getByText(/nothing is spoken/i)).toBeTruthy();
+    expect(screen.getByText(/Choose a phrase to start your message/)).toBeTruthy(); // straight to the talking screen
   });
 
   it('reports a hidden tab and stops the camera on unmount', () => {
@@ -228,27 +227,14 @@ describe('Motif app', () => {
     expect(h.session.getSnapshot().stage).toBe('mapping-confirm');
   });
 
-  it('offers back to start inside assisted input started from the start screen, but not in practice', () => {
+  it('offers back to start inside the Helper in assisted input started from the start screen', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch)' }));
-    act(() => h.click('practice')); // in More since C1 (R18)
-    expect(h.session.getSnapshot().stage).toBe('practice');
-    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
-    act(() => h.session.selectTarget('finish-practice'));
     expect(h.session.getSnapshot().stage).toBe('communication');
     fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
     expect(h.session.getSnapshot()).toMatchObject({ stage: 'welcome', inputMode: 'gesture' });
-  });
-
-  it('hides back to start during practice with a movement setup', () => {
-    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
-    h.setUpToCommunication();
-    act(() => h.stepTo('practice'));
-    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    expect(h.session.getSnapshot().stage).toBe('practice');
-    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
   });
 
   it('offers Continue and a confirmed delete for the saved setup on the welcome screen', async () => {
@@ -349,12 +335,11 @@ describe('Motif app', () => {
       ['choose', () => h.run(9_000)],
       ['training', () => h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' })],
       ['comfort', () => { h.followPrompts((snap) => snap.stage === 'negative'); h.run(11_000, (t) => ({ headYaw: 6 * Math.sin(t / 900) })); }],
-      ['practice', () => h.selectByGesture('approve-comfortable')],
-      ['communication', () => h.selectByGesture('finish-practice')],
+      ['communication', () => h.selectByGesture('approve-comfortable')],
       ['recalibrate', () => h.selectByGesture('recalibrate')],
       ['assisted', () => { h.selectByGesture('recalibrate-no'); h.session.useAssisted(); }],
     ];
-    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'practice', 'communication', 'communication', 'communication'];
+    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'communication', 'communication', 'communication'];
     for (const [index, [name, go]] of screens.entries()) {
       act(go);
       expect([name, h.snap.stage]).toEqual([name, stages[index]]);

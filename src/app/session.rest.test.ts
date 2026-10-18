@@ -72,7 +72,6 @@ describe('calibration with a changing relaxed face (R12)', () => {
     expect(h.snap.approvedModels).toEqual([]);
 
     h.selectByGesture('approve-comfortable', movement(motion));
-    h.selectByGesture('finish-practice', movement(motion));
     expect(h.snap.stage).toBe('communication');
     h.run(60_000);
     expect(h.snap.message).toEqual([]);

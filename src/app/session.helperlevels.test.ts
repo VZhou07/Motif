@@ -100,18 +100,13 @@ describe('Say it again, Speak and the Helper list', () => {
     expect(h.spoken).toEqual(['Yes', 'Yes', 'Yes']);
   });
 
-  it('repeatLast is refused with nothing spoken, while paused and in practice', () => {
+  it('repeatLast is refused with nothing spoken, and while paused', () => {
     const h = ready();
     h.session.repeatLast();
     expect(h.spoken).toEqual([]);
     withMessage(h);
     h.selectByGesture('speak');
     h.selectByGesture('pause');
-    h.session.repeatLast();
-    expect(h.spoken).toEqual(['Yes']);
-    h.session.resume();
-    h.selectByGesture('practice');
-    expect(h.snap.stage).toBe('practice');
     h.session.repeatLast();
     expect(h.spoken).toEqual(['Yes']);
   });
@@ -128,7 +123,7 @@ describe('Say it again, Speak and the Helper list', () => {
     const h = ready();
     expect(h.snap.scan!.targets.find((target) => target.id === 'more')?.label).toBe('Helper');
     h.selectByGesture('more');
-    expect(ids(h)).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']);
+    expect(ids(h)).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']);
     expect(h.snap.scan!.targets.find((target) => target.id === 'back')?.label).toBe('Close helper');
     expect(h.snap.helperOpen).toBe(true);
   });

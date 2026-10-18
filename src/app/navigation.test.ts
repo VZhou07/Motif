@@ -3,10 +3,9 @@ import { buildLevel, CONTROL_LABELS, effectiveLevel, type Level, type LevelConte
 import { addFavourite, addGroup, defaultVocabulary, type Vocabulary } from './vocabulary';
 
 const gesture = (movements: number, timed = true): LevelContext =>
-  ({ stage: 'communication', inputMode: 'gesture', timed, movements, hasApproved: true, decisions: [] });
+  ({ inputMode: 'gesture', timed, movements, hasApproved: true });
 const assisted = (hasApproved: boolean): LevelContext =>
-  ({ stage: 'communication', inputMode: 'assisted', timed: true, movements: hasApproved ? 1 : 0, hasApproved, decisions: [] });
-const practice = (decisions: LevelContext['decisions'] = []): LevelContext => ({ ...gesture(1), stage: 'practice', decisions });
+  ({ inputMode: 'assisted', timed: true, movements: hasApproved ? 1 : 0, hasApproved });
 const ids = (level: Level, context: LevelContext, vocabulary: Vocabulary = defaultVocabulary()) =>
   buildLevel(level, vocabulary, context).map((target) => target.id);
 
@@ -48,8 +47,8 @@ describe('inside a group', () => {
       ['back', 'Back', 'nav'], ['pause', 'Pause', 'control']]);
   });
 
-  it('is the same for practice and every input mode', () => {
-    for (const context of [gesture(1), gesture(3, false), assisted(true), practice()]) {
+  it('is the same for every input mode', () => {
+    for (const context of [gesture(1), gesture(3, false), assisted(true)]) {
       expect(ids({ group: 'g1' }, context)).toEqual(['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'back', 'pause']);
     }
   });
@@ -57,16 +56,16 @@ describe('inside a group', () => {
   it('falls back to the top level for a missing or empty group', () => {
     expect(ids({ group: 'g9' }, gesture(1))).toEqual(ids('top', gesture(1)));
     expect(ids({ group: 'favourites' }, gesture(1))).toEqual(ids('top', gesture(1)));
-    expect(effectiveLevel({ group: 'favourites' }, defaultVocabulary(), 'communication')).toBe('top');
-    expect(effectiveLevel({ group: 'g1' }, defaultVocabulary(), 'communication')).toEqual({ group: 'g1' });
+    expect(effectiveLevel({ group: 'favourites' }, defaultVocabulary())).toBe('top');
+    expect(effectiveLevel({ group: 'g1' }, defaultVocabulary())).toEqual({ group: 'g1' });
   });
 });
 
 describe('More', () => {
   it.each([
-    [1, true, ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']],
-    [2, false, ['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']],
-    [4, false, ['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'recalibrate', 'back', 'pause']],
+    [1, true, ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']],
+    [2, false, ['clear', 'save-favourite', 'say-again', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']],
+    [4, false, ['clear', 'save-favourite', 'say-again', 'change-controls', 'recalibrate', 'back', 'pause']],
   ])('with %i movement(s) (timed: %s) holds the rarer controls and ends with Back and Pause', (movements, timed, expected) => {
     expect(ids('more', gesture(movements, timed))).toEqual(expected);
   });
@@ -76,7 +75,7 @@ describe('More', () => {
   });
 
   it('in assisted mode keeps its own movement setup choice', () => {
-    expect(ids('more', assisted(false))).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'setup-gesture', 'back', 'pause']);
+    expect(ids('more', assisted(false))).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'setup-gesture', 'back', 'pause']);
     expect(ids('more', assisted(true))).toContain('use-gesture');
     expect(ids('more', assisted(true))).not.toContain('recalibrate');
   });
@@ -90,23 +89,9 @@ describe('confirm a favourite', () => {
   });
 });
 
-describe('practice', () => {
-  it('replaces Speak and Undo with Finish practice, has no More, and keeps Use previous at the top', () => {
-    const previous = [{ id: 'use-previous', label: 'Use previous controls', kind: 'decision' as const }];
-    expect(ids('top', practice(previous))).toEqual(['finish-practice', 'group:favourites', 'group:g1', 'group:g2', 'pause', 'use-previous']);
-    expect(ids('top', practice())).not.toContain('more');
-  });
-
-  it('never offers More or the confirm level', () => {
-    expect(ids('more', practice())).toEqual(ids('top', practice()));
-    expect(ids({ confirm: 'x' }, practice())).toEqual(ids('top', practice()));
-    expect(effectiveLevel('more', defaultVocabulary(), 'practice')).toBe('top');
-  });
-});
-
 describe('every level', () => {
   const levels: Level[] = ['top', 'more', { group: 'g1' }, { confirm: 'Hi' }];
-  const contexts = [gesture(1), gesture(2, false), gesture(4, false), assisted(false), assisted(true), practice()];
+  const contexts = [gesture(1), gesture(2, false), gesture(4, false), assisted(false), assisted(true)];
 
   it('includes Pause, has unique ids and has a label for every target', () => {
     for (const level of levels) for (const context of contexts) {
@@ -128,13 +113,6 @@ describe('Helper confirmation levels (R18)', () => {
   it('the clear and recalibrate levels start with the safe choice and end with Pause', () => {
     expect(ids({ clear: true }, gesture(1))).toEqual(['clear-no', 'clear-yes', 'pause']);
     expect(ids({ recalibrate: true }, gesture(1))).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
-  });
-
-  it('practice falls back to the top level for them', () => {
-    const practice = { ...gesture(1), stage: 'practice' as const };
-    expect(effectiveLevel({ clear: true }, defaultVocabulary(), 'practice')).toBe('top');
-    expect(effectiveLevel({ recalibrate: true }, defaultVocabulary(), 'practice')).toBe('top');
-    expect(ids({ clear: true }, practice)).toEqual(ids('top', practice));
   });
 
   it('labels the Helper entry and its Close button', () => {

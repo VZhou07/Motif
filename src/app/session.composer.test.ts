@@ -31,7 +31,6 @@ function addAndApprove(h: Harness, choice: MovementChoice): void {
   if (h.snap.scanMode === 'step') h.stepTo('more'); else h.selectByGesture('more');
   h.addMovement(choice, perform);
   h.selectByGesture('approve-comfortable'); // R18: adding approves from the comfort screen
-  h.stepTo('finish-practice');
 }
 
 const favourites = (h: Harness) => h.snap.vocabulary.groups[0]!.phrases;
@@ -234,14 +233,5 @@ describe('editing phrases while paused (R14)', () => {
     h.session.resume();
     expect(h.snap.level?.group?.id).toBe('g2');
     expect(h.highlightedId()).toBe('phrase:g2:0');
-  });
-
-  it('cannot edit during practice', () => {
-    const h = new Harness();
-    h.calibrate();
-    h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
-    expect(h.snap.stage).toBe('practice');
-    h.selectByGesture('pause');
-    expect(h.session.editVocabulary({ kind: 'add-group', name: 'Family' }).ok).toBe(false);
   });
 });

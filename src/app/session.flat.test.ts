@@ -21,13 +21,6 @@ describe('flat board', () => {
     expect(h.snap.phraseGroups).toBe(false);
   });
 
-  it('practice lists the flat phrases', () => {
-    const h = flat();
-    h.calibrate();
-    h.selectByGesture('approve-comfortable');
-    expect(ids(h)).toEqual(['finish-practice', ...FLAT_PHRASES, 'pause']);
-  });
-
   it('the Helper has no Save to Favourites, and group and favourite actions do nothing', () => {
     const h = flat();
     h.setUpToCommunication();

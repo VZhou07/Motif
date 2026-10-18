@@ -3,7 +3,7 @@ import { BROW, CHEEK, HEAD_WOBBLE, Harness, MOUTH, PUCKER, REST, type Values } f
 import type { MovementChoice } from './types';
 
 describe('guided calibration to communication (simulated numeric person)', () => {
-  it('learns, verifies, approves by gesture, practices, composes and speaks', () => {
+  it('learns, verifies, approves by gesture, composes and speaks', () => {
     const h = new Harness();
     h.calibrate();
     const cycle = h.snap.cycles[0]!;
@@ -20,17 +20,13 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['record-again', 'approve-comfortable', 'approve-effort', 'another-movement']);
     expect(h.snap.mapping).toBeNull();
     h.selectByGesture('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModel?.feature).toBe('browOuterUpLeft');
     expect(h.snap.mapping?.mode).toBe('auto');
     expect(h.snap.cycles[0]!.outcome).toBe('approved');
 
-    h.selectByGesture('phrase:g1:0');
-    expect(h.snap.practice).toEqual({ selections: 1, last: 'Yes' });
-    expect(h.snap.message).toEqual([]);
+    expect(h.snap.message).toEqual([]); // approving adds nothing and speaks nothing
     expect(h.spoken).toEqual([]);
-    h.selectByGesture('finish-practice');
-    expect(h.snap.stage).toBe('communication');
 
     h.selectByGesture('phrase:g2:0');
     expect(h.snap.message).toEqual(['I need water']);
@@ -450,7 +446,7 @@ function addAndApprove(h: Harness, choice: MovementChoice, proposal = 'map:0'): 
   expect(h.snap.stage).toBe('comfort');
   if (proposal === 'map:0') h.selectByGesture('approve-comfortable');
   else { h.selectByGesture('choose-different'); h.selectByGesture(proposal); h.selectByGesture('approve-mapping'); }
-  expect(h.snap.stage).toBe('practice');
+  expect(h.snap.stage).toBe('communication');
 }
 
 /** Brow selects, mouth moves next (step scanning), in communication. */
@@ -458,7 +454,6 @@ function twoGestureStep(): Harness {
   const h = new Harness();
   h.setUpToCommunication();
   addAndApprove(h, OPEN_MOUTH);
-  h.stepTo('finish-practice');
   expect(h.snap.stage).toBe('communication');
   return h;
 }
@@ -490,7 +485,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.approvedModels).toHaveLength(1);
     h.selectByGesture('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
     expect(h.snap.mapping?.mode).toBe('step');
     expect(h.snap.scanMode).toBe('step');
@@ -544,7 +539,6 @@ describe('multiple gestures (R6)', () => {
     h.run(800);
     expect(h.snap.stage).toBe('comfort');
     h.selectByGesture('approve-comfortable');
-    h.stepTo('finish-practice');
     expect(h.snap.stage).toBe('communication');
     const index = h.snap.scan!.index;
     h.run(800);
@@ -609,7 +603,6 @@ describe('multiple gestures (R6)', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS);
     expect(h.snap.mappingLabel).toMatch(/Pucker lips moves back/);
-    h.stepTo('finish-practice');
     const length = h.snap.scan!.targets.length;
     const index = h.snap.scan!.index;
     h.run(600);
@@ -626,10 +619,8 @@ describe('multiple gestures (R6)', () => {
   it('a pause movement toggles; next is ignored while paused; select also resumes', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS);
-    h.stepTo('finish-practice');
     addAndApprove(h, PUFF_CHEEKS);
     expect(h.snap.mappingLabel).toMatch(/Puff cheeks pauses or resumes/);
-    h.stepTo('finish-practice');
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('add-movement');
     h.run(600);
     h.run(600, CHEEK); h.run(600);
@@ -655,7 +646,6 @@ describe('multiple gestures (R6)', () => {
     addAndApprove(h, OPEN_MOUTH, 'map:2');
     expect(h.snap.mapping?.assignments).toEqual({ [h.snap.approvedModels[0]!.id]: 'select' });
     expect(h.snap.scanMode).toBe('auto');
-    h.selectByGesture('finish-practice');
     h.selectByGesture('group:g1');
     h.selectByGesture('phrase:g1:0', MOUTH);
     expect(h.snap.message).toEqual([]);
@@ -687,7 +677,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.mapping).toEqual(before);
     h.selectByGesture('map:1');
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.runtime?.armed).toBe(false);
     const [brow, mouth] = h.snap.approvedModels;
     expect(h.snap.mapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow!.id]: 'next' });
@@ -700,9 +690,12 @@ describe('multiple gestures (R6)', () => {
     h.stepTo('change-controls');
     h.selectByGesture('map:1');
     h.selectByGesture('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
-    expect(h.snap.scan?.targets.map((target) => target.id)).toContain('use-previous');
-    h.stepTo('use-previous', BROW, MOUTH); // now brow moves next and mouth selects
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous'); // moved to Change controls (R20)
+    h.stepTo('change-controls', BROW, MOUTH);
+    const mapIds = h.snap.decisions.map((decision) => decision.id);
+    expect(mapIds.indexOf('use-previous')).toBeGreaterThan(mapIds.lastIndexOf('map:3'));
+    h.selectByGesture('use-previous');
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.pendingMapping?.assignments).toEqual(original?.assignments);
     expect(h.snap.mapping).not.toEqual(original);
@@ -713,9 +706,7 @@ describe('multiple gestures (R6)', () => {
   it('with four movements every communication control is reachable and works', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS);
-    h.stepTo('finish-practice');
     addAndApprove(h, PUFF_CHEEKS);
-    h.stepTo('finish-practice');
     // Every level (R14): each target is reached by Next alone, and the level list is exactly as designed.
     const walk = (expected: string[]) => {
       const ids = h.snap.scan!.targets.map((target) => target.id);
@@ -733,7 +724,7 @@ describe('multiple gestures (R6)', () => {
     walk(['phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'back', 'pause']);
     h.stepTo('back');
     h.stepTo('more');
-    walk(['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'recalibrate', 'back', 'pause']);
+    walk(['clear', 'save-favourite', 'say-again', 'change-controls', 'recalibrate', 'back', 'pause']);
     h.stepTo('back');
     h.stepTo('phrase:g1:2');
     h.stepTo('speak');
@@ -746,9 +737,6 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.scan!.paused).toBe(true);
     h.run(600, BROW); h.run(600);
     expect(h.snap.scan!.paused).toBe(false);
-    h.stepTo('practice');
-    expect(h.snap.stage).toBe('practice');
-    h.stepTo('finish-practice');
     h.stepTo('recalibrate');
     expect(h.snap.confirmingRecalibrate).toBe(true);
     h.stepTo('recalibrate-no');
@@ -761,7 +749,6 @@ describe('multiple gestures (R6)', () => {
   it('with three movements a mapping without next keeps automatic scanning and speed controls', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS, 'map:3'); // brow alone selects
-    h.selectByGesture('finish-practice');
     h.selectByGesture('more');
     const ids = h.snap.scan!.targets.map((target) => target.id);
     expect(ids).toEqual(expect.arrayContaining(['slower', 'faster', 'add-movement', 'change-controls', 'recalibrate', 'pause']));
@@ -863,7 +850,6 @@ describe('multiple gestures (R6)', () => {
     const one = new Harness();
     one.setUpToCommunication();
     addAndApprove(one, OPEN_MOUTH, 'map:2'); // brow alone selects; mouth unmapped
-    one.selectByGesture('finish-practice');
     one.run(600);
     one.run(200, MOUTH);
     expect(one.snap.scan!.latched).toBeNull();

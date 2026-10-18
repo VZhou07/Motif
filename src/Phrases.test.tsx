@@ -119,16 +119,6 @@ describe('communication levels on screen', () => {
     expect(button('Open Needs, 4 phrases')).toBeTruthy();
   });
 
-  it('practice shows groups but no editor or More', () => {
-    const h = new Harness();
-    h.calibrate();
-    h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
-    show(h);
-    expect(button('Open Quick, 3 phrases')).toBeTruthy();
-    expect(screen.queryByText('Edit phrases')).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Helper' })).toBeNull();
-  });
-
   it('the paused editor says changes cannot be kept when this browser blocks storage (R19)', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => null) });
     h.setUpToCommunication();

@@ -21,7 +21,6 @@ function twoStep(): Harness {
   const h = new Harness();
   h.setUpToCommunication();
   add(h, OPEN_MOUTH);
-  h.stepTo('finish-practice');
   return h;
 }
 
@@ -38,7 +37,7 @@ describe('effort and observed use (R8)', () => {
     easy.selectByGesture('approve-comfortable');
     expect(evidenceOf(easy, BROW_LABEL).effort).toBe('easy');
     h.selectByGesture('approve-effort');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(evidenceOf(h, BROW_LABEL).effort).toBe('effort');
     expect(evidenceOf(h, BROW_LABEL).checks).toEqual({ passed: 2, total: 2 });
     expect(evidenceOf(h, BROW_LABEL).everyday.windows).toBe(1);
@@ -47,18 +46,18 @@ describe('effort and observed use (R8)', () => {
   it('counts completed and released holds only while communicating, never tracking loss or setup', () => {
     const h = new Harness();
     h.setUpToCommunication();
-    const before = evidenceOf(h, BROW_LABEL).use; // practice finish-practice hold counts; setup holds do not
-    expect(before).toEqual({ completed: 1, unfinished: 0 });
+    const before = evidenceOf(h, BROW_LABEL).use; // the approving hold and setup holds do not count
+    expect(before).toEqual({ completed: 0, unfinished: 0 });
     h.run(600);
     h.run(150, BROW); // released before the dwell completed
     h.run(600);
-    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 1, unfinished: 1 });
+    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 0, unfinished: 1 });
     h.run(150, BROW);
     for (let i = 0; i < 4; i += 1) h.step(REST, 'missing'); // tracking loss mid-dwell
     h.run(600);
-    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 1, unfinished: 1 });
+    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 0, unfinished: 1 });
     h.selectByGesture('phrase:g1:0'); // two holds: open Quick, then Yes (R14)
-    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 3, unfinished: 1 });
+    expect(evidenceOf(h, BROW_LABEL).use).toEqual({ completed: 2, unfinished: 1 });
   });
 
   it('does not count a hold cancelled by another movement joining', () => {
@@ -94,7 +93,6 @@ describe('recommendations (R8)', () => {
   it('adds a separate recommended proposal when the evidence reorders the movements', () => {
     const h = twoStep();
     add(h, PUCKER_LIPS);
-    h.stepTo('finish-practice');
     h.run(600);
     for (let i = 0; i < 2; i += 1) { h.run(150, MOUTH); h.run(600); } // two unfinished mouth holds
     expect(evidenceOf(h, 'Open mouth').use.unfinished).toBe(2);
@@ -193,7 +191,6 @@ describe('evidence edge cases (R8)', () => {
     const h = new Harness();
     h.setUpToCommunication();
     add(h, OPEN_MOUTH, 'choose-different', 'map:2'); // brow alone selects; mouth unmapped
-    h.selectByGesture('finish-practice');
     const before = evidenceOf(h, 'Open mouth').use.completed;
     h.run(600); h.run(600, MOUTH); h.run(600);
     expect(evidenceOf(h, 'Open mouth').use.completed).toBe(before + 1);

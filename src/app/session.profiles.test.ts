@@ -20,7 +20,6 @@ function savedPersonA() {
   h.selectByGesture('slower');
   h.addMovement(OPEN_MOUTH, perform);
   h.selectByGesture('approve-comfortable');
-  h.stepTo('finish-practice');
   h.click('phrase:g2:0'); // a message that must never be saved
   expect(h.session.saveProfile('Person A')).toEqual({ ok: true });
   return { storage, store, original: h };
@@ -144,7 +143,7 @@ describe('quick continue', () => {
     expect(fresh.snap.stage).toBe('mapping-confirm');
     expect(fresh.snap.approvedModels).toEqual([]);
     fresh.selectByGesture('approve-mapping');
-    expect(fresh.snap.stage).toBe('practice');
+    expect(fresh.snap.stage).toBe('communication');
     expect(fresh.snap.approvedModels).toHaveLength(1);
   });
 
@@ -174,7 +173,7 @@ describe('quick continue', () => {
     expect(h.snap.approvedModels).toEqual([]);
     expect(h.snap.cycles.at(-1)).toMatchObject({ source: 'restored', quick: true, heldOut: [], negative: null, outcome: 'verified' });
     h.selectByGesture('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(2);
     expect(h.snap.cycles.at(-1)!.outcome).toBe('approved');
   });
@@ -183,7 +182,6 @@ describe('quick continue', () => {
     const { storage, original } = savedPersonA();
     const h = quickOn(storage, REST, original.now);
     h.selectByGesture('approve-mapping');
-    h.stepTo('finish-practice');
     for (const item of h.snap.evidence) {
       expect(item.checks).toEqual({ passed: 0, total: 0 });
       expect(item.everyday.windows).toBe(0);
@@ -240,14 +238,13 @@ function twoAndBack(gapMs = 0) {
   h.run(2_000);
   h.addMovement(OPEN_MOUTH, perform);
   h.selectByGesture('approve-comfortable');
-  h.stepTo('finish-practice');
   expect(h.session.returnToStart()).toBe(true);
   return { h, storage, store };
 }
 
 function approveSaved(h: Harness): void {
   h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
-  expect(h.snap.stage).toBe('practice');
+  expect(h.snap.stage).toBe('communication');
 }
 
 function finishRechecks(h: Harness, movement = perform): void {
@@ -295,14 +292,6 @@ describe('back to start from assisted input (R16)', () => {
     h.session.selectTarget('phrase:g1:0');
     expect(h.snap.message).toEqual([]);
   });
-
-  it('is refused during assisted practice', () => {
-    const h = assisted();
-    h.click('practice'); // in More since C1 (R18)
-    expect(h.snap.stage).toBe('practice');
-    expect(h.session.returnToStart()).toBe(false);
-    expect(h.snap.stage).toBe('practice');
-  });
 });
 
 describe('Continue within an hour of the checks (R17)', () => {
@@ -325,7 +314,7 @@ describe('Continue within an hour of the checks (R17)', () => {
     expect(h.snap.cycles.at(-1)?.negative?.passed).toBe(true);
     expect(h.snap.approvedModels).toEqual([]);
     h.selectByGesture('approve-saved', BROW, 60_000, 600, 0);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(lastSetup(store).checks?.policyVersion).toBe(1);
   });
 
@@ -411,7 +400,7 @@ describe('Continue within an hour of the checks (R17)', () => {
     expect(cycle.negative).toMatchObject({ passed: true });
     expect(cycle.movement).toMatch(/1 movement checked within the last hour; not repeated/);
     h.selectByGesture('approve-saved', MOUTH, 60_000, 600, 0);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     const after = lastSetup(store).checks!;
     expect(after.restAt).toBe(before.restAt);
     expect(after.movementAt[browId]).toBe(before.movementAt[browId]);
@@ -545,7 +534,6 @@ describe('a failed restore forgets the check times (R17 B1)', () => {
     h.run(2_000);
     h.addMovement(OPEN_MOUTH, perform);
     h.selectByGesture('approve-comfortable');
-    h.stepTo('finish-practice');
     expect(h.session.returnToStart()).toBe(true);
     blocked = true;
     h.session.restoreProfile(LAST, true);
@@ -588,7 +576,7 @@ describe('restoring a profile (R7)', () => {
     expect(h.session.restoreProfile('Person A')).toBe(true);
     recheck(h);
     h.selectByGesture('approve-saved', MOUTH, 60_000, 600, 0);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual([]);
     expect(h.snap.announcement).toMatch(/Your phrases were replaced by the ones saved with “Person A”\.$/);
   });
@@ -626,7 +614,7 @@ describe('restoring a profile (R7)', () => {
     // "Do not use this profile" is not offered on the comfort screen; it stays on the mapping stage.
 
     h.selectByGesture('approve-saved', MOUTH, 60_000, 600, 0); // any re-checked movement drives setup choices
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.runtime?.armed).toBe(false);
     expect(h.snap.restoring).toBeNull();
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
@@ -637,7 +625,6 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.evidence.map((item) => item.effort)).toEqual(['unknown', 'unknown']); // effort is not saved in v1 profiles
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous');
     h.run(600);
-    h.stepTo('finish-practice');
     h.stepTo('phrase:g1:0');
     expect(h.snap.message).toEqual(['Hello']);
     // Today's rest becomes the approved baseline, so adding a movement later still works.
@@ -796,7 +783,7 @@ describe('restoring a profile (R7)', () => {
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.cycles.at(-1)!.source).toBe('trained');
     h.selectByGesture('approve-comfortable', MOUTH);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual(['Open mouth']);
   });
 
@@ -816,7 +803,6 @@ describe('restoring a profile (R7)', () => {
     recheck(h);
     h.selectByGesture('approve-saved');
     h.run(600);
-    h.stepTo('finish-practice');
     h.stepTo('add-movement');
     expect(h.snap.stage).toBe('choose');
     h.selectByGesture('keep-current');

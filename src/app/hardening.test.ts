@@ -43,7 +43,6 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     b.followPrompts((snap) => snap.stage === 'negative', MOUTH);
     b.run(11_000, HEAD_WOBBLE);
     b.selectByGesture('approve-comfortable', MOUTH);
-    b.selectByGesture('finish-practice', MOUTH);
     b.selectByGesture('add-movement', MOUTH);
     b.session.chooseMovement(PUFF_CHEEKS);
     b.followPrompts((snap) => snap.stage === 'negative', (snap) => perform(snap.capture?.movement ?? null));
@@ -61,7 +60,6 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterA.followPrompts((snap) => snap.stage === 'negative', BROW);
     laterA.run(11_000, HEAD_WOBBLE);
     laterA.selectByGesture('approve-saved');
-    laterA.selectByGesture('finish-practice');
     laterA.run(1_000);
     laterA.run(800, MOUTH); laterA.run(800);
     laterA.run(800, CHEEK); laterA.run(800); // Person B's movements do nothing here
@@ -79,7 +77,6 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     laterB.run(11_000, HEAD_WOBBLE);
     expect(laterB.snap.stage).toBe('comfort');
     laterB.selectByGesture('approve-saved', MOUTH);
-    laterB.stepTo('finish-practice', CHEEK, MOUTH);
     laterB.run(600, BROW); laterB.run(600);
     expect(laterB.snap.message).toEqual([]);
     laterB.stepTo('phrase:g1:1', CHEEK, MOUTH);
@@ -92,7 +89,6 @@ describe('demo: Person A and Person B without code changes (R10)', () => {
     const mouthOnly = laterB.snap.decisions.find((decision) => decision.label.includes('Open mouth selects (automatic scanning)'))!;
     laterB.selectByGesture(mouthOnly.id, MOUTH);
     laterB.selectByGesture('approve-mapping', MOUTH);
-    laterB.selectByGesture('finish-practice', MOUTH);
     expect(laterB.snap.scanMode).toBe('auto');
     laterB.selectByGesture('phrase:g1:0', MOUTH);
     expect(laterB.snap.message).toEqual(['Yes']); // Speak emptied the message
