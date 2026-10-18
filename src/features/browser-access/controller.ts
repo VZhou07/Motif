@@ -158,8 +158,10 @@ export class BrowserController {
   // ── Requests from the session ───────────────────────────────────────────
 
   private readonly onRequest = (request: BrowserRequest): void => {
-    if (request === 'browse') { void this.browse(); return; }
-    void this.command(request);
+    // Never leave a rejection unhandled: any unexpected failure ends control with a plain reason.
+    const failed = () => { this.browsePending = false; this.drop('execution-failed'); };
+    if (request === 'browse') { void this.browse().catch(failed); return; }
+    void this.command(request).catch(failed);
   };
 
   private async browse(): Promise<void> {

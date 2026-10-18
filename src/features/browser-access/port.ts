@@ -36,7 +36,9 @@ const executed = (id: string): BrowserCommandResult => ({ version: 1, id, status
  * Panel-side BrowserCommandPort. Validates everything before anything is sent, allows one command in flight,
  * records ids before acting (so a failed command is never replayed) and never queues.
  */
-export function createBrowserCommandPort(host: PortHost, transport: PortTransport, options: { panelId?: string } = {}): BrowserPort {
+export function createBrowserCommandPort(host: PortHost, rawTransport: PortTransport, options: { panelId?: string } = {}): BrowserPort {
+  // chrome.runtime.sendMessage can throw synchronously ("Extension context invalidated."): always turn that into a rejected promise.
+  const transport: PortTransport = { send: (message) => { try { return Promise.resolve(rawTransport.send(message)); } catch (error) { return Promise.reject(error); } } };
   const panelId = options.panelId ?? crypto.randomUUID();
   const seen: string[] = [];
   let binding: PortBinding | null = null;
