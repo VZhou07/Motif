@@ -188,3 +188,4 @@ Design: reasoning.md R20. Baseline 1126 tests. QA owns `src/app/ux-nopractice.ac
 | P7 | TEST | The control with id `speak` is labelled "Play" in the message bar, scan target, announcements, hints and accessible names, and no visible "Speak" button label remains; behaviour is unchanged (message moves to Last spoken, speech port called, empty message announces nothing to play). "Last spoken" and "Say it again" text unchanged. |
 | P8 | TEST | tsc, full vitest and build pass; edits to existing tests are limited to practice removal and the Play label, each listed. |
 | PH | HUMAN | With a real camera: approving goes straight to the board and it feels clear that Play speaks aloud. |
+| P9 | TEST | No user-visible text anywhere (buttons, labels, announcements, refusals, hints, Helper copy) contains "practice" except the movement-recording stage's own wording (training attempts); the first-setup approve button reads "Approve and start". |

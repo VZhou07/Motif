@@ -1219,3 +1219,9 @@ User: "remove the practice page. instead of Speak, can the button say Play inste
 
 ### Tests
 Rows P1-P8 in UX_ACCEPTANCE.md. QA owns `src/app/ux-nopractice.acceptance.test.ts`.
+
+### Revision 2 (review of revision 1: APPROVED with notes; notes adopted)
+- Remove every remaining practice reference the review listed: `Stage` (types.ts), `isRoutedStage`, `levelContext` stage/decisions, the fallback and `activate` branches, `snapshot.practice`, the Helper `practice` control (navigation.ts and HelperPanel), the practice list and `effectiveLevel` branch, `case 'practice'` in App.tsx, and the practice text in CommunicationView, CameraPanel and ScanBoard.
+- Visible wording: the decision label `approve-comfortable` becomes "Approve and start" (id unchanged); announcements and refusals that mention practice or "Practice first" are reworded; the approval announcement adds "Change controls can bring back your previous controls." when a previous mapping exists. New row P9: no user-visible "practice" text remains outside the movement-recording stage.
+- `use-previous` gate: `!candidate`, not restoring, a valid `previousMapping` for `approvedModels`; order after the proposal cards, before `reject`/`reject-profile`.
+- **Review verdict:** reviewer ae8ac905: R20 revision 1 APPROVED with notes; adopted here.
