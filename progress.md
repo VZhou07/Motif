@@ -58,6 +58,12 @@ R15 local code commits (in order): `8f2fde6 Fix gesture conflicts`, `7db6bd2 Exp
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Latest task — hide phrase groups and Favourites (R19)
+
+- User: the merged board felt odd (group tiles "Favourites (empty)", "Open Quick, 3 phrases"); asked to hide the new things. Session option `phraseGroups` (default false in the app via `useMotif`; test support passes true). Design: reasoning.md R19 revisions 1-2 APPROVED; criteria F1-F6.
+- State: **software verified; human acceptance pending** — commits 82288f5, fe413d7 plus QA tests; vitest 74 files/1126, tsc clean, build OK. Favourites/groups code and data untouched. To re-enable: change the default in `src/app/useMotif.ts`. Not pushed.
+- Offered next (awaiting user go-ahead): hide the camera panel in assisted mode, drop "N phrases" count, first-time hint line, larger hint text; product choices: caregiver link placement, Speak highlighted on an empty message.
+
 ## Current task — merge origin/main into ux-simplify (R18)
 
 - User ran `git pull` and got divergent branches; chose "Combine both" (main's phrase groups/Favourites/caregiver + my message bar/Helper/confirmations). Base `ux-simplify` 9dade52; `origin/main` 24e9c6b (119 commits, 857 tests). First merge attempt aborted (14 conflicting files); nothing lost.
