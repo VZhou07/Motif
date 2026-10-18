@@ -27,7 +27,7 @@ Source of the hook: `docs/workstreams/participant-requests/integration.md` (step
 5. Helper (pointer) clicks on the request panel call new `session.selectRequest(id)`: refused unless stage is communication, not paused and `id` is a current request target; opens the Ask level when needed, then activates. This mirrors the existing `openGroup` helper shortcut (and, like it, prefixes "Not saved." when it leaves the confirm level); gesture/Space input never use it.
 6. `CommunicationView` never renders `request:*` targets (filters them out of tiles/toolbar). It mounts `ParticipantRequestsPanel` (live labels, status cards, retry/cancel) with `snapshot`, `onActivate={session.selectRequest}`, `disabled={paused}`; the `ask` tile renders like a group tile. In the Ask level the panel renders directly under the level heading (where the highlight is); elsewhere below the composer. Hidden in Practice.
 7. Pairing: `WelcomeView` gets a "Caregiver requests" `<details>` card mounting `ParticipantPairing`; also reachable from the communication screen's helper area. Pairing never arms gestures or changes calibration.
-8. Root disposes in order `controller.dispose()` then the shared client is left to the page (it is shared with the caregiver route).
+8. The controller lives as long as the page, like the participant session that holds it, so Root never disposes it (w1_testing N3: recorded deviation, harmless). The shared client is left to the page (it is shared with the caregiver route).
 
 ## Failure modes and tests (Vitest on the real `MotifSession`, controller over the existing care test transport)
 
