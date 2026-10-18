@@ -1379,12 +1379,12 @@ export class MotifSession {
 
   /** Opens a group tile; an empty group only announces, so the list the user has learned never shifts. */
   private openLevel(groupId: string, nowMs: number): void {
-    if (!this.phraseGroups) return;
+    if (!this.phraseGroups && groupId !== FAVOURITES_ID) return;
     const group = this.vocabulary.groups.find((entry) => entry.id === groupId);
     if (!group) return;
     if (!group.phrases.length) {
       this.idleWraps = 0;
-      this.announce(group.id === 'favourites' ? 'No favourites yet. Use More, then Save message to Favourites.' : `${group.name} has no phrases yet.`);
+      this.announce(group.id === 'favourites' ? 'No favourites yet. Use Helper, then Save message to Favourites.' : `${group.name} has no phrases yet.`);
       return;
     }
     this.setLevel({ group: group.id }, nowMs);
@@ -1396,7 +1396,7 @@ export class MotifSession {
    * A gesture dwell in progress is cancelled with no action. Gesture and Space input never use this.
    */
   openGroup(id: string | 'top'): void {
-    if (!this.phraseGroups) return;
+    if (!this.phraseGroups && id !== 'top' && id !== FAVOURITES_ID) return;
     const scanner = this.scanner;
     if (!scanner || !this.isRoutedStage() || scanner.snapshot.paused) return;
     const nowMs = this.clock();
@@ -1512,7 +1512,7 @@ export class MotifSession {
       case 'say-again': this.sayAgain(); break;
       case 'save-favourite': this.askToSaveFavourite(nowMs); break;
       case 'confirm-favourite': this.confirmFavourite(nowMs); break;
-      case 'cancel-favourite': if (!this.phraseGroups) break; this.setLevel('top', nowMs); this.announce('Not saved.'); break;
+      case 'cancel-favourite': this.setLevel('top', nowMs); this.announce('Not saved.'); break;
       case 'clear':
         if (!this.message.length) { this.announce('Nothing to clear.'); break; }
         this.setLevel({ clear: true }, nowMs);
@@ -1580,7 +1580,6 @@ export class MotifSession {
 
   /** Checks first, so the person is never asked to confirm something that cannot be saved. */
   private askToSaveFavourite(nowMs: number): void {
-    if (!this.phraseGroups) return;
     if (!this.message.length) { this.announce('Nothing to save yet. Add a phrase first.'); return; }
     const text = this.message.join('. ');
     const problem = addProblem(this.vocabulary, FAVOURITES_ID, text);
@@ -1591,7 +1590,6 @@ export class MotifSession {
 
   /** Re-validated on confirm; a rejection changes nothing and nothing is ever evicted. Storage waits for profile Save. */
   private confirmFavourite(nowMs: number): void {
-    if (!this.phraseGroups) return;
     if (!isConfirmLevel(this.level)) return;
     const result = addFavourite(this.vocabulary, this.level.confirm);
     if (result.ok) this.vocabulary = result.value;

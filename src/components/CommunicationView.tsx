@@ -90,7 +90,7 @@ export function CommunicationView({ snapshot, session }: ViewProps) {
           ? <HelperPanel snapshot={snapshot} session={session} />
           : (
             <>
-              {snapshot.phraseGroups && <h2 className="level-heading">{where}</h2>}
+              {(snapshot.phraseGroups || level?.kind === 'group') && <h2 className="level-heading">{where}</h2>}
               <div className="phrase-grid" role="group" aria-label={level?.kind === 'group' && level.group ? `${level.group.name} phrases` : snapshot.phraseGroups ? 'Phrase groups' : 'Phrases'}>
                 {tiles.map((target, index) => (
                   <ScanButton key={target.id} id={target.id} snapshot={snapshot} onActivate={activate} className="phrase-tile" disabled={paused || confirmingClear}

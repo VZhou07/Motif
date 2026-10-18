@@ -25,7 +25,7 @@ export const CONTROL_LABELS: Record<string, string> = {
   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
   undo: 'Undo', 'say-again': 'Say it again', 'save-favourite': 'Save message to Favourites',
-  'cancel-favourite': 'Cancel, do not save', more: 'Helper', back: 'Back',
+  'cancel-favourite': 'Cancel, do not save', favourites: 'Favourites', more: 'Helper', back: 'Back',
   'clear-no': 'Keep it', 'clear-yes': 'Yes, clear it', 'recalibrate-no': 'Keep current setup', 'recalibrate-yes': 'Start recalibration',
 };
 
@@ -58,7 +58,7 @@ const withGroups = (context: LevelContext) => context.groups !== false;
 
 function moreControls(context: LevelContext): string[] {
   const speed = context.timed ? ['slower', 'faster'] : [];
-  const save = withGroups(context) ? ['save-favourite'] : [];
+  const save = ['save-favourite'];
   if (context.inputMode === 'assisted') {
     return ['clear', ...save, 'say-again', ...speed, context.hasApproved ? 'use-gesture' : 'setup-gesture'];
   }
@@ -72,7 +72,7 @@ function moreControls(context: LevelContext): string[] {
  */
 export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelContext): ScanTarget[] {
   const grouped = withGroups(context);
-  if (isGroupLevel(level) && grouped) {
+  if (isGroupLevel(level) && (grouped || level.group === FAVOURITES_ID)) {
     const group = vocabulary.groups.find((entry) => entry.id === level.group);
     if (group && group.phrases.length) {
       return [
@@ -86,16 +86,18 @@ export function buildLevel(level: Level, vocabulary: Vocabulary, context: LevelC
     return ['clear-no', 'clear-yes', 'pause'].map(control);
   } else if (isRecalibrateLevel(level)) {
     return ['recalibrate-no', 'recalibrate-yes', 'pause'].map(control);
-  } else if (isConfirmLevel(level) && grouped) {
+  } else if (isConfirmLevel(level)) {
     return [{ id: 'confirm-favourite', label: `Save “${level.confirm}” to Favourites`, kind: 'control' }, control('cancel-favourite'), control('pause')];
   }
   const tiles = grouped ? groupTargets(vocabulary) : flatTargets(vocabulary);
-  return [control('speak'), control('undo'), ...tiles, control('pause'), nav('more')];
+  // Flat board: Favourites is the one group kept, as a button beside Helper.
+  const favourites: ScanTarget[] = grouped ? [] : [{ id: `group:${FAVOURITES_ID}`, label: CONTROL_LABELS.favourites!, kind: 'nav' }];
+  return [control('speak'), control('undo'), ...tiles, control('pause'), ...favourites, nav('more')];
 }
 
 /** The level `buildLevel` actually produced, so the session never keeps a level that fell back to top. */
 export function effectiveLevel(level: Level, vocabulary: Vocabulary, groups = true): Level {
-  if (!groups && (isGroupLevel(level) || isConfirmLevel(level))) return 'top';
+  if (!groups && isGroupLevel(level) && level.group !== FAVOURITES_ID) return 'top';
   if (isGroupLevel(level)) return vocabulary.groups.some((group) => group.id === level.group && group.phrases.length) ? level : 'top';
   return level;
 }

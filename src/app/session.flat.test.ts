@@ -13,24 +13,45 @@ describe('flat board', () => {
   it('lists Speak, Undo, the six phrases, Pause and the Helper, the same for any message', () => {
     const h = flat();
     h.setUpToCommunication();
-    expect(ids(h)).toEqual(['speak', 'undo', ...FLAT_PHRASES, 'pause', 'more']);
+    expect(ids(h)).toEqual(['speak', 'undo', ...FLAT_PHRASES, 'pause', 'group:favourites', 'more']);
     h.selectByGesture('phrase:g1:0');
     expect(h.snap.message).toEqual(['Yes']);
-    expect(ids(h)).toEqual(['speak', 'undo', ...FLAT_PHRASES, 'pause', 'more']);
+    expect(ids(h)).toEqual(['speak', 'undo', ...FLAT_PHRASES, 'pause', 'group:favourites', 'more']);
     expect(h.highlightedId()).toBe('speak'); // the highlight returns to Speak after a phrase
     expect(h.snap.phraseGroups).toBe(false);
   });
 
-  it('the Helper has no Save to Favourites, and group and favourite actions do nothing', () => {
+  it('Favourites button: save a message in the Helper, open it beside Helper, pick it, Back returns', () => {
+    const h = flat();
+    h.setUpToCommunication();
+    h.selectByGesture('group:favourites');
+    expect(h.snap.level?.kind).toBe('top'); // empty: announces only
+    h.selectByGesture('phrase:g1:0');
+    h.selectByGesture('more');
+    h.selectByGesture('save-favourite');
+    expect(h.snap.level?.kind).toBe('confirm');
+    h.selectByGesture('confirm-favourite');
+    expect(h.snap.vocabulary.groups[0]!.phrases).toEqual(['Yes']);
+    h.selectByGesture('speak');
+    h.selectByGesture('group:favourites');
+    expect(h.snap.level?.kind).toBe('group');
+    expect(ids(h)).toEqual(['phrase:favourites:0', 'back', 'pause']);
+    h.selectByGesture('phrase:favourites:0');
+    expect(h.snap.message).toEqual(['Yes']);
+    expect(h.snap.level?.kind).toBe('top');
+    h.selectByGesture('group:favourites');
+    h.selectByGesture('back');
+    expect(h.snap.level?.kind).toBe('top');
+  });
+
+  it('the Helper has Save to Favourites, and group actions do nothing', () => {
     const h = flat();
     h.setUpToCommunication();
     h.selectByGesture('more');
-    expect(ids(h)).not.toContain('save-favourite');
+    expect(ids(h)).toContain('save-favourite');
     h.session.selectTarget('back');
     h.selectByGesture('phrase:g1:0');
     h.session.openGroup('g1');
-    expect(h.snap.level?.kind).toBe('top');
-    h.session.selectTarget('save-favourite');
     expect(h.snap.level?.kind).toBe('top');
   });
 

@@ -16,7 +16,7 @@ function mount(h: Harness) {
 }
 function flat(): Harness { const h = new Harness({ phraseGroups: false }); h.setUpToCommunication(); return h; }
 const phraseButtons = () => screen.queryAllByRole('button', { name: /^Add “.+” to message$/ });
-const BANNED = /Favourites|Open Quick|Open Needs|\(empty\)|Jump to a phrase group|Save message to Favourites/;
+const BANNED = /Open Quick|Open Needs|\(empty\)|Jump to a phrase group/;
 
 describe('F5 flat board on screen', () => {
   it('F5 the six phrase tiles show directly, numbered, in order, with no group, Favourites or empty text', () => {
@@ -70,16 +70,15 @@ describe('F5 flat board on screen', () => {
     mount(h);
     fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     expect(document.body.textContent).not.toMatch(BANNED);
-    expect(screen.queryByRole('button', { name: /Save message to Favourites/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Save message to Favourites/ })).toBeTruthy();
     const note = screen.getByText(/Your setup is saved on this device automatically/);
     expect(note.textContent).toMatch(/phrases/);
-    expect(note.textContent).not.toMatch(/favourite|phrase groups/i);
+    expect(note.textContent).not.toMatch(/phrase groups/i);
     fireEvent.click(within(screen.getByRole('group', { name: 'Scanning and message' })).getByRole('button', { name: /Pause/ }));
     fireEvent.click(screen.getAllByText(/^Edit phrases/)[0]!);
     expect(screen.getByRole('textbox', { name: 'New phrase for Quick' })).toBeTruthy();
     expect(screen.getByRole('textbox', { name: 'New phrase for Needs' })).toBeTruthy();
     expect(screen.queryByRole('textbox', { name: /Favourites/ })).toBeNull();
-    expect(screen.queryByText(/Favourites/)).toBeNull();
   });
 
   it('F5 an edit made in the Helper shows as a new tile after Resume', () => {

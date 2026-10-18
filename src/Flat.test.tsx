@@ -16,7 +16,7 @@ describe('flat board', () => {
     expect(tiles()).toHaveLength(6);
     expect(tiles()[0]!.textContent).toMatch(/^01/);
     const text = document.querySelector('main')!.textContent ?? '';
-    expect(text).not.toMatch(/Favourites|Open Quick|Open Needs|\(empty\)|Jump to a phrase group/);
+    expect(text).not.toMatch(/Open Quick|Open Needs|\(empty\)|Jump to a phrase group/);
     expect(screen.getByRole('button', { name: 'Add “Yes” to message' })).toBeTruthy();
   });
 
@@ -29,11 +29,11 @@ describe('flat board', () => {
     expect(tiles()).toHaveLength(7);
   });
 
-  it('the Helper hides group jump, Save to Favourites, the Favourites editor and the favourites saving copy', () => {
+  it('the Helper hides group jump and the Favourites editor, and offers Save to Favourites', () => {
     show(flat());
     fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     const text = document.querySelector('main')!.textContent ?? '';
-    expect(text).not.toMatch(/Jump to a phrase group|Save message to Favourites|Favourites/);
+    expect(text).not.toMatch(/Jump to a phrase group/);
     expect(screen.queryByRole('textbox', { name: 'New phrase for Favourites' })).toBeNull();
     expect(screen.getByText(/movement settings, controls, phrases, scan speed/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Pause' })); // phrases are edited while paused

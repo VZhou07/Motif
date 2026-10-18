@@ -5,8 +5,8 @@ import { BROW, Harness, REST } from './session.test-support';
 // R19: phrase groups and Favourites are hidden by default (`phraseGroups` false). F1-F4 (session level). See UX_ACCEPTANCE.md.
 
 const FLAT = ['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2'];
-const TOP = ['speak', 'undo', ...FLAT, 'pause', 'more'];
-const MORE_FLAT = ['clear', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
+const TOP = ['speak', 'undo', ...FLAT, 'pause', 'group:favourites', 'more'];
+const MORE_FLAT = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
 
 type Options = { profiles?: ReturnType<typeof createLocalProfileStore> };
 const flat = (options: Options = {}) => new Harness({ ...options, phraseGroups: false });
@@ -33,7 +33,7 @@ describe('F1 flat board', () => {
   it('F1 the top list is speak, undo, the six phrases, pause, more: no group target, whatever the message', () => {
     const h = ready(flat());
     expect(ids(h)).toEqual(TOP);
-    expect(ids(h).some((id) => id.startsWith('group:'))).toBe(false);
+    expect(ids(h).filter((id) => id.startsWith('group:'))).toEqual(['group:favourites']);
     h.selectByGesture('phrase:g1:0');
     expect(ids(h)).toEqual(TOP);
     h.selectByGesture('speak');
@@ -48,7 +48,7 @@ describe('F1 flat board', () => {
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual(['Thank you']);
     ready(h);
     expect(ids(h)).toEqual(TOP);
-    expect(ids(h).some((id) => id.includes('favourites'))).toBe(false);
+    expect(ids(h).some((id) => id.startsWith('phrase:favourites'))).toBe(false);
     raw(h, 'phrase:favourites:0');
     expect(h.snap.message).toEqual([]);
   });
@@ -60,7 +60,7 @@ describe('F1 flat board', () => {
     expect(h.session.editVocabulary({ kind: 'add-phrase', group: 'favourites', text: 'Hidden one' }).ok).toBe(true);
     expect(h.session.editVocabulary({ kind: 'add-phrase', group: 'g2', text: 'Turn me over' }).ok).toBe(true);
     h.session.resume();
-    expect(ids(h)).toEqual(['speak', 'undo', 'phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g1:3', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g2:3', 'pause', 'more']);
+    expect(ids(h)).toEqual(['speak', 'undo', 'phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g1:3', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g2:3', 'pause', 'group:favourites', 'more']);
     expect(ids(h)).not.toContain('phrase:favourites:0');
   });
 
@@ -122,36 +122,34 @@ describe('F2 flat behaviour', () => {
     expect(h.snap.scan!.paused).toBe(false);
   });
 
-  it('F2 the Helper list has no save-favourite', () => {
+  it('F2 the Helper list has save-favourite', () => {
     const h = ready(flat());
     raw(h, 'more');
     expect(ids(h)).toEqual(MORE_FLAT);
-    expect(ids(h)).not.toContain('save-favourite');
+    expect(ids(h)).toContain('save-favourite');
     const assisted = flat();
     assisted.session.useAssisted();
     assisted.switchTo('more');
-    expect(ids(assisted)).not.toContain('save-favourite');
+    expect(ids(assisted)).toContain('save-favourite');
   });
 
-  it('F2 group and favourite actions do nothing, however they are reached', () => {
+  it('F2 group actions do nothing, however they are reached', () => {
     const storage = storageWithFavourite();
     const h = ready(flat({ profiles: createLocalProfileStore(() => storage) }));
     say(h, 'phrase:g1:0');
     const before = JSON.stringify({ level: h.snap.level, ids: ids(h), message: h.snap.message, vocabulary: h.snap.vocabulary });
     h.session.openGroup('g1');
-    h.session.openGroup('favourites');
-    raw(h, 'group:g1', 'group:favourites', 'save-favourite', 'confirm-favourite', 'cancel-favourite');
-    internals(h).askToSaveFavourite(h.now);
+    raw(h, 'group:g1', 'confirm-favourite');
     internals(h).confirmFavourite(h.now);
     h.session.refresh();
     expect(JSON.stringify({ level: h.snap.level, ids: ids(h), message: h.snap.message, vocabulary: h.snap.vocabulary })).toBe(before);
     raw(h, 'more', 'save-favourite');
-    expect(kind(h)).toBe('more');
+    expect(kind(h)).toBe('confirm');
     expect(h.snap.vocabulary.groups[0]!.phrases).toEqual(['Thank you']);
   });
 
   it('F2 a stale group or confirm level falls back to the main list, also after Pause and Resume', () => {
-    for (const stale of [{ group: 'g1' }, { confirm: 'Yes' }, { group: 'favourites' }]) {
+    for (const stale of [{ group: 'g1' }]) {
       const h = ready(flat());
       say(h, 'phrase:g1:0');
       internals(h).level = stale;
@@ -211,7 +209,7 @@ describe('F3 Favourites survive', () => {
     expect(h.session.editVocabulary({ kind: 'remove-phrase', group: 'g1', index: 1 }).ok).toBe(true);
     h.session.resume();
     expect(JSON.stringify(storedVocabulary(storage).groups[0])).toBe(before);
-    expect(ids(h)).toEqual(['speak', 'undo', 'phrase:g1:0', 'phrase:g1:1', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g2:3', 'pause', 'more']);
+    expect(ids(h)).toEqual(['speak', 'undo', 'phrase:g1:0', 'phrase:g1:1', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g2:3', 'pause', 'group:favourites', 'more']);
     expect(h.snap.vocabulary.groups[1]!.phrases[0]).toBe('Yes please');
   });
 });
