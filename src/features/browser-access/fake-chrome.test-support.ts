@@ -28,6 +28,8 @@ export class FakeChrome implements ChromeLike {
   /** Called after every awaited fake so a test can advance a fake clock (slowness). */
   onAwait: () => void = () => {};
   panelBehavior: unknown[] = [];
+  /** Lets a test change tab state when goBack runs (for example, landing on another site). */
+  onBack: (tabId: number) => void = () => {};
 
   readonly messageEvent = new FakeEvent<MessageListener>();
   readonly onActivated = new FakeEvent<(info: { tabId: number; windowId: number }) => void>();
@@ -88,6 +90,7 @@ export class FakeChrome implements ChromeLike {
         await this.tick();
         this.goBacks.push(tabId);
         if (this.backError) throw this.backError;
+        this.onBack(tabId);
       },
       onActivated: this.onActivated,
       onUpdated: this.onUpdated,
