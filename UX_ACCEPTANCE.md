@@ -156,3 +156,16 @@ Design: reasoning.md R18. Baselines: ux-simplify 638 tests, main 857. QA owns `s
 
 ### Merge result (round 1 of 3)
 Software verified: M1-M7, M9, M10, M11 PASS; M12 PASS (assisted mode on `localhost:5173`, no account or Supabase gate; the `127.0.0.1` origin held an older saved setup). Coordinator rerun: vitest 70 files/1091 PASS, tsc clean, build OK. New: 33 session + 9 UI merge tests; four earlier acceptance files updated to the merged contract without weakening. QA found one real failure (a verification reason still said "armed the recognizer"); reworded (`a9eb7ae`). Mutations caught: clear auto-return discarding the message, `clear-yes` before `clear-no`, `repeatLast` while paused, a dynamic top list, recalibrate flags before the camera check, "Not saved" wording on clear. M10: `src/care`, `src/Root.tsx`, `src/features` identical to origin/main; the merge adds only `.env.example` with empty values; no secrets committed. Known trade-off: Speak is first and empties the message into "Last spoken". **Human acceptance pending:** MH (also UH, VH, CH).
+
+# Hide phrase groups and Favourites (R19)
+
+Design: reasoning.md R19. Baseline 1091 tests. QA owns `src/app/ux-flat.acceptance.test.ts`.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| F1 | TEST | Default app session (`phraseGroups` false): top list = `speak`, `undo`, the Quick + Needs phrases (6, ids `phrase:<group>:<n>`), `pause`, `more`; no `group:*` target; identical for an empty/non-empty message. Practice list = `finish-practice`, the flat phrases, `pause`. |
+| F2 | TEST | Flat mode: selecting a phrase adds it and the highlight returns to `speak`; Speak, Undo, say-again, Clear/Recalibrate confirmations, Pause and the Helper levels behave as in the merge tests; the `more` list has no `save-favourite`; `openGroup`/`askToSaveFavourite` do nothing; a stale `{group}` or `{confirm}` level falls back to top. |
+| F3 | TEST | Favourites survive: a profile with saved favourites loads, a flat-mode autosave keeps them byte-for-byte in the stored vocabulary, and with `phraseGroups` true they reappear. Editing phrases in the Helper still works and edits any group. |
+| F4 | TEST | With `phraseGroups` true (test support default) all of main's existing group/Favourites tests pass unchanged. |
+| F5 | TEST | UI flat mode: the phrase tiles show directly (6 tiles, numbered), there are no "Favourites", "Open Quick"/"Open Needs" or "(empty)" texts, no "Jump to a phrase group", no "Save message to Favourites". Grouped mode (`phraseGroups` true): group tile visible text is the group name with the count as a second line, never "Open X, N phrases"/"(empty)" as visible text, accessible name still describes it. |
+| F6 | TEST/CHROME | tsc, full vitest and build pass; assisted mode at 1470×762, 1280×720, 390×844 shows the bar, Speak, Undo, 6 phrase tiles, Pause and Helper without scrolling. |

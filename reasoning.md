@@ -1168,3 +1168,24 @@ R18 mapping note: on ethan-features, comments saying "R14" in `vocabulary.ts`, `
 | R19 revision 1 | r19_review | B1 a fresh setup after reload / failed Continue / back to start overwrote saved favourites despite "kept on this device"; B2 draft still described main's removed Save panel and did not list C1 assertions being reversed. Notes n1–n7. (Two earlier runs were cut off by session restarts.) | BLOCKING |
 | R19 implementation | r19_testing (testing review) | tsc, vitest 599, build, browser 83/83 PASS; 23 mutants, 3 survived. B1 quick Continue restoring saved phrases untested (M11) → test added, now caught. M23 → unreadable-entry test added. M16 equivalent (Delete only offered with nothing approved). Non-blocking 1–4 and 6 fixed (editor copy guarded by storage, ux-record filter narrowed to `.phrase-editor`, corrupt-payload text tightened, notes above, ACCEPTANCE 7a.1). | BLOCKING → fixed |
 | R19 revision 2 | r19_review (re-check) | B1/B2 resolved; n1–n7 adopted. Conditions folded in before implementation: stale revision 1 lines removed; Delete resets the in-memory vocabulary. Non-blocking: seeding uses first readable entry, defaults on unreadable/blocked storage (adopted). | APPROVED (conditions applied) |
+
+
+## R19 — Hide phrase groups and Favourites for now (revision 1)
+User, after seeing the merged board: "not intuitive … adding the new things to the comms board feels odd. can you hide them for now?" Observed in assisted mode: the top list shows tiles "Favourites (empty)", "Open Quick, 3 phrases", "Open Needs, 3 phrases" (screen-reader labels used as visible text) and half the screen is empty. Base `1406723` (1091 tests).
+
+### Design
+- New session option `phraseGroups?: boolean` (default `false` in the app; `Harness`/test support passes `true` so all of main's group, Favourites and navigation tests run unchanged). `LevelContext.groups: boolean` carries it into `buildLevel`. Turning the feature back on later is changing the default.
+- Flat mode (`groups` false) in `navigation.ts`:
+  - top list = `speak`, `undo`, every phrase of every group EXCEPT the Favourites group in vocabulary order (ids unchanged: `phrase:<group>:<n>`), `pause`, `more`. For the default vocabulary that is Quick then Needs = 6 phrases. Stable list: it never depends on the message.
+  - group levels, the favourites confirm level and `save-favourite` are unreachable: `buildLevel` for a group/confirm level falls back to top; `effectiveLevel` returns top; `openGroup`, `openLevel`, `askToSaveFavourite`, `confirmFavourite` do nothing. `more` level drops `save-favourite`. Practice list = `finish-practice`, the flat phrases, `pause`, decisions.
+  - Saved Favourites are never deleted or rewritten by hiding: the vocabulary, profile persistence and the phrase editor are unchanged (Edit phrases stays in the Helper and still edits all groups).
+- UI (`CommunicationView`, `HelperPanel`): in flat mode render the phrase tiles directly (3-column grid like the approved mockup, numbered tiles, no level heading, no group tiles), and hide the Helper panel's "Jump to a phrase group" section and "Save message to Favourites" button. Visible tile text for any group tile in grouped mode becomes the group name with the count as a quiet second line (e.g. "Quick" / "3 phrases"), and the empty Favourites tile is not shown as "(empty)" — the accessible name keeps the long form. (The grouped-mode text fix applies only when the feature is turned on.)
+- Not changed: the caregiver dashboard header link, Supabase code, setup/approval flows.
+
+### Failure modes
+- Hidden Favourites must not lose data: test that a profile with favourites survives a flat-mode save and reappears untouched when groups are on.
+- A level left over from grouped mode (`{group}`/`{confirm}`) must fall back to top without error.
+- More than 6 flat phrases (after editing): the grid grows; no cap change.
+
+### Tests
+Rows F1-F6 in UX_ACCEPTANCE.md. QA owns `src/app/ux-flat.acceptance.test.ts`.
