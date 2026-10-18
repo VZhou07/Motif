@@ -12,7 +12,7 @@ const perform = (label: string | null): Values => (label === 'Open mouth' ? MOUT
 const PH = ['phrase:g1:0', 'phrase:g1:1', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g1:2'];
 const GROUPS = ['group:favourites', 'group:g1', 'group:g2'];
 const TOP = ['speak', 'undo', ...GROUPS, 'pause', 'more'];
-const MORE_GESTURE = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
+const MORE_GESTURE = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
 
 type Snap = Harness['snap'] & { helperOpen: boolean; confirmingClear: boolean; confirmingRecalibrate: boolean; movementSeen: boolean };
 const snap = (h: Harness) => h.snap as Snap;
@@ -35,7 +35,6 @@ function ready2(): Harness {
   h.selectByGesture('choose-different');
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
-  h.stepTo('finish-practice');
   expect(h.snap.stage).toBe('communication');
   return h;
 }
@@ -73,7 +72,7 @@ describe('C1 stable lists', () => {
 });
 
 describe('C2 selections to speak, highlight resets', () => {
-  it('C2 "Please help me" is spoken in 3 gesture selections (group, phrase, Speak) and the highlight returns to Speak', () => {
+  it('C2 "Please help me" is spoken in 3 gesture selections (group, phrase, Play) and the highlight returns to Play', () => {
     const h = ready();
     let selections = 0;
     h.selectByGesture('group:g2'); selections += 1;
@@ -87,7 +86,7 @@ describe('C2 selections to speak, highlight resets', () => {
     expect(h.highlightedId()).toBe('speak');
   });
 
-  it('C2 a five-phrase message is spoken in 11 selections (a group and a phrase each, then Speak)', () => {
+  it('C2 a five-phrase message is spoken in 11 selections (a group and a phrase each, then Play)', () => {
     const h = ready();
     let selections = 0;
     for (const id of PH.slice(0, 5)) {
@@ -225,7 +224,7 @@ describe('C5 Clear confirmation', () => {
 });
 
 describe('C6 Helper level', () => {
-  it('C6 gesture Helper: clear, save-favourite, say-again, slower, faster, practice, change-controls, add-movement, recalibrate, back, pause', () => {
+  it('C6 gesture Helper: clear, save-favourite, say-again, slower, faster, change-controls, add-movement, recalibrate, back, pause', () => {
     const h = ready();
     say(h, PH[0], 'more');
     expect(snap(h).helperOpen).toBe(true);
@@ -245,14 +244,14 @@ describe('C6 Helper level', () => {
     expect(h.snap.scanMode).toBe('step');
     say(h, 'more');
     const list = ids(h);
-    expect(list).toEqual(['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']);
+    expect(list).toEqual(['clear', 'save-favourite', 'say-again', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']);
     expect(list).not.toContain('tiring');
   });
 
   it('C6 the assisted Helper offers a movement setup choice instead of the gesture controls', () => {
     const h = assisted();
     h.switchTo('more');
-    expect(ids(h)).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'setup-gesture', 'back', 'pause']);
+    expect(ids(h)).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'setup-gesture', 'back', 'pause']);
   });
 
   it('C6 opening and closing the Helper changes no setting, and Close returns to the main list', () => {
@@ -276,7 +275,7 @@ describe('C6 Helper level', () => {
 });
 
 describe('C7 ids need their level', () => {
-  const levelOnly = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back',
+  const levelOnly = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back',
     'clear-yes', 'clear-no', 'recalibrate-yes', 'recalibrate-no', 'confirm-favourite', 'cancel-favourite', 'use-gesture', 'setup-gesture'];
 
   it('C7 a Helper id selected from the main list does nothing', () => {
@@ -293,7 +292,6 @@ describe('C7 ids need their level', () => {
       ['change-controls', () => ready(), (h) => expect(h.snap.stage).toBe('mapping')],
       ['add-movement', () => ready(), (h) => { expect(h.snap.stage).toBe('choose'); expect(h.snap.adding).toBe(true); }],
       ['recalibrate', () => ready(), (h) => { expect(h.snap.stage).toBe('communication'); expect(h.snap.level?.kind).toBe('recalibrate'); }],
-      ['practice', () => ready(), (h) => expect(h.snap.stage).toBe('practice')],
     ];
     for (const [id, make, check] of cases) {
       const h = make();
@@ -395,11 +393,11 @@ describe('C9 movement seen', () => {
     expect(snap(h).movementSeen).toBe(false);
   });
 
-  it('C9 the same holds in practice', () => {
+  it('C9 the same holds on the board right after approval', () => {
     const h = new Harness();
     h.calibrate();
     h.selectByGesture('approve-comfortable', BROW, 60_000, 600, 200);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     h.run(1_500, REST);
     h.session.refresh();
     expect(snap(h).movementSeen).toBe(false);
@@ -436,8 +434,8 @@ describe('C14 privacy', () => {
   });
 });
 
-describe('C15 Speak and list integrity', () => {
-  it('C15 Speak moves the message to lastSpoken and empties it', () => {
+describe('C15 Play and list integrity', () => {
+  it('C15 Play moves the message to lastSpoken and empties it', () => {
     const h = ready();
     say(h, PH[0], PH[1], 'speak');
     expect(h.snap.message).toEqual([]);
@@ -454,7 +452,7 @@ describe('C15 Speak and list integrity', () => {
     expect(h.spoken).toEqual([]);
   });
 
-  it('C15 Speak with an empty message changes nothing', () => {
+  it('C15 Play with an empty message changes nothing', () => {
     const h = ready();
     raw(h, 'speak');
     expect(h.snap.lastSpoken).toBeNull();
@@ -471,7 +469,7 @@ describe('C15 Speak and list integrity', () => {
     expect(h.snap.decisions.map((d) => d.id)).toEqual(expect.arrayContaining(list.filter((id) => id.startsWith('map:'))));
   });
 
-  it('C15 add-movement, recalibrate and practice keep their own scan lists', () => {
+  it('C15 add-movement and recalibrate keep their own scan lists', () => {
     const add = ready();
     say(add, 'add-movement');
     expect(add.snap.stage).toBe('choose');
@@ -479,10 +477,5 @@ describe('C15 Speak and list integrity', () => {
     const recal = ready();
     say(recal, 'recalibrate');
     expect(ids(recal)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
-    const practice = ready();
-    say(practice, 'practice');
-    expect(practice.snap.stage).toBe('practice');
-    expect(ids(practice)).toContain('finish-practice');
-    expect(snap(practice).helperOpen).toBe(false);
   });
 });

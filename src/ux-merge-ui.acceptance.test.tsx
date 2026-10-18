@@ -19,10 +19,10 @@ const maybe = (name: string | RegExp) => screen.queryByRole('button', { name });
 const before = (a: Element, b: Element) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
 
 describe('M9 combined talking screen', () => {
-  it('M9 the message bar precedes the group tiles and Speak/Undo are always on screen', () => {
+  it('M9 the message bar precedes the group tiles and Play/Undo are always on screen', () => {
     mount(ready());
     expect(before(screen.getByRole('region', { name: 'Message' }), screen.getByRole('group', { name: 'Phrase groups' }))).toBe(true);
-    expect(button(/^Speak/)).toBeTruthy();
+    expect(button(/^Play/)).toBeTruthy();
     expect(button(/^Undo/)).toBeTruthy();
   });
 
@@ -53,7 +53,7 @@ describe('M9 combined talking screen', () => {
       expect(before(previous, element)).toBe(true);
       previous = element;
     }
-    for (const name of [/^Clear message/, /^Save message to Favourites/, /^Say it again/, /^Practice/]) expect(within(scanning).getByRole('button', { name })).toBeTruthy();
+    for (const name of [/^Clear message/, /^Save message to Favourites/, /^Say it again/]) expect(within(scanning).getByRole('button', { name })).toBeTruthy();
   });
 
   it('M9 diagnostics stay hidden until opened and the Movement seen status exists', () => {

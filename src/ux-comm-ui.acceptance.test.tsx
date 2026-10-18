@@ -38,17 +38,17 @@ describe('C10 communication layout', () => {
     expect(before(message, grid)).toBe(true);
   });
 
-  it('C10 Speak and Undo are always on screen, muted without a message, and work with one', () => {
+  it('C10 Play and Undo are always on screen, muted without a message, and work with one', () => {
     const h = ready();
     mount(h);
-    expect(button(/^Speak/)).toBeTruthy();
+    expect(button(/^Play/)).toBeTruthy();
     expect(button(/^Undo/)).toBeTruthy();
     add('Quick', 'Yes');
     expect(h.snap.message).toEqual(['Yes']);
-    expect(button(/^Speak/)).toBeTruthy();
+    expect(button(/^Play/)).toBeTruthy();
     fireEvent.click(button(/^Undo/));
     expect(h.snap.message).toEqual([]);
-    expect(button(/^Speak/)).toBeTruthy();
+    expect(button(/^Play/)).toBeTruthy();
     expect(button(/^Undo/)).toBeTruthy();
   });
 
@@ -58,7 +58,7 @@ describe('C10 communication layout', () => {
     expect(maybeButton(/Say it again/)).toBeNull();
     add('Quick', 'Yes');
     expect(maybeButton(/Say it again/)).toBeNull();
-    fireEvent.click(button(/^Speak/));
+    fireEvent.click(button(/^Play/));
     expect(button(/Say it again/)).toBeTruthy();
     expect(screen.getByRole('region', { name: 'Message' }).textContent).toMatch(/Yes/);
     add('Quick', 'No');
@@ -100,14 +100,12 @@ describe('C10 communication layout', () => {
     expect(screen.getByRole('status', { name: /Movement seen/ })).toBeTruthy();
   });
 
-  it('C10 practice shows Finish practice and no Helper', () => {
+  it('C10 right after approval the board has Helper and Movement seen, and no practice step', () => {
     const h = ready();
     mount(h);
-    fireEvent.click(button('Helper'));
-    fireEvent.click(button(/^Practice/));
-    expect(h.snap.stage).toBe('practice');
-    expect(button(/Start talking/)).toBeTruthy();
-    expect(maybeButton('Helper')).toBeNull();
+    expect(h.snap.stage).toBe('communication');
+    expect(button('Helper')).toBeTruthy();
+    expect(maybeButton(/Start talking|Finish practice/)).toBeNull();
     expect(screen.getByRole('status', { name: /Movement seen/ })).toBeTruthy();
   });
 });
@@ -135,9 +133,8 @@ describe('C11 sizes and names', () => {
       ['helper', () => { fireEvent.click(button('Helper')); }],
       ['clear confirmation', () => { fireEvent.click(button(/^Clear/)); }],
       ['board again', () => { fireEvent.click(button('Keep it')); }],
-      ['spoken', () => { fireEvent.click(button(/^Speak/)); }],
+      ['spoken', () => { fireEvent.click(button(/^Play/)); }],
       ['helper after speaking', () => { fireEvent.click(button('Helper')); }],
-      ['practice', () => { fireEvent.click(button(/^Practice/)); }],
     ];
     for (const [name, go] of states) {
       act(go);

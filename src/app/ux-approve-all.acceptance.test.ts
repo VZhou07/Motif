@@ -40,7 +40,6 @@ function ready2(): Harness {
   h.selectByGesture('choose-different');
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
-  h.stepTo('finish-practice');
   expect(h.snap.approvedModels).toHaveLength(2);
   return h;
 }
@@ -89,13 +88,13 @@ describe('V1 one Approve screen when adding or recalibrating', () => {
     expect(h.snap.scan!.targets.map((target) => target.id)).toEqual(COMFORT_2PLUS);
   });
 
-  it('V1 Approve turns on exactly the previewed controls and reaches practice with no mapping or confirm screen', () => {
+  it('V1 Approve turns on exactly the previewed controls and reaches the board with no mapping or confirm screen', () => {
     const h = addingComfort();
     const preview = snap(h).comfortPreview!;
     expect(preview).not.toBeNull();
     const seen = stagesSeen(h);
     h.session.decide('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(seen.has('mapping')).toBe(false);
     expect(seen.has('mapping-confirm')).toBe(false);
     expect(h.snap.approvedModels).toHaveLength(2);
@@ -106,18 +105,18 @@ describe('V1 one Approve screen when adding or recalibrating', () => {
   it('V1 the same Approve works by gesture, one selection', () => {
     const h = addingComfort();
     h.selectByGesture('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(2);
   });
 
-  it('V1 recalibrating offers the same list and approves straight to practice', () => {
+  it('V1 recalibrating offers the same list and approves straight to the board', () => {
     const h = recalibratingComfort();
     expect(decisionIds(h)).toEqual(expect.arrayContaining(['record-again', 'approve-comfortable', 'another-movement', 'keep-current']));
     expect(decisionIds(h)[0]).toBe('record-again');
     const preview = snap(h).comfortPreview!;
     const seen = stagesSeen(h);
     h.session.decide('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(seen.has('mapping') || seen.has('mapping-confirm')).toBe(false);
     expect(sorted(applied(h))).toEqual(sorted(preview.parts));
   });
@@ -128,7 +127,7 @@ describe('V1 one Approve screen when adding or recalibrating', () => {
     const preview = snap(h).comfortPreview!;
     expect(preview.parts).toHaveLength(1);
     h.session.decide('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(1);
   });
 
@@ -159,7 +158,7 @@ describe('V2 preview equals what is approved', () => {
       h.session.refresh();
       const preview = snap(h).comfortPreview!;
       h.session.decide('approve-comfortable');
-      expect([JSON.stringify(notes), h.snap.stage]).toEqual([JSON.stringify(notes), 'practice']);
+      expect([JSON.stringify(notes), h.snap.stage]).toEqual([JSON.stringify(notes), 'communication']);
       expect(sorted(applied(h))).toEqual(sorted(preview.parts));
       expect(h.snap.mapping!.mode).toBe(preview.mode);
     }
@@ -190,7 +189,7 @@ describe('V2 preview equals what is approved', () => {
     expect(h.snap.stage).toBe('comfort');
     const preview = snap(h).comfortPreview!;
     h.session.decide('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(sorted(applied(h))).toEqual(sorted(preview.parts));
   });
 });
@@ -232,7 +231,7 @@ describe('V3 effort-choose and choose-different', () => {
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.approvedModels).toHaveLength(1);
     h.session.decide('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
   });
 
   it('V3 a refused approval announces a plain reason and arms nothing (a partial restore cannot be approved)', () => {
@@ -256,11 +255,11 @@ describe('V4 Continue with a full re-check', () => {
     expect(decisionIds(h)).not.toContain('reject-profile');
   });
 
-  it('V4 approve-saved arms the saved controls and reaches practice', () => {
+  it('V4 approve-saved arms the saved controls and reaches the board', () => {
     const { h, storage } = restoreToComfort();
     const savedLabels = JSON.parse(storage.data.get(PROFILE_KEY)!).profiles[0].models.map((model: { label: string }) => model.label);
     h.session.decide('approve-saved');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual(savedLabels);
     expect(h.snap.mapping).not.toBeNull();
   });
@@ -302,7 +301,7 @@ describe('V4 Continue with a full re-check', () => {
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.approvedModels).toHaveLength(0);
     h.session.decide('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
   });
 });
 

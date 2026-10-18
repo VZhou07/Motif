@@ -9,7 +9,7 @@ const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as 
 const perform = (label: string | null): Values => (label === 'Open mouth' ? MOUTH : label ? BROW : REST);
 const PH = ['phrase:g1:0', 'phrase:g1:1', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'phrase:g1:2'];
 const TOP = ['speak', 'undo', 'group:favourites', 'group:g1', 'group:g2', 'pause', 'more'];
-const MORE = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
+const MORE = ['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
 
 type Snap = Harness['snap'] & { helperOpen: boolean; confirmingClear: boolean; confirmingRecalibrate: boolean; movementSeen: boolean };
 const snap = (h: Harness) => h.snap as Snap;
@@ -31,7 +31,6 @@ function ready2(): Harness {
   h.selectByGesture('choose-different');
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
-  h.stepTo('finish-practice');
   return h;
 }
 function assisted(): Harness { const h = new Harness(); h.session.useAssisted(); return h; }
@@ -82,7 +81,7 @@ describe('M2 Helper level', () => {
   it('M2 below the movement limit Add a movement is offered; with step scanning there is no slower/faster', () => {
     const h = ready2();
     raw(h, 'more');
-    expect(ids(h)).toEqual(['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']);
+    expect(ids(h)).toEqual(['clear', 'save-favourite', 'say-again', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause']);
   });
 
   it('M2 the assisted Helper has setup-gesture (no approved movement) and use-gesture (one approved)', () => {
@@ -95,7 +94,7 @@ describe('M2 Helper level', () => {
     b.switchTo('more');
     expect(ids(b)).toContain('use-gesture');
     expect(ids(b)).not.toContain('setup-gesture');
-    expect(ids(b)).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'practice', 'use-gesture', 'back', 'pause']);
+    expect(ids(b)).toEqual(['clear', 'save-favourite', 'say-again', 'slower', 'faster', 'use-gesture', 'back', 'pause']);
   });
 });
 
@@ -193,7 +192,7 @@ describe('M4 Recalibrate', () => {
 
 // ═══ M5 ═══════════════════════════════════════════════════════════════════
 describe('M5 Speak, Say it again, Undo, counts', () => {
-  it('M5 Speak moves the message into lastSpoken and empties it, with or without a voice', () => {
+  it('M5 Play moves the message into lastSpoken and empties it, with or without a voice', () => {
     const h = ready();
     say(h, PH[0], PH[1], 'speak');
     expect(h.snap.message).toEqual([]);
@@ -230,7 +229,7 @@ describe('M5 Speak, Say it again, Undo, counts', () => {
     }
   });
 
-  it('M5 repeatLast() is refused with nothing spoken, while paused and in practice', () => {
+  it('M5 repeatLast() is refused with nothing spoken, and while paused', () => {
     const none = ready();
     none.session.repeatLast();
     expect(none.spoken).toEqual([]);
@@ -239,11 +238,6 @@ describe('M5 Speak, Say it again, Undo, counts', () => {
     expect(paused.snap.scan!.paused).toBe(true);
     paused.session.repeatLast();
     expect(paused.spoken).toEqual(['Yes']);
-    const practice = ready();
-    say(practice, PH[0], 'speak', 'practice');
-    expect(practice.snap.stage).toBe('practice');
-    practice.session.repeatLast();
-    expect(practice.spoken).toEqual(['Yes']);
   });
 
   it('M5 Undo removes only the last phrase and nothing else', () => {
@@ -255,7 +249,7 @@ describe('M5 Speak, Say it again, Undo, counts', () => {
     expect({ last: h.snap.lastSpoken, ms: h.snap.scan!.intervalMs, vocabulary: h.snap.vocabulary }).toEqual(before);
   });
 
-  it('M5 Favourites tile, phrase, Speak is 3 selections and the highlight returns to Speak after the phrase', () => {
+  it('M5 Favourites tile, phrase, Play is 3 selections and the highlight returns to Play after the phrase', () => {
     const h = withFavourite();
     h.selectByGesture('speak');
     h.run(0);
@@ -375,10 +369,6 @@ describe('M7 Pause, hold safety, levels and state', () => {
 
   it('M7 entering communication again resets the level to the main list', () => {
     const h = ready();
-    say(h, 'practice');
-    expect(h.snap.stage).toBe('practice');
-    h.selectByGesture('finish-practice');
-    expect(h.snap.stage).toBe('communication');
     expect(kind(h)).toBe('top');
     say(h, 'more');
     h.session.useAssisted();

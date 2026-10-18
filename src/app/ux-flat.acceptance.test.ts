@@ -6,7 +6,7 @@ import { BROW, Harness, REST } from './session.test-support';
 
 const FLAT = ['phrase:g1:0', 'phrase:g1:1', 'phrase:g1:2', 'phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2'];
 const TOP = ['speak', 'undo', ...FLAT, 'pause', 'more'];
-const MORE_FLAT = ['clear', 'say-again', 'slower', 'faster', 'practice', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
+const MORE_FLAT = ['clear', 'say-again', 'slower', 'faster', 'change-controls', 'add-movement', 'recalibrate', 'back', 'pause'];
 
 type Options = { profiles?: ReturnType<typeof createLocalProfileStore> };
 const flat = (options: Options = {}) => new Harness({ ...options, phraseGroups: false });
@@ -64,12 +64,13 @@ describe('F1 flat board', () => {
     expect(ids(h)).not.toContain('phrase:favourites:0');
   });
 
-  it('F1 the practice list is finish-practice, the flat phrases, pause', () => {
+  it('F1 right after approval the board is the flat list (there is no practice list)', () => {
     const h = flat();
     h.calibrate();
     h.selectByGesture('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
-    expect(ids(h)).toEqual(['finish-practice', ...FLAT, 'pause']);
+    expect(h.snap.stage).toBe('communication');
+    expect(ids(h)).toEqual(TOP);
+    expect(ids(h)).not.toContain('finish-practice');
   });
 
   it('F1 the assisted board is the same flat list', () => {
@@ -83,7 +84,7 @@ describe('F1 flat board', () => {
 });
 
 describe('F2 flat behaviour', () => {
-  it('F2 selecting a phrase adds it and the highlight returns to Speak', () => {
+  it('F2 selecting a phrase adds it and the highlight returns to Play', () => {
     const h = ready(flat());
     h.selectByGesture('phrase:g2:1');
     expect(h.snap.message).toEqual(['Please help me']);
@@ -91,7 +92,7 @@ describe('F2 flat behaviour', () => {
     expect(kind(h)).toBe('top');
   });
 
-  it('F2 Speak, Undo and Say it again behave as before', () => {
+  it('F2 Play, Undo and Say it again behave as before', () => {
     const h = ready(flat());
     say(h, 'phrase:g1:0', 'phrase:g1:1', 'speak');
     expect(h.spoken).toEqual(['Yes. No']);
@@ -168,7 +169,6 @@ describe('F2 flat behaviour', () => {
     h.selectByGesture('choose-different');
     h.selectByGesture('map:0');
     h.selectByGesture('approve-mapping');
-    h.stepTo('finish-practice');
     expect(ids(h)).toEqual(TOP);
     h.run(61_000, REST);
     expect(ids(h)).toEqual(TOP);

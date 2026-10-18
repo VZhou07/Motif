@@ -29,12 +29,12 @@ describe('F5 flat board on screen', () => {
     expect(screen.queryByRole('group', { name: 'Phrase groups' })).toBeNull();
   });
 
-  it('F5 a tile adds its phrase and Speak speaks it', () => {
+  it('F5 a tile adds its phrase and Play speaks it', () => {
     const h = flat();
     mount(h);
     fireEvent.click(screen.getByRole('button', { name: 'Add “I need water” to message' }));
     expect(h.snap.message).toEqual(['I need water']);
-    fireEvent.click(screen.getByRole('button', { name: /^Speak/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Play/ }));
     expect(h.spoken).toEqual(['I need water']);
   });
 

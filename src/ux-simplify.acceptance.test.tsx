@@ -53,7 +53,6 @@ function ready2(): Harness {
   h.selectByGesture('choose-different');
   h.selectByGesture('map:0');
   h.selectByGesture('approve-mapping');
-  h.stepTo('finish-practice');
   return h;
 }
 /** Tiring is reported from Change controls (two movements). */
@@ -180,7 +179,7 @@ describe('U2 setupProgress', () => {
   });
 
   it('U2 is hidden on tiring, Change controls and every non-setup stage', async () => {
-    for (const stage of ['tiring', 'welcome', 'practice', 'communication'] as const) {
+    for (const stage of ['tiring', 'welcome', 'communication'] as const) {
       expect([stage, await setupProgress(snap({ stage, approvedModels: [model] }))]).toEqual([stage, null]);
     }
     for (const stage of ['mapping', 'mapping-confirm'] as const) {
@@ -452,17 +451,16 @@ describe('U6 mapping cards', () => {
 });
 
 // ═══ U7 / U8 / U9 / U10 ════════════════════════════════════════════════════
-describe('U7 practice', () => {
-  it('U7 shows "Practice · nothing is spoken" and Start talking finishes practice', () => {
+describe('U7 approval goes straight to talking', () => {
+  it('U7 after approval the board is shown with no practice banner and no Start talking step', () => {
     const h = new Harness();
     h.calibrate();
     h.selectByGesture('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
-    mount(h);
-    expect(document.body.textContent).toMatch(/Practice · nothing is spoken/);
-    expect(screen.queryByRole('button', { name: /Finish practice/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Start talking/ }));
     expect(h.snap.stage).toBe('communication');
+    mount(h);
+    expect(document.body.textContent).not.toMatch(/practice|nothing is spoken/i);
+    expect(screen.queryByRole('button', { name: /Finish practice|Start talking/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Play/ })).toBeTruthy();
   });
 });
 

@@ -75,7 +75,6 @@ describe('3.2 tiles are disabled when they cannot record', () => {
     const h = new Harness();
     h.calibrate();
     h.selectByGesture('approve-comfortable');
-    h.selectByGesture('finish-practice');
     h.selectByGesture('add-movement');
     expect(h.snap.adding).toBe(true);
     mount(h);
@@ -106,8 +105,8 @@ describe('3.3 rename on the comfort screen', () => {
     fireEvent.change(nameField(), { target: { value: 'Left brow lift' } });
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModels).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: 'Approve and practice' }));
-    expect(h.snap.stage).toBe('practice');
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and start' }));
+    expect(h.snap.stage).toBe('communication');
     const [model] = h.snap.approvedModels;
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(model!.label).toBe('Left brow lift');
@@ -179,7 +178,6 @@ describe('3.4 rename refusals', () => {
     const h = new Harness();
     h.calibrate();
     h.selectByGesture('approve-comfortable');
-    h.selectByGesture('finish-practice');
     h.addMovement(OPEN_MOUTH, perform);
     expect(h.snap.stage).toBe('comfort');
     const result = h.session.renameMovement(BROW_LABEL);
@@ -213,7 +211,7 @@ describe('3.4 rename refusals', () => {
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.candidate?.label).toBe(BROW_LABEL);
     h.session.decide('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.session.renameMovement('Late').ok).toBe(false);
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL]);
   });
@@ -233,7 +231,6 @@ describe('3.4 rename refusals', () => {
     const first = new Harness({ profiles: createLocalProfileStore(() => storage) });
     first.calibrate();
     first.selectByGesture('approve-comfortable');
-    first.selectByGesture('finish-practice');
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
     h.session.setCamera('running');
     h.session.restoreProfile('Last setup', false);
@@ -265,7 +262,7 @@ describe('3.5 Record again keeps the name', () => {
 });
 
 describe('3.6 selection count', () => {
-  it('3.6 Get started, pick a movement and Approve are 3 session actions to reach practice', () => {
+  it('3.6 Get started, pick a movement and Approve are 3 session actions to reach the board', () => {
     const h = new Harness();
     const decide = vi.spyOn(h.session, 'decide');
     const startBaseline = vi.spyOn(h.session, 'startBaseline');
@@ -277,8 +274,8 @@ describe('3.6 selection count', () => {
     fireEvent.click(tile(BROW_LABEL));
     h.followPrompts((snap) => snap.stage === 'negative', BROW);
     act(() => h.run(11_000, HEAD_WOBBLE));
-    fireEvent.click(screen.getByRole('button', { name: 'Approve and practice' }));
-    expect(h.snap.stage).toBe('practice');
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and start' }));
+    expect(h.snap.stage).toBe('communication');
     expect(choose.mock.calls).toHaveLength(1);
     expect(decide.mock.calls.map((call) => call[0])).toEqual(['approve-comfortable']);
     expect(startBaseline.mock.calls.length + choose.mock.calls.length + decide.mock.calls.length).toBe(3);
@@ -301,7 +298,6 @@ describe('3.7 other record paths unchanged', () => {
     const h = new Harness();
     h.calibrate();
     h.selectByGesture('approve-comfortable');
-    h.selectByGesture('finish-practice');
     h.selectByGesture('add-movement');
     mount(h);
     fireEvent.click(tile('Open mouth'));
@@ -320,7 +316,6 @@ describe('3.7 other record paths unchanged', () => {
     const h = new Harness();
     h.calibrate();
     h.selectByGesture('approve-comfortable');
-    h.selectByGesture('finish-practice');
     h.addMovement(OPEN_MOUTH, perform);
     mount(h);
     expect(h.snap.stage).toBe('comfort');
