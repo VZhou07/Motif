@@ -19,7 +19,8 @@ Checks to run per chunk: `npx vitest run src/features/browser-access`, `npx tsc 
 - Chunks 3-5 DONE: port (`c17a629`), host/dispatch/lock (`9802070`), controller + stand-in session (`e9ea4b8`), built-output test (`dist` test commit), card + executor seam (`bd2b0dc`, `f160755`). Stand-in session `toy-session.ts` is NOT the real MotifSession; it mirrors the patch semantics for tests and the probe.
 - Notes (reviewer condition 5): a cancelled pending hold bumps the input epoch, so a legitimately executing first scroll can be reported `invalidated`. Conservative by design, not a bug.
 - Known limitations recorded: (a) docked-window fallback (fallback 1) needs a window choice because `lastFocusedWindow` may be the Motif window itself; not built. (b) A network blip or session expiry ends browse (fail closed). (c) Worker drops the binding if a command arrives while the page is loading.
-- Last passing commit: `f160755`. Next: chunk 7 machine probe (owned harness, labelled not the real session).
+- Chunk 6 DONE (`bd2b0dc`, `f160755`). Chunk 7 DONE (probe harness build, machine probe). Chunks 1-7 complete; chunk 8 (real session) NOT started: it needs Agent 3 to apply `session-hooks.patch` (after independent review) and provide the care client/mount/build hooks.
+- Last passing state: see "Final checks" below. Working tree clean after the final docs commit.
 
 ## Review record
 | Revision | Reviewer | Verdict | Findings and fixes |
@@ -42,3 +43,14 @@ Chrome for Testing 153.0.8010.12 (Playwright cache `chromium-1243`; Playwright 1
 
 ## Human-pending (never claim)
 Load the built extension via chrome://extensions > Developer mode > Load unpacked (Chrome 155); open the side panel with the toolbar icon; observe camera prompt in the panel; confirm the panel keeps tracking across tab switches and stops when minimized/closed; allow one site through the helper form; real gesture selects Scroll, Back works, Return shows the correct paired participant, and a request sends; no second tracker open in the localhost web app.
+
+## Final checks for chunks 1-7 (implementer runs; NOT independent verification)
+- `npx tsc --noEmit` clean. `npx tsc -p extensions/motif --noEmit` clean.
+- `npx vitest run src/features/browser-access`: 11 files, 229 tests pass (protocol, origins, manifest/CSP, grant-camera, fake chrome worker, port, controller incl. cross-account and tab events, dispatch/latency, lock, built-output test, card). Whole repo `npx vitest run`: 786 pass, 7 fail; the same 7 fail on the unmodified base (`session.conflicts.test.ts` x4, `CalibrationPreparation.test.tsx` x3); none are in this workstream.
+- Build: `npx vite build --config extensions/motif/vite.config.ts --configLoader runner` (output `extensions/motif/dist`, gitignored). Needs gitignored `public/models`, `public/mediapipe`, `public/runtime-assets.json`; they were copied here from `/Users/vivianyang/Motif/public` (no npm install, no setup:assets). Without them `dist.test.ts` is skipped and the build fails its asset step.
+- Smoke (after build): `node extensions/motif/scripts/smoke.mjs` 9/9 (whole app under extension CSP, zero violations, camera grant page refused by the worker, panel page accepted).
+- Probe: `npx vite build --config extensions/motif/vite.config.ts --mode probe --configLoader runner` then `node extensions/motif/scripts/probe.mjs` 24/24. NOT THE REAL SESSION (stand-in scan list; Space dispatched as an event; the harness page is a background tab). Proves in real Chrome for Testing 153: real manifest + worker + port + controller scroll a real page (0 -> 540 -> 1080 -> 540), Back, Pause, Return, request tile once, tracking loss/other origin/person change end control, forged command refused, web page cannot message the worker, second runtime copy refused by Web Lock, two-window bind consistent. Could NOT prove: gestures, the real side panel, true visibility, real camera prompt, optional-permission prompt (U3).
+- Patch hooks 1-3 for Agent 3: `session-hooks.patch` (17 tests in a scratch copy; needs independent review before applying).
+
+## Hooks left for chunk 8
+Agent 3: review/apply `session-hooks.patch`; provide the shared `CareClient` (use `identityFromCare`); mount `BrowserAccessProvider` + `BrowserControlsPanel` in the extension entry (`extensions/motif/src/sidepanel.tsx` currently mounts `App` only); build a session adapter implementing `BrowserHostSession` from MotifSession (`getHostState` from snapshot scope/tracking/hidden/camera/scan.paused/stage); add `build:extension` script; participant request tiles (`request:*`) in the scan lists; layout at ~400 px. Then: create the controller with `createBrowserCommandPort`, `createPortHost`, acquire `acquireRuntimeLock` before starting the tracker, wire `visibilitychange`/`pagehide`/`freeze` to `controller.notifyHidden()`, and run the same scenarios through the real session.
