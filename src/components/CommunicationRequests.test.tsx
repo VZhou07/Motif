@@ -64,7 +64,11 @@ describe('communication screen with caregiver requests (W1)', () => {
     act(() => { h.session.selectTarget('pause'); });
     view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
     expect(board()).not.toBeNull();
-    act(() => { h.session.resume(); h.session.selectTarget('ask'); });
+    expect(board()!.closest('.board')).toBeNull(); // above the board, so the pause overlay never covers it
+    act(() => { h.session.resume(); h.session.selectTarget('more'); });
+    view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
+    expect(board()).toBeNull(); // the Helper panel replaces the board
+    act(() => { h.session.selectTarget('back'); h.session.selectTarget('ask'); });
     view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
     expect(board()).toBeNull();
     expect(screen.getAllByRole('group', { name: 'Requests' })).toHaveLength(1);

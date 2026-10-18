@@ -1,6 +1,7 @@
 import { KIND_NAMES, statusText } from './controller';
 import type { ParticipantRequestController, RequestCard } from './controller';
 import { useParticipantRequests } from './ParticipantRequestsPanel';
+import './participant-requests.css';
 
 const OPEN: readonly RequestCard['status'][] = ['pending', 'failed', 'sent', 'acknowledged'];
 
