@@ -236,7 +236,17 @@ export function createSupabaseCareClient(config: CareConfig): CareClient {
     global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ?? AbortSignal.timeout(15_000) }) },
   });
   let verified: CareCredential | null = null;
-  const checkError = (error: { message: string } | null) => { if (error) throw new CareError('auth_failed', 'Care account sign-in could not be completed. Check the account and project setup.'); };
+  // Map the provider's documented error code only; its message text is never shown (W2 Q1).
+  const checkError = (error: { message: string; code?: string } | null) => {
+    if (!error) return;
+    switch (error.code) {
+      case 'invalid_credentials': throw new CareError('invalid_credentials', 'That e-mail and password do not match a caregiver account.');
+      case 'email_not_confirmed': throw new CareError('email_not_confirmed', 'This caregiver e-mail is not confirmed yet. Open the confirmation e-mail, or ask the person who set up Motif to confirm this account.');
+      case 'anonymous_provider_disabled': throw new CareError('anonymous_disabled', 'Device pairing is turned off on the care service: anonymous sign-ins are not enabled in the Supabase project.');
+      case 'over_request_rate_limit': throw new CareError('rate_limited', 'Too many attempts. Wait a minute and try again.');
+      default: throw new CareError('auth_failed', 'Care account sign-in could not be completed. Check the account and project setup.');
+    }
+  };
   const auth: CareAuthAdapter = {
     async credential() {
       const { data, error } = await sdk.auth.getSession(); checkError(error);
