@@ -15,7 +15,11 @@ Checks to run per chunk: `npx vitest run src/features/browser-access`, `npx tsc 
 - Reasoning rev 2 APPROVED (independent reviewer). Implementing chunks 1-7 only; chunk 8 (real session) waits for Agent 3 applying `session-hooks.patch`.
 - P1 fix to the patch done (`6116e2b`): Pause survives scope switches and sink attach/detach; unchanged sink is a no-op; 17 patch tests (gesture and assisted); still needs Agent 3's independent review.
 - Chunk 1 DONE (`f9e34bc` protocol/origins, `2bb8981` manifest/csp/grant-camera, `ffaecfe` extension build + smoke). Assets copied from the main checkout into gitignored `public/`. Early build-and-boot smoke: whole app boots in the extension under CSP, 0 violations, 0 errors, nothing left the extension.
-- Chunk 2 DONE (`c0df924` worker, fake chrome). Last passing commit: `c0df924`. Next: chunk 3 `port.ts`.
+- Chunk 2 DONE (`c0df924` worker, fake chrome).
+- Chunks 3-5 DONE: port (`c17a629`), host/dispatch/lock (`9802070`), controller + stand-in session (`e9ea4b8`), built-output test (`dist` test commit), card + executor seam (`bd2b0dc`, `f160755`). Stand-in session `toy-session.ts` is NOT the real MotifSession; it mirrors the patch semantics for tests and the probe.
+- Notes (reviewer condition 5): a cancelled pending hold bumps the input epoch, so a legitimately executing first scroll can be reported `invalidated`. Conservative by design, not a bug.
+- Known limitations recorded: (a) docked-window fallback (fallback 1) needs a window choice because `lastFocusedWindow` may be the Motif window itself; not built. (b) A network blip or session expiry ends browse (fail closed). (c) Worker drops the binding if a command arrives while the page is loading.
+- Last passing commit: `f160755`. Next: chunk 7 machine probe (owned harness, labelled not the real session).
 
 ## Review record
 | Revision | Reviewer | Verdict | Findings and fixes |
