@@ -1,9 +1,9 @@
 diff --git a/src/app/session.browser.test.ts b/src/app/session.browser.test.ts
 new file mode 100644
-index 0000000..04d03d2
+index 0000000..88b522c
 --- /dev/null
 +++ b/src/app/session.browser.test.ts
-@@ -0,0 +1,105 @@
+@@ -0,0 +1,164 @@
 +import { describe, expect, it } from 'vitest';
 +import type { BrowserRequest } from './types';
 +import { Harness, REST } from './session.test-support';
@@ -107,10 +107,69 @@ index 0000000..04d03d2
 +    expect(h.snap.scope).toBe('communication');
 +    expect(requests).toEqual(['scroll-up']);
 +  });
++
++  describe.each(['gesture', 'assisted'] as const)('Pause survives scope changes (%s driver)', (driver) => {
++    function pausedInBrowser() {
++      const h = new Harness();
++      if (driver === 'gesture') h.setUpToCommunication(); else h.session.useAssisted();
++      const requests: BrowserRequest[] = [];
++      const sink = (request: BrowserRequest) => { requests.push(request); };
++      h.session.setBrowserSink(sink);
++      expect(h.session.enterBrowserScope()).toBe(true);
++      const reach = (id: string) => {
++        if (driver === 'gesture') { h.selectByGesture(id); return; }
++        for (let guard = 0; h.highlightedId() !== id; guard += 1) { if (guard > 400) throw new Error(`never highlighted ${id}`); h.step(REST); }
++        h.session.switchPress(h.now);
++      };
++      reach('pause');
++      expect(h.snap.scan?.paused).toBe(true);
++      return { h, sink, requests };
++    }
++
++    it('pause then Return', () => {
++      const { h } = pausedInBrowser();
++      expect(h.session.returnToCommunication()).toBe(true);
++      expect(h.snap.scope).toBe('communication');
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('pause then tracking loss and automatic return', () => {
++      const { h } = pausedInBrowser();
++      h.step(REST, 'invalid');
++      expect(h.session.returnToCommunication()).toBe(true);
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('pause then attach and detach', () => {
++      const { h, sink } = pausedInBrowser();
++      h.session.setBrowserSink(sink); // same identity: no-op, no rebuild
++      expect(h.snap.scan?.paused).toBe(true);
++      expect(h.snap.scope).toBe('browser');
++      h.session.setBrowserSink(() => {});
++      expect(h.snap.scan?.paused).toBe(true);
++      h.session.setBrowserSink(null);
++      expect(h.snap.scope).toBe('communication');
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('pause then idle return keeps Pause', () => {
++      const { h } = pausedInBrowser();
++      h.stall(200_000);
++      expect(h.session.returnToCommunication()).toBe(true);
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('an unchanged sink is a no-op that does not rebuild the scanner or change the epoch', () => {
++      const { h, sink } = pausedInBrowser();
++      const epoch = h.session.getInputEpoch();
++      h.session.setBrowserSink(sink);
++      expect(h.session.getInputEpoch()).toBe(epoch);
++    });
++  });
 +});
 +
 diff --git a/src/app/session.ts b/src/app/session.ts
-index 22f10da..653a2c7 100644
+index 22f10da..7f77c85 100644
 --- a/src/app/session.ts
 +++ b/src/app/session.ts
 @@ -12,7 +12,7 @@ import { movementEvidence, recommendMapping, type Effort, type MovementNotes, ty
@@ -143,7 +202,7 @@ index 22f10da..653a2c7 100644
    constructor(options: SessionOptions = {}) {
      this.speech = options.speech ?? silentSpeech;
      this.clock = options.clock ?? (() => performance.now());
-@@ -184,6 +191,51 @@ export class MotifSession {
+@@ -184,6 +191,52 @@ export class MotifSession {
  
    readonly getSnapshot = (): SessionSnapshot => this.snap;
  
@@ -165,9 +224,10 @@ index 22f10da..653a2c7 100644
 +
 +  /** Attach or detach the browser controller. Detaching while browsing returns to communication. */
 +  setBrowserSink(sink: ((request: BrowserRequest) => void) | null): void {
++    if (this.browserSink === sink) return;
 +    this.browserSink = sink;
 +    if (!sink && this.scope === 'browser') this.scope = 'communication';
-+    if (this.stage === 'communication') this.rebuildRouted();
++    if (this.stage === 'communication') this.rebuildRouted(true);
 +    this.publish();
 +  }
 +
@@ -175,7 +235,7 @@ index 22f10da..653a2c7 100644
 +  enterBrowserScope(): boolean {
 +    if (!this.browserSink || this.stage !== 'communication' || this.scope !== 'communication' || this.hidden || !this.scanner || this.scanner.snapshot.paused) return false;
 +    this.scope = 'browser';
-+    this.rebuildRouted();
++    this.rebuildRouted(true);
 +    this.announce('Browser controls. Return to messages is the last item.');
 +    this.publish();
 +    return true;
@@ -186,7 +246,7 @@ index 22f10da..653a2c7 100644
 +    if (this.stage !== 'communication') return false;
 +    if (this.scope === 'communication') return true;
 +    this.scope = 'communication';
-+    this.rebuildRouted();
++    this.rebuildRouted(true);
 +    this.announce('Back to your messages.');
 +    this.publish();
 +    return true;
@@ -195,7 +255,7 @@ index 22f10da..653a2c7 100644
    /** Republish after an external status change (for example, voices finished loading). */
    refresh(): void { this.publish(); }
  
-@@ -257,6 +309,7 @@ export class MotifSession {
+@@ -257,6 +310,7 @@ export class MotifSession {
    setHidden(hidden: boolean, nowMs: number = this.clock()): void {
      if (this.hidden === hidden) return;
      this.hidden = hidden;
@@ -203,7 +263,7 @@ index 22f10da..653a2c7 100644
      if (hidden) { this.cues?.stop(); this.failClosed(nowMs, 'stale'); }
      if (this.scanner && this.scanDriver === 'assisted') this.scanner.setSuspended(hidden, nowMs);
      this.publish();
-@@ -282,6 +335,7 @@ export class MotifSession {
+@@ -282,6 +336,7 @@ export class MotifSession {
    }
  
    private route(frame: FeatureFrame, nowMs: number): void {
@@ -211,7 +271,7 @@ index 22f10da..653a2c7 100644
      switch (this.stage) {
        case 'baseline': this.captureBaseline(frame); break;
        case 'training':
-@@ -442,6 +496,7 @@ export class MotifSession {
+@@ -442,6 +497,7 @@ export class MotifSession {
      this.scanner = null;
      this.scanTargets = [];
      this.scanDriver = 'none';
@@ -219,7 +279,7 @@ index 22f10da..653a2c7 100644
      this.baselineRecorder = null;
      this.trialRecorder = null;
      this.negativeMonitor = null;
-@@ -457,6 +512,7 @@ export class MotifSession {
+@@ -457,6 +513,7 @@ export class MotifSession {
    }
  
    private startScanner(targets: ScanTarget[], driver: 'gesture' | 'assisted', models: readonly GestureModel[]): void {
@@ -227,7 +287,7 @@ index 22f10da..653a2c7 100644
      const nowMs = this.clock();
      this.scanTargets = targets;
      this.scanner = new ScanController(targets.map((target) => target.id), this.intervalMs, nowMs);
-@@ -1243,18 +1299,37 @@ export class MotifSession {
+@@ -1243,18 +1300,40 @@ export class MotifSession {
      this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
    }
  
@@ -243,8 +303,11 @@ index 22f10da..653a2c7 100644
 +  }
 +
 +  /** The single path that builds the communication-stage scanner for the active scope. */
-+  private rebuildRouted(): void {
++  private rebuildRouted(keepPause = false): void {
++    // A scope switch or sink attach/detach must not silently clear Pause (a new scanner starts unpaused).
++    const paused = keepPause && this.scanner?.snapshot.paused === true;
 +    this.startScanner(this.routedTargets(), this.routedDriver(), this.approvedModels);
++    if (paused) this.scanner?.setPaused(true, this.clock());
 +  }
 +
 +  private routedTargets(): ScanTarget[] {
@@ -270,7 +333,7 @@ index 22f10da..653a2c7 100644
    }
  
    private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
-@@ -1277,6 +1352,7 @@ export class MotifSession {
+@@ -1277,6 +1356,7 @@ export class MotifSession {
      if (this.lastScanFrameTimestamp !== undefined && !scanner.snapshot.paused) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
      this.lastScanFrameTimestamp = frame.timestampMs;
      const update = this.runtime.step(frame, nowMs);
@@ -278,7 +341,7 @@ index 22f10da..653a2c7 100644
      if (this.isRoutedStage()) this.countUse(update.event?.gestureId, update.cancelCause === 'released' || update.cancelCause === 'band' ? update.cancelledId : undefined);
      // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
      const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
-@@ -1310,17 +1386,19 @@ export class MotifSession {
+@@ -1310,17 +1390,19 @@ export class MotifSession {
    /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
    private fallBackToAutomatic(): void {
      this.stepFallback = true;
@@ -299,7 +362,7 @@ index 22f10da..653a2c7 100644
      this.idleValidMs = 0;
      this.scanner?.setPaused(false, nowMs);
      this.announce('Resumed.');
-@@ -1328,6 +1406,14 @@ export class MotifSession {
+@@ -1328,6 +1410,14 @@ export class MotifSession {
  
    private activate(id: string, nowMs: number): void {
      if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:') || id.startsWith('tiring:') || id.startsWith('discovered:')) { this.chooseSetupTarget(id); return; }
@@ -314,7 +377,7 @@ index 22f10da..653a2c7 100644
      const phrase = this.phraseFor(id);
      if (this.stage === 'practice') {
        if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
-@@ -1467,6 +1553,7 @@ export class MotifSession {
+@@ -1467,6 +1557,7 @@ export class MotifSession {
        failure: this.failure, decisions: this.setupTargets(),
        scan: scanner ? { targets: this.scanTargets, index: scanner.index, latched: scanner.latchedTarget ?? null, paused: scanner.paused,
          suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
