@@ -1,5 +1,11 @@
 # Motif technical handoff
 
+## W2 — care setup quality of life (coordinator acting as Agent 3, 2026-10-17)
+
+- User asked to "make sure it's working and add any quality of life stuff". Headless Chromium against the hosted project: caregiver route renders sign-in (VITE config parsed); pairing reaches `POST /auth/v1/signup` → 422 `anonymous_provider_disabled` (anonymous sign-ins still off on the project; user must Save the toggle).
+- Design `docs/workstreams/request-relay/qol.md` revision 1: w2_review APPROVED before code. Commits `ae82621` truthful auth/pairing errors, `c171bcd` open-request count in caregiver tab title, `3c9eaa9` `npm run check:care` (read-only setup check), `af07c89` title offline/stale test + script fixes. w2_testing PASS at `3c9eaa9`; follow-ups in `af07c89` (stale-title mutation now caught).
+- `npm run check:care` on the hosted project: 10 PASS, 1 FAIL (anonymous sign-ins). After the user saves the setting, rerun it, then the two-window pair → water → acknowledge test.
+
 ## W1 — request wiring (coordinator acting as Agent 3, 2026-10-17)
 
 - Agent 3 offline; user asked the coordinator to finish Agent 3's remaining wiring, without the browser companion (C4 deferred by the user). Branch `feature/request-wiring` from `main` `24e9c6b`; not pushed. Design: `docs/workstreams/request-relay/wiring.md` revision 2 — w1_review BLOCKED revision 1 (B1: identity rebuild undid Pause), APPROVED revision 2.
