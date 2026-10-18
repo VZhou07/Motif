@@ -7,7 +7,7 @@ import type { Vocabulary } from './vocabulary';
 
 export type Stage =
   | 'welcome' | 'baseline' | 'choose' | 'training' | 'verify' | 'negative'
-  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'practice' | 'communication' | 'recalibrate-confirm' | 'tiring'
+  | 'setup-failed' | 'comfort' | 'mapping' | 'mapping-confirm' | 'communication' | 'tiring'
   | 'discover' | 'discover-results';
 
 export type CameraStatus = 'off' | 'loading' | 'running' | 'error';
@@ -120,7 +120,7 @@ export interface SessionSnapshot {
   decisions: ScanTarget[];
   scan: ScanView | null;
   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
-  /** Current communication/practice scan level; null outside those stages (R14). */
+  /** Current communication scan level; null outside that stage (R14). */
   level: LevelView | null;
   /** Phrase groups (Favourites first); deliberately saved settings, never message history (R14). */
   vocabulary: Vocabulary;
@@ -128,7 +128,6 @@ export interface SessionSnapshot {
   lastSpoken: string | null;
   speech: { available: boolean; voiceName: string | null };
   spokenPrompts: boolean;
-  practice: { selections: number; last: string | null };
   /** Text for the polite live region: prompts, notices, and selections only. */
   announcement: string;
   profiles: ProfilesView;
@@ -140,14 +139,32 @@ export interface SessionSnapshot {
   setupModels: GestureModel[];
   /** The recommended proposal in `mapping`, with plain reasons. */
   recommendation: { id: string; reasons: string[] } | null;
+  /** The controls offered on the mapping screen, as cards (empty elsewhere). Same ids and order as the scan targets. */
+  proposals: ProposalCard[];
+  /** Communication panel state; never stored in a profile. */
+  helperOpen: boolean;
+  confirmingClear: boolean;
+  confirmingRecalibrate: boolean;
+  /** True for 1 s after a recognised movement in communication (gesture mode only). */
+  movementSeen: boolean;
+  /** Phrase groups and Favourites are shown (off by default for now, R19). */
+  phraseGroups: boolean;
   /** On the first-movement comfort screen: what Approve will turn on (null elsewhere). */
-  comfortPreview: { label: string; mode: 'auto' | 'step' } | null;
+  comfortPreview: { label: string; mode: 'auto' | 'step'; parts: Array<{ label: string; action: 'select' | 'next' | 'previous' | 'pause' }> } | null;
   /** Name of the saved profile being re-checked; nothing is armed until its controls are approved. */
   restoring: string | null;
 }
 
+export interface ProposalCard {
+  id: string;
+  mode: 'auto' | 'step';
+  recommended: boolean;
+  inUse: boolean;
+  parts: Array<{ label: string; action: 'select' | 'next' | 'previous' | 'pause' }>;
+}
+
 export interface LevelView {
-  kind: 'top' | 'more' | 'ask' | 'group' | 'confirm';
+  kind: 'top' | 'more' | 'ask' | 'group' | 'confirm' | 'clear' | 'recalibrate';
   group: { id: string; name: string; phrases: number } | null;
   /** The message text waiting for Save to Favourites confirmation. */
   confirm: string | null;

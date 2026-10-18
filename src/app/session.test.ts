@@ -3,7 +3,7 @@ import { BROW, CHEEK, HEAD_WOBBLE, Harness, MOUTH, PUCKER, REST, type Values } f
 import type { MovementChoice } from './types';
 
 describe('guided calibration to communication (simulated numeric person)', () => {
-  it('learns, verifies, approves by gesture, practices, composes and speaks', () => {
+  it('learns, verifies, approves by gesture, composes and speaks', () => {
     const h = new Harness();
     h.calibrate();
     const cycle = h.snap.cycles[0]!;
@@ -20,17 +20,13 @@ describe('guided calibration to communication (simulated numeric person)', () =>
     expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['record-again', 'approve-comfortable', 'approve-effort', 'another-movement']);
     expect(h.snap.mapping).toBeNull();
     h.selectByGesture('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModel?.feature).toBe('browOuterUpLeft');
     expect(h.snap.mapping?.mode).toBe('auto');
     expect(h.snap.cycles[0]!.outcome).toBe('approved');
 
-    h.selectByGesture('phrase:g1:0');
-    expect(h.snap.practice).toEqual({ selections: 1, last: 'Yes' });
-    expect(h.snap.message).toEqual([]);
+    expect(h.snap.message).toEqual([]); // approving adds nothing and speaks nothing
     expect(h.spoken).toEqual([]);
-    h.selectByGesture('finish-practice');
-    expect(h.snap.stage).toBe('communication');
 
     h.selectByGesture('phrase:g2:0');
     expect(h.snap.message).toEqual(['I need water']);
@@ -224,6 +220,7 @@ describe('communication safety', () => {
     h.run(400, BROW);
     h.run(600);
     expect(h.snap.message).toEqual(['No']);
+    expect(h.highlightedId()).toBe('speak'); // the list changed, so the highlight restarts at its first item
   });
 
   it('emits once per hold and rearms only after full neutral', () => {
@@ -268,8 +265,10 @@ describe('communication safety', () => {
     const h = ready();
     const model = h.snap.approvedModel;
     h.selectByGesture('recalibrate');
-    expect(h.snap.stage).toBe('recalibrate-confirm');
-    h.selectByGesture('keep-current', BROW, 60_000, 3_000, 0);
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.scan?.targets.map((target) => target.id)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
+    h.selectByGesture('recalibrate-no', BROW, 60_000, 3_000, 0);
+    expect(h.snap.confirmingRecalibrate).toBe(false);
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModel).toEqual(model);
     expect(h.snap.runtime?.armed).toBe(false);
@@ -282,7 +281,7 @@ describe('communication safety', () => {
     const h = ready();
     const model = h.snap.approvedModel;
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     expect(h.snap.stage).toBe('baseline');
     expect(h.snap.recalibrating).toBe(true);
     h.run(3_000, BROW);
@@ -301,7 +300,7 @@ describe('communication safety', () => {
     const h = ready();
     const old = h.snap.approvedModel!;
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     h.run(10_500);
     expect(h.snap.stage).toBe('choose');
     h.selectByGesture('same-movement');
@@ -309,9 +308,7 @@ describe('communication safety', () => {
     h.run(11_000);
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModel).toEqual(old);
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    h.selectByGesture('approve-comfortable');
     expect(h.snap.approvedModel?.id).not.toBe(old.id);
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.cycles.at(-1)?.outcome).toBe('approved');
@@ -321,7 +318,7 @@ describe('communication safety', () => {
     const h = ready();
     h.session.decide('approve-mapping');
     h.session.chooseSetupTarget('map:0');
-    h.session.decide('start-recalibration');
+    h.session.decide('approve-saved');
     expect(h.snap.stage).toBe('communication');
   });
 
@@ -419,7 +416,7 @@ describe('honest limits and setup settings', () => {
     expect(negative.eventCount).toBe(0);
     expect(negative.restarts).toBeGreaterThanOrEqual(10);
     expect(negative.validDurationMs).toBeLessThan(10_000);
-    expect(negative.reasons).toContain('Ten armed seconds were not observed within one minute.');
+    expect(negative.reasons).toContain('Ten seconds of everyday activity were not recorded within one minute.');
   });
 
   it('speaks capture prompts only when the helper enables spoken prompts', () => {
@@ -447,10 +444,9 @@ const perform = (label: string | null): Values => MOVES[label ?? ''] ?? REST;
 function addAndApprove(h: Harness, choice: MovementChoice, proposal = 'map:0'): void {
   h.addMovement(choice, perform);
   expect(h.snap.stage).toBe('comfort');
-  h.selectByGesture('comfortable');
-  h.selectByGesture(proposal);
-  h.selectByGesture('approve-mapping');
-  expect(h.snap.stage).toBe('practice');
+  if (proposal === 'map:0') h.selectByGesture('approve-comfortable');
+  else { h.selectByGesture('choose-different'); h.selectByGesture(proposal); h.selectByGesture('approve-mapping'); }
+  expect(h.snap.stage).toBe('communication');
 }
 
 /** Brow selects, mouth moves next (step scanning), in communication. */
@@ -458,7 +454,6 @@ function twoGestureStep(): Harness {
   const h = new Harness();
   h.setUpToCommunication();
   addAndApprove(h, OPEN_MOUTH);
-  h.stepTo('finish-practice');
   expect(h.snap.stage).toBe('communication');
   return h;
 }
@@ -469,6 +464,7 @@ describe('multiple gestures (R6)', () => {
     h.setUpToCommunication();
     h.selectByGesture('more');
     expect(h.snap.scan?.targets.map((target) => target.id)).toContain('add-movement');
+    h.session.selectTarget('close-helper');
     h.addMovement(OPEN_MOUTH, perform);
     expect(h.snap.stage).toBe('comfort');
     const cycle = h.snap.cycles[1]!;
@@ -482,14 +478,14 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.mapping?.mode).toBe('auto');
 
-    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different');
     expect(h.snap.stage).toBe('mapping');
     expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current', 'map:0', 'map:1', 'map:2', 'map:3', 'reject']);
     h.selectByGesture('map:0');
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.approvedModels).toHaveLength(1);
     h.selectByGesture('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels.map((model) => model.label)).toEqual([BROW_LABEL, 'Open mouth']);
     expect(h.snap.mapping?.mode).toBe('step');
     expect(h.snap.scanMode).toBe('step');
@@ -542,10 +538,7 @@ describe('multiple gestures (R6)', () => {
     h.run(800, { ...BROW, ...MOUTH });
     h.run(800);
     expect(h.snap.stage).toBe('comfort');
-    h.selectByGesture('comfortable');
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
-    h.stepTo('finish-practice');
+    h.selectByGesture('approve-comfortable');
     expect(h.snap.stage).toBe('communication');
     const index = h.snap.scan!.index;
     h.run(800);
@@ -610,7 +603,6 @@ describe('multiple gestures (R6)', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS);
     expect(h.snap.mappingLabel).toMatch(/Pucker lips moves back/);
-    h.stepTo('finish-practice');
     const length = h.snap.scan!.targets.length;
     const index = h.snap.scan!.index;
     h.run(600);
@@ -627,10 +619,8 @@ describe('multiple gestures (R6)', () => {
   it('a pause movement toggles; next is ignored while paused; select also resumes', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS);
-    h.stepTo('finish-practice');
     addAndApprove(h, PUFF_CHEEKS);
     expect(h.snap.mappingLabel).toMatch(/Puff cheeks pauses or resumes/);
-    h.stepTo('finish-practice');
     expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('add-movement');
     h.run(600);
     h.run(600, CHEEK); h.run(600);
@@ -656,7 +646,6 @@ describe('multiple gestures (R6)', () => {
     addAndApprove(h, OPEN_MOUTH, 'map:2');
     expect(h.snap.mapping?.assignments).toEqual({ [h.snap.approvedModels[0]!.id]: 'select' });
     expect(h.snap.scanMode).toBe('auto');
-    h.selectByGesture('finish-practice');
     h.selectByGesture('group:g1');
     h.selectByGesture('phrase:g1:0', MOUTH);
     expect(h.snap.message).toEqual([]);
@@ -688,7 +677,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.mapping).toEqual(before);
     h.selectByGesture('map:1');
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.runtime?.armed).toBe(false);
     const [brow, mouth] = h.snap.approvedModels;
     expect(h.snap.mapping?.assignments).toEqual({ [mouth!.id]: 'select', [brow!.id]: 'next' });
@@ -701,9 +690,12 @@ describe('multiple gestures (R6)', () => {
     h.stepTo('change-controls');
     h.selectByGesture('map:1');
     h.selectByGesture('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
-    expect(h.snap.scan?.targets.map((target) => target.id)).toContain('use-previous');
-    h.stepTo('use-previous', BROW, MOUTH); // now brow moves next and mouth selects
+    expect(h.snap.stage).toBe('communication');
+    expect(h.snap.scan?.targets.map((target) => target.id)).not.toContain('use-previous'); // moved to Change controls (R20)
+    h.stepTo('change-controls', BROW, MOUTH);
+    const mapIds = h.snap.decisions.map((decision) => decision.id);
+    expect(mapIds.indexOf('use-previous')).toBeGreaterThan(mapIds.lastIndexOf('map:3'));
+    h.selectByGesture('use-previous');
     expect(h.snap.stage).toBe('mapping-confirm');
     expect(h.snap.pendingMapping?.assignments).toEqual(original?.assignments);
     expect(h.snap.mapping).not.toEqual(original);
@@ -714,9 +706,7 @@ describe('multiple gestures (R6)', () => {
   it('with four movements every communication control is reachable and works', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS);
-    h.stepTo('finish-practice');
     addAndApprove(h, PUFF_CHEEKS);
-    h.stepTo('finish-practice');
     // Every level (R14): each target is reached by Next alone, and the level list is exactly as designed.
     const walk = (expected: string[]) => {
       const ids = h.snap.scan!.targets.map((target) => target.id);
@@ -734,23 +724,22 @@ describe('multiple gestures (R6)', () => {
     walk(['phrase:g2:0', 'phrase:g2:1', 'phrase:g2:2', 'back', 'pause']);
     h.stepTo('back');
     h.stepTo('more');
-    walk(['clear', 'save-favourite', 'say-again', 'practice', 'change-controls', 'tiring', 'recalibrate', 'back', 'pause']);
+    walk(['clear', 'save-favourite', 'say-again', 'change-controls', 'recalibrate', 'back', 'pause']);
     h.stepTo('back');
     h.stepTo('phrase:g1:2');
     h.stepTo('speak');
     expect(h.spoken).toEqual(['Thank you']);
-    h.stepTo('clear');
+    h.stepTo('phrase:g1:0');
+    h.stepTo('clear'); // behind Helper, then confirmed
+    h.stepTo('clear-yes');
     expect(h.snap.message).toEqual([]);
     h.stepTo('pause');
     expect(h.snap.scan!.paused).toBe(true);
     h.run(600, BROW); h.run(600);
     expect(h.snap.scan!.paused).toBe(false);
-    h.stepTo('practice');
-    expect(h.snap.stage).toBe('practice');
-    h.stepTo('finish-practice');
     h.stepTo('recalibrate');
-    expect(h.snap.stage).toBe('recalibrate-confirm');
-    h.selectByGesture('keep-current');
+    expect(h.snap.confirmingRecalibrate).toBe(true);
+    h.stepTo('recalibrate-no');
     expect(h.snap.approvedModels).toHaveLength(4);
     h.stepTo('change-controls');
     expect(h.snap.stage).toBe('mapping');
@@ -760,7 +749,6 @@ describe('multiple gestures (R6)', () => {
   it('with three movements a mapping without next keeps automatic scanning and speed controls', () => {
     const h = twoGestureStep();
     addAndApprove(h, PUCKER_LIPS, 'map:3'); // brow alone selects
-    h.selectByGesture('finish-practice');
     h.selectByGesture('more');
     const ids = h.snap.scan!.targets.map((target) => target.id);
     expect(ids).toEqual(expect.arrayContaining(['slower', 'faster', 'add-movement', 'change-controls', 'recalibrate', 'pause']));
@@ -792,7 +780,7 @@ describe('multiple gestures (R6)', () => {
     const h = twoGestureStep();
     const before = { models: h.snap.approvedModels, mapping: h.snap.mapping };
     h.stepTo('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.stepTo('recalibrate-yes');
     expect(h.snap.stage).toBe('baseline');
     h.run(10_500);
     expect(h.snap.stage).toBe('choose');
@@ -805,7 +793,7 @@ describe('multiple gestures (R6)', () => {
     expect(h.snap.scanMode).toBe('step');
 
     h.stepTo('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.stepTo('recalibrate-yes');
     h.run(10_500);
     h.selectByGesture('same-movement');
     expect(h.snap.stage).toBe('training');
@@ -814,10 +802,8 @@ describe('multiple gestures (R6)', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.approvedModels).toEqual(before.models);
-    h.selectByGesture('comfortable');
-    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['keep-current', 'map:0', 'reject']);
-    h.selectByGesture('map:0');
-    h.selectByGesture('approve-mapping');
+    expect(h.snap.decisions.map((decision) => decision.id)).toEqual(['record-again', 'approve-comfortable', 'approve-effort', 'another-movement', 'keep-current']);
+    h.selectByGesture('approve-comfortable');
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(h.snap.scanMode).toBe('auto');
     // The old two-movement controls refer to movements that no longer exist.
@@ -864,7 +850,6 @@ describe('multiple gestures (R6)', () => {
     const one = new Harness();
     one.setUpToCommunication();
     addAndApprove(one, OPEN_MOUTH, 'map:2'); // brow alone selects; mouth unmapped
-    one.selectByGesture('finish-practice');
     one.run(600);
     one.run(200, MOUTH);
     expect(one.snap.scan!.latched).toBeNull();

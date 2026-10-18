@@ -1,19 +1,15 @@
+import { setupProgress } from './app/progress';
 import { CAREGIVER_HREF } from './app/route';
-import type { Stage } from './app/types';
 import { useMotif, type MotifRuntime } from './app/useMotif';
 import { CameraPanel } from './components/CameraPanel';
 import { CommunicationView } from './components/CommunicationView';
 import { BrandMark, Icon } from './components/Icon';
-import { ComfortView, DiscoveryResultsView, FailedView, MappingConfirmView, MappingView, RecalibrateView, TiringView } from './components/ReviewViews';
-import { CaptureView, ChooseView, WelcomeView } from './components/SetupViews';
-
-const SETUP_STEP: Partial<Record<Stage, number>> = {
-  baseline: 0, choose: 1, discover: 1, 'discover-results': 1, training: 1, verify: 1, negative: 1, 'setup-failed': 1, comfort: 1, mapping: 2, 'mapping-confirm': 2,
-};
+import { ComfortView, DiscoveryResultsView, FailedView, MappingConfirmView, MappingView, TiringView } from './components/ReviewViews';
+import { CaptureView, ChooseView, SetupProgressBar, WelcomeView } from './components/SetupViews';
 
 export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {}) {
   const { snapshot, session, videoRef, startCamera, getStarted, stopCamera, cueStatus, setCuesEnabled, requests } = useMotif(runtime);
-  const step = SETUP_STEP[snapshot.stage];
+  const progress = setupProgress(snapshot);
   const view = { snapshot, session };
   let content;
   switch (snapshot.stage) {
@@ -29,9 +25,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
     case 'comfort': content = <ComfortView {...view} />; break;
     case 'mapping': content = <MappingView {...view} />; break;
     case 'mapping-confirm': content = <MappingConfirmView {...view} />; break;
-    case 'recalibrate-confirm': content = <RecalibrateView {...view} />; break;
     case 'tiring': content = <TiringView {...view} />; break;
-    case 'practice':
     case 'communication': content = <CommunicationView {...view} requests={requests} />; break;
   }
   return (
@@ -46,15 +40,7 @@ export default function App({ runtime }: { runtime?: Partial<MotifRuntime> } = {
       </header>
       <div className="workspace-layout">
         <main id="main-content" className="main-workspace" tabIndex={-1}>
-          {step !== undefined && (
-            <nav className="setup-steps" aria-label="Setup progress">
-              {['Settle in', 'Find your movement', 'Make it yours'].map((label, index) => (
-                <span key={label} className={step >= index ? 'step-current' : ''} aria-current={step === index ? 'step' : undefined}>
-                  <span>{step > index ? <Icon name="check" size={12} /> : `0${index + 1}`}</span>{label}
-                </span>
-              ))}
-            </nav>
-          )}
+          {progress && <SetupProgressBar progress={progress} />}
           {snapshot.camera === 'error' && snapshot.cameraMessage && (
             <div className="error-banner" role="alert"><strong>The camera needs attention</strong><p>{snapshot.cameraMessage}</p></div>
           )}

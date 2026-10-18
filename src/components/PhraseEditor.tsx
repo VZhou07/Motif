@@ -6,8 +6,10 @@ import { FAVOURITES_ID, VOCABULARY_LIMITS, type PhraseGroup, type Vocabulary, ty
  * Helper (conventional input) editor for phrase groups (R14). Every change goes through one typed
  * vocabulary edit; refusals are shown inline in plain words and change nothing.
  */
-export function PhraseEditor({ vocabulary, onEdit, disabled = false }: {
+export function PhraseEditor({ vocabulary, onEdit, disabled = false, hideFavourites = false }: {
   vocabulary: Vocabulary;
+  /** Flat board (R19): the hidden Favourites group is not offered for editing; its saved phrases stay stored. */
+  hideFavourites?: boolean;
   onEdit: (edit: VocabularyEdit) => Result<Vocabulary>;
   disabled?: boolean;
 }) {
@@ -23,7 +25,7 @@ export function PhraseEditor({ vocabulary, onEdit, disabled = false }: {
   return (
     <div className="phrase-editor">
       {error && <p id={errorId} className="status-notice">{error}</p>}
-      {vocabulary.groups.map((group) => (
+      {vocabulary.groups.filter((group) => !(hideFavourites && group.id === FAVOURITES_ID)).map((group) => (
         <GroupEditor key={group.id} group={group} edit={edit} disabled={disabled} describedBy={error ? errorId : undefined} />
       ))}
       <div className="editor-row">

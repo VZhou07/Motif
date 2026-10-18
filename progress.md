@@ -81,6 +81,31 @@ R15 local code commits (in order): `8f2fde6 Fix gesture conflicts`, `7db6bd2 Exp
 
 Plain-language summary: [STATUS.md](STATUS.md). Build Goal: approved software scope COMPLETE as of session 3 (full P0, P1, hardening; P2 excluded); all human/hardware acceptance pending — see [ACCEPTANCE.md](ACCEPTANCE.md). The user is asleep or away: do not ask questions; reason through problems, using subagents for independent review. The camera is covered: never open the real webcam and never claim live-camera, comfort, speech-audibility or hands-free acceptance.
 
+## Latest task — hide phrase groups and Favourites (R19)
+
+- User: the merged board felt odd (group tiles "Favourites (empty)", "Open Quick, 3 phrases"); asked to hide the new things. Session option `phraseGroups` (default false in the app via `useMotif`; test support passes true). Design: reasoning.md R19 revisions 1-2 APPROVED; criteria F1-F6.
+- State: **software verified; human acceptance pending** — commits 82288f5, fe413d7 plus QA tests; vitest 74 files/1126, tsc clean, build OK. Favourites/groups code and data untouched. To re-enable: change the default in `src/app/useMotif.ts`. Not pushed.
+- Offered next (awaiting user go-ahead): hide the camera panel in assisted mode, drop "N phrases" count, first-time hint line, larger hint text; product choices: caregiver link placement, Speak highlighted on an empty message.
+
+## Current task — merge origin/main into ux-simplify (R18)
+
+- User ran `git pull` and got divergent branches; chose "Combine both" (main's phrase groups/Favourites/caregiver + my message bar/Helper/confirmations). Base `ux-simplify` 9dade52; `origin/main` 24e9c6b (119 commits, 857 tests). First merge attempt aborted (14 conflicting files); nothing lost.
+- Design: reasoning.md R18 revisions 1-2, APPROVED. Criteria: UX_ACCEPTANCE.md M1-M12, MH. State: **software verified; human acceptance pending (MH)** — merge `1578bab` plus fixes; QA tests `b5584c6`; vitest 70 files/1091, tsc clean, build OK. Next: user tries it with the camera, then push ux-simplify and open a PR if wanted (not pushed).
+- `.env.local` holds the two VITE_SUPABASE_* values the user pasted (gitignored; never commit). Nothing pushed.
+
+## Current task — branch ux-simplify (fewer pages)
+
+- User: "so many pages … simple and intuitive … fix it". Branch `ux-simplify` off `ux-comm-screen` at `b2adf7c` (513 tests). Practice stays required (plan.md decision kept; shown on the Talk screen).
+- Slice A (views, copy, progress bar, mapping cards; no stage-machine change): reasoning.md "UX simplify, slice A" revision 1; criteria U1-U12, UH. State: **software verified; human acceptance pending (UH)** — commits f8b36ee..e70b1c0 plus QA tests; vitest 38 files/595, tsc clean, build OK.
+- Slice B: **software verified; human acceptance pending (VH)** — commits 6b80d24..7a8fa31 plus QA tests; vitest 39 files/638, tsc clean, build OK. Next: merge origin/main (119 new commits: caregiver dashboard, participant requests, phrase groups) into ux-simplify; no push.
+- Agents: reviewer ae8ac905 (design), developer a7a8cb8d, QA ae97aab9 (owns `src/ux-simplify.acceptance.test.tsx`).
+
+## Previous task — branch ux-comm-screen (communication screen)
+
+- User approved the mockup (https://claude.ai/artifact/W8t4tg1TKfoiHHrk9SZ4Cr) and asked to build it, with Change controls, Add a movement and the other important helper options prominent. Branch `ux-comm-screen` off `ux-landing` at `1e17e06`. Baseline: tsc clean, vitest 34 files/461, build OK.
+- Design: reasoning.md "UX comm screen" revision 1. Criteria: UX_ACCEPTANCE.md C1-C14 + CH.
+- State: **software verified; human acceptance pending (CH).** Design revision 2 APPROVED; developer commits ceb41fc, f77e76e, b6110dd, 9365806; QA round 1 PASS (51 acceptance tests, 5 mutations caught, C12 screenshots). Coordinator: vitest 36 files/513, tsc clean, build OK. Next: user tries it with the camera; then PR if wanted. Nothing pushed.
+
 ## Current task — merge `origin/main` into `ethan-features` (R19)
 
 - User (awake, 2026-10-17): "merge main". Base: branch `ethan-features` at the commit after this note; `origin/main` at `e2d5871`. Trial merge (throwaway worktree, removed) conflicts in 10 files.
@@ -228,3 +253,8 @@ Previous T1 (R11): steady 3/3/3 rhythm, next-cue previews and coherent spoken cu
 - Slice 3 design APPROVED (rev 2, `6a34eda`). QA finishing `src/app/ux-record.acceptance.test.ts`; developer implementing (SetupViews.tsx ChooseView, ReviewViews.tsx ComfortView, session.ts renameMovement, types.ts, tests it intentionally changes). Round 0 of 3.
 - **Slice 3 software verified; human acceptance pending (3.H).** Commits a559869, 0b9463d; tests 00ff6b9 + focus test. `ux-setup-flow` complete in software: 431 tests, tsc, build pass. Human checks 1.H, 2.H, 3.H pending. Next branch: `ux-comm-screen` (criteria AC1-AC14 in the plan file) off `ux-setup-flow` or `fix-record-movement`; needs design + review first. Nothing pushed. Agents: dev a7a8cb8d..., QA ae97aab9..., reviewer a0c73f94... (resumable).
 - **Hold length per movement (slice H) reverted at the user's request (2026-10-17)** with a revert commit on ux-landing; the original commits 5df857b..fed9ba6 remain in history if it is wanted again. Tree matches 6315311 (simplified start screen). 431 tests, tsc, build pass.
+
+## R20 no practice page, Speak renamed Play (branch ux-simplify, 2026-10-17)
+- **Software verified; human acceptance pending (PH).** Approval goes straight to the talking screen; "Use previous" moved to Change controls; button now says Play; evidence lines say "recorded attempt". QA table in `UX_ACCEPTANCE.md` (P1-P9 pass, PH pending, 8 mutation checks killed, Chrome assisted-mode check done).
+- Last passing: tsc clean, 76 files / 1162 tests, build OK, on the commit "Reword recorded attempt evidence lines". Nothing pushed. Agents: dev a7a8cb8d..., QA ae97aab9..., reviewer ae8ac905... (resumable).
+- Next: user decides on offered board fixes (hide camera panel in assisted mode, drop "N phrases", first-time hint, larger hint text), caregiver link placement, Play when empty, "Play again" rename, and whether to push `ux-simplify`.

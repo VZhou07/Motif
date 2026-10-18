@@ -19,41 +19,40 @@ function atComfort(h = new Harness()): Harness {
   expect(h.snap.stage).toBe('comfort');
   return h;
 }
-/** Full first setup through the new approve screen, then finish practice. */
+/** Full first setup through the new approve screen, then the board. */
 function setUpFirst(h: Harness): void {
   h.calibrate();
   h.selectByGesture('approve-comfortable');
-  h.selectByGesture('finish-practice');
 }
 const ids = (h: Harness) => h.snap.decisions.map((decision) => decision.id);
 const evidence = (h: Harness) => h.snap.evidence.find((item) => item.label === BROW_LABEL)!;
 
 describe('2.1 one approve screen', () => {
-  it('2.1 offers Approve and practice, Approve but it takes effort, Record again, Try another movement', () => {
+  it('2.1 offers Approve and start, Approve but it takes effort, Record again, Try another movement', () => {
     const h = atComfort();
     expect([...ids(h)].sort()).toEqual(['another-movement', 'approve-comfortable', 'approve-effort', 'record-again']);
     expect(h.snap.decisions.map((decision) => decision.label)).toEqual(
-      expect.arrayContaining(['Approve and practice', 'Approve, but it takes effort']));
+      expect.arrayContaining(['Approve and start', 'Approve, but it takes effort']));
     expect(h.snap.decisions.map((decision) => decision.label).join('|')).toMatch(/Record.*again/);
     expect(h.snap.decisions.map((decision) => decision.label).join('|')).toMatch(/another movement/i);
   });
 
-  it('2.1 mapping and mapping-confirm never appear on the way to practice', () => {
+  it('2.1 mapping and mapping-confirm never appear on the way to the board', () => {
     const h = atComfort();
     const stages = new Set<string>();
     h.session.subscribe(() => stages.add(h.session.getSnapshot().stage));
     h.session.decide('approve-comfortable' as never);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(stages.has('mapping')).toBe(false);
     expect(stages.has('mapping-confirm')).toBe(false);
   });
 });
 
 describe('2.2 approving', () => {
-  it('2.2 Approve and practice approves the one movement (select only), cycle approved, effort easy', () => {
+  it('2.2 Approve and start approves the one movement (select only), cycle approved, effort easy', () => {
     const h = atComfort();
     h.session.decide('approve-comfortable' as never);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(Object.values(h.snap.mapping!.assignments)).toEqual(['select']);
     expect(h.snap.cycles.at(-1)!.outcome).toBe('approved');
@@ -63,20 +62,20 @@ describe('2.2 approving', () => {
   it('2.2 Approve, but it takes effort does the same and records effort', () => {
     const h = atComfort();
     h.session.decide('approve-effort' as never);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(Object.values(h.snap.mapping!.assignments)).toEqual(['select']);
     expect(h.snap.cycles.at(-1)!.outcome).toBe('approved');
     expect(evidence(h).effort).toBe('effort');
   });
 
-  it('2.2 a repeated Approve after practice began is ignored', () => {
+  it('2.2 a repeated Approve after the board opened is ignored', () => {
     const h = atComfort();
     h.session.decide('approve-comfortable' as never);
     const before = h.snap.approvedModels;
     h.session.decide('approve-comfortable' as never);
     h.session.decide('approve-effort' as never);
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toEqual(before);
     expect(evidence(h).effort).toBe('easy');
   });
@@ -98,12 +97,12 @@ describe('2.3 nothing is on before approval', () => {
     again.session.decide('record-again');
     expect(again.snap.approvedModels).toHaveLength(0);
     expect(again.snap.mapping).toBeNull();
-    expect(again.snap.stage).not.toBe('practice');
+    expect(again.snap.stage).not.toBe('communication');
     const other = atComfort();
     other.session.decide('another-movement');
     expect(other.snap.approvedModels).toHaveLength(0);
     expect(other.snap.mapping).toBeNull();
-    expect(other.snap.stage).not.toBe('practice');
+    expect(other.snap.stage).not.toBe('communication');
   });
 
   it('2.3 a first accidental movement on the comfort screen approves nothing (the scan starts on Record again)', () => {
@@ -111,10 +110,11 @@ describe('2.3 nothing is on before approval', () => {
     expect(h.highlightedId()).toBe('record-again');
     h.run(3_000, BROW);
     h.run(1_000, REST);
-    expect(h.snap.stage).not.toBe('practice');
+    expect(h.snap.stage).not.toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(0);
     expect(h.snap.mapping).toBeNull();
-    expect(h.snap.practice.selections).toBe(0);
+    expect(h.snap.message).toEqual([]);
+    expect(h.snap.lastSpoken).toBeNull();
   });
 });
 
@@ -130,14 +130,14 @@ describe('2.4 the screen says what turns on', () => {
     expect(text).toMatch(/separate checks passed/);
     expect(text).toMatch(/accidental selections/);
     expect(text).toMatch(/not a guarantee/);
-    expect(screen.getByRole('button', { name: 'Approve and practice' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Approve and start' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Approve, but it takes effort' })).toBeTruthy();
-    expect(h.snap.comfortPreview).toEqual({ label: expect.stringContaining(`${BROW_LABEL} selects`), mode: 'auto' });
+    expect(h.snap.comfortPreview).toEqual({ label: expect.stringContaining(`${BROW_LABEL} selects`), mode: 'auto', parts: expect.any(Array) });
   });
 });
 
 describe('2.5 / 2.7 selection count with the gesture scanner', () => {
-  it('2.5 one decision (the Approve) after the checks reaches practice, never the old comfortable/map/approve trio', () => {
+  it('2.5 one decision (the Approve) after the checks reaches the board, never the old comfortable/map/approve trio', () => {
     const h = new Harness();
     const decide = vi.spyOn(h.session, 'decide');
     const startBaseline = vi.spyOn(h.session, 'startBaseline');
@@ -150,7 +150,7 @@ describe('2.5 / 2.7 selection count with the gesture scanner', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
     h.selectByGesture('approve-comfortable');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(decide.mock.calls.map((call) => call[0])).toEqual(['approve-comfortable']);
     // Get started + Record (chooseMovement) + Approve = 3 session calls; picking the movement tile is the 4th click (UI only).
     expect(startBaseline.mock.calls.length + choose.mock.calls.length + decide.mock.calls.length).toBe(3);
@@ -162,7 +162,7 @@ describe('2.5 / 2.7 selection count with the gesture scanner', () => {
     expect(targets).toEqual(expect.arrayContaining(['approve-comfortable', 'approve-effort']));
     expect(targets).not.toContain('comfortable');
     h.selectByGesture('approve-effort');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(1);
     expect(evidence(h).effort).toBe('effort');
   });
@@ -175,7 +175,7 @@ describe('2.9 preview equals the applied mapping, independent of effort', () => 
       const preview = h.snap.comfortPreview;
       expect(preview).not.toBeNull();
       h.session.decide(id as never);
-      expect(h.snap.stage).toBe('practice');
+      expect(h.snap.stage).toBe('communication');
       expect(h.snap.mappingLabel).toBe(preview!.label);
       expect(h.snap.mapping!.mode).toBe(preview!.mode);
     }
@@ -216,7 +216,7 @@ describe('2.10 refusals are clean', () => {
     expect(ids(h)).not.toContain('approve-comfortable');
     h.session.decide('approve-comfortable' as never);
     h.session.decide('approve-effort' as never);
-    expect(h.snap.stage).not.toBe('practice');
+    expect(h.snap.stage).not.toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(0);
     expect(h.snap.pendingMapping).toBeNull();
     h.followPrompts((snap) => snap.stage === 'setup-failed' || snap.stage === 'comfort', REST);
@@ -251,30 +251,30 @@ describe('2.10 refusals are clean', () => {
 });
 
 describe('2.11 other paths never offer the new ids', () => {
-  const notNew = (h: Harness) => {
+  // Slice B replaced this: adding and recalibrating now approve from the comfort screen too (no approve-effort with 2+ movements).
+  const notNew = (h: Harness, expected: string[]) => {
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).toContain('comfortable');
-    expect(ids(h)).not.toContain('approve-comfortable');
-    expect(ids(h)).not.toContain('approve-effort');
-    expect(h.snap.comfortPreview).toBeNull();
+    expect(ids(h)).toEqual(expected);
+    expect(ids(h)).not.toContain('comfortable');
+    expect(h.snap.comfortPreview).not.toBeNull();
   };
   it('2.11 adding a movement', () => {
     const h = new Harness();
     setUpFirst(h);
     h.addMovement(OPEN_MOUTH, perform);
-    notNew(h);
+    notNew(h, ['record-again', 'approve-comfortable', 'effort-choose', 'choose-different', 'another-movement', 'keep-current']);
   });
   it('2.11 recalibrating', () => {
     const h = new Harness();
     setUpFirst(h);
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     h.run(10_500);
     h.selectByGesture('same-movement');
     h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.recalibrating).toBe(true);
-    notNew(h);
+    notNew(h, ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement', 'keep-current']);
   });
   it('2.11 re-checking a restored setup', () => {
     const storage = createMemoryStorage();
@@ -288,8 +288,7 @@ describe('2.11 other paths never offer the new ids', () => {
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.restoring).toBe('Last setup');
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).not.toContain('approve-comfortable');
-    expect(ids(h)).not.toContain('approve-effort');
+    expect(ids(h)).toEqual(['choose-different', 'approve-saved', 'another-movement']);
   });
 });
 
@@ -316,21 +315,19 @@ describe('2.12 scan order and description', () => {
 });
 
 describe('2.6 other paths keep their screens', () => {
-  it('2.6 a second movement still goes comfort -> mapping -> confirm -> practice', () => {
+  it('2.6 a second movement still goes comfort -> mapping -> confirm -> the board', () => {
     const h = new Harness();
     setUpFirst(h);
     h.addMovement(OPEN_MOUTH, perform);
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).toEqual(expect.arrayContaining(['comfortable', 'comfortable-effort', 'record-again', 'another-movement']));
-    expect(ids(h)).not.toContain('approve-comfortable');
+    expect(ids(h)).toEqual(expect.arrayContaining(['record-again', 'approve-comfortable', 'effort-choose', 'choose-different', 'another-movement']));
     expect(ids(h)).not.toContain('approve-effort');
-    expect(h.snap.comfortPreview).toBeNull();
-    h.selectByGesture('comfortable');
+    h.selectByGesture('choose-different'); // the cards stay available
     expect(h.snap.stage).toBe('mapping');
     h.selectByGesture('map:0');
     expect(h.snap.stage).toBe('mapping-confirm');
     h.selectByGesture('approve-mapping');
-    expect(h.snap.stage).toBe('practice');
+    expect(h.snap.stage).toBe('communication');
     expect(h.snap.approvedModels).toHaveLength(2);
   });
 
@@ -345,8 +342,8 @@ describe('2.6 other paths keep their screens', () => {
     h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', (snap) => perform(snap.capture?.movement ?? null));
     h.run(11_000, HEAD_WOBBLE);
     expect(h.snap.stage).toBe('comfort');
-    expect(ids(h)).toEqual(['comfortable', 'another-movement', 'reject-profile']);
-    expect(h.snap.comfortPreview).toBeNull();
+    expect(ids(h)).toEqual(['choose-different', 'approve-saved', 'another-movement']);
+    expect(h.snap.comfortPreview).not.toBeNull();
   });
 
   it('2.6 the first-movement Approve ids are not offered outside the comfort stage', () => {

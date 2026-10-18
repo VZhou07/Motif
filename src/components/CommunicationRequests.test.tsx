@@ -29,32 +29,27 @@ function paired() {
 }
 
 describe('communication screen with caregiver requests (W1)', () => {
-  it('shows the Ask tile, each request button once, and the pairing card', () => {
+  it('shows the Ask button on the board, the request buttons inside it once, and the pairing card in the Helper', () => {
     const { requests, h } = paired();
-    render(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
+    const view = render(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
     expect(screen.getByRole('button', { name: 'Ask caregiver' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Ask for water' })).toBeNull();
+    act(() => { h.session.selectTarget('ask'); });
+    view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
     expect(screen.getAllByRole('button', { name: 'Ask for water' })).toHaveLength(1);
+    act(() => { h.session.selectTarget('back'); h.session.selectTarget('more'); });
+    view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
     expect(screen.getByText('Caregiver requests: pair this device')).toBeTruthy();
   });
 
-  it('a helper click on Water opens Ask and sends exactly once', () => {
+  it('a helper click on Ask opens it and a click on Water sends exactly once', () => {
     const { client, requests, h } = paired();
     const view = render(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
-    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Ask for water' })); });
-    view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
-    expect(client.sendRequest).toHaveBeenCalledTimes(1);
-    act(() => { h.session.selectTarget('ask'); });
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Ask caregiver' })); });
     view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
     expect(screen.getByRole('heading', { name: 'Ask caregiver' })).toBeTruthy();
     expect(screen.getAllByRole('group', { name: 'Requests' })).toHaveLength(1);
-  });
-
-  it('shows no request panel or pairing card in practice', () => {
-    const { requests, h } = paired();
-    h.reach('practice', (id) => h.session.selectTarget(id));
-    h.session.selectTarget('practice');
-    render(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
-    expect(screen.queryByRole('region', { name: 'Requests to your caregiver' })).toBeNull();
-    expect(screen.queryByText('Caregiver requests: pair this device')).toBeNull();
+    act(() => { fireEvent.click(screen.getByRole('button', { name: 'Ask for water' })); });
+    expect(client.sendRequest).toHaveBeenCalledTimes(1);
   });
 });

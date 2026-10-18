@@ -1,15 +1,15 @@
 # Motif build update
 
-**On `main`:** all four pull requests are merged (accounts and requests foundation, participant requests, caregiver dashboard, grouped phrases). The missing connections (requests and pairing on the person's screen) are merged into local `main`.
+**Branch `ux-simplify` (merged with `origin/main`):** the setup is one flow with a single progress bar, click-to-record, one approve screen, and Recalibrate / A movement is tiring moved inside Helper or Change controls. The talking screen shows the message on top (**Play**, **Undo**, **Say it again**), the 6 phrases as large tiles, and only **Pause**, **Favourites** and **Helper** (plus **Ask caregiver** when paired) underneath. Phrase groups are built but hidden for now (one setting turns them back on). A **Favourites** button sits beside Helper; save a message to it from Helper. Helper holds the controls, scan speed, Clear (asks first), Save to Favourites, phrase groups, Edit phrases and camera details. Clear and Recalibrate ask before they act. A **Movement seen** light shows on the right.
 
-**What works now (automated checks):**
-- The person's main list: **Speak · Undo · Favourites · Quick · Needs · Pause · Ask caregiver · More**. **Ask caregiver** appears once the device is paired and lists water, bathroom, help changing position, general help and cancel. One selection sends one request; nothing is sent from Practice, while paused, or by speaking.
-- Pairing: on the start screen (and under the message), open **Caregiver requests: pair this device** and type the caregiver's invitation code.
-- Caregiver dashboard at `#/caregiver`: sign in, add people, make invitation codes, see and answer requests.
+**Also from `main`:** Favourites kept with Last setup, and the caregiver dashboard at `#/caregiver` (needs Supabase settings in `.env.local`; see `docs/supabase-setup.md`). When a caregiver is paired, an **Ask caregiver** button appears beside Helper (requests), and pairing sits in Helper.
 
+**Checked (automated):** see `progress.md` for the latest test, typecheck and build results.
 **Needs you:** in Supabase, anonymous sign-ins must be saved as on (the live setting still says off). Run `npm run check:care`: every line should say PASS. Then follow `docs/demo-runbook.md` (it includes a database check to paste into Supabase). Use a separate browser or incognito window for the caregiver and each person; one browser shares one sign-in.
 
-**Also new:** clearer sign-in and pairing errors, and the caregiver tab shows the number of open requests.
+**Practice page removed:** approving now goes straight to the talking screen, and the button says **Play** instead of Speak. "Use previous" now lives in Change controls.
+
+**Needs you (real camera):** after approving, hold your movement a moment and check nothing is played by accident; Get started starts the rest check by itself; clicking a movement starts recording; the approve screen is clear; blink vs one-eye; Continue within and after an hour; on the talking screen, whether the Movement seen light matches your movement and scanning through Favourites, Helper and Clear feels right.
 
 **Checked:** typecheck, 888 tests, build, 83/83 browser checks; independent testers passed it. The browser companion is left out for now.
 

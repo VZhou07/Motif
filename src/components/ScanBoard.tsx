@@ -35,7 +35,7 @@ export function ScanButton({ id, snapshot, onActivate, children, className = '',
 export function ScanHint({ snapshot }: { snapshot: SessionSnapshot }) {
   const scan = snapshot.scan;
   let text = 'Choose with a click, touch or keyboard (assisted setup).';
-  const operating = snapshot.stage === 'communication' || snapshot.stage === 'practice';
+  const operating = snapshot.stage === 'communication';
   if (scan?.driver === 'gesture') {
     const ready = operating && snapshot.mappingLabel
       ? (snapshot.scanMode === 'step'
@@ -55,15 +55,19 @@ export function ScanHint({ snapshot }: { snapshot: SessionSnapshot }) {
   return <p className="control-hint">{text}</p>;
 }
 
+/** Decisions that are never the main action: they leave things as they are or step back. */
+const NOT_PRIMARY = new Set(['keep-current', 'never-mind', 'reject', 'reject-profile', 'another-movement', 'record-again']);
+
 /** Setup choices: decisions and mapping proposals. Each is scanned (when a movement exists) and clickable for helpers. */
-export function DecisionList({ snapshot, onChoose, describedBy }: { snapshot: SessionSnapshot; onChoose: (id: string) => void; describedBy?: string }) {
+export function DecisionList({ snapshot, onChoose, describedBy, primaryId }: { snapshot: SessionSnapshot; onChoose: (id: string) => void; describedBy?: string; primaryId?: string | null }) {
   if (!snapshot.decisions.length) return null;
+  const primary = primaryId !== undefined ? primaryId : snapshot.decisions.find((decision) => !NOT_PRIMARY.has(decision.id))?.id ?? null;
   return (
     <>
       <ScanHint snapshot={snapshot} />
       <div className="stacked-actions" role="group" aria-label="Choices" aria-describedby={describedBy}>
-        {snapshot.decisions.map((decision, index) => (
-          <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} primary={index === 0}
+        {snapshot.decisions.map((decision) => (
+          <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} primary={decision.id === primary}
             onActivate={onChoose}>{decision.label}</ScanButton>
         ))}
       </div>

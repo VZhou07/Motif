@@ -33,8 +33,8 @@ export class Harness {
   readonly session: MotifSession;
   stepMs = 50;
 
-  constructor(options: { profiles?: ProfileStore; requests?: RequestPort } = {}) {
-    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles, requests: options.requests });
+  constructor(options: { profiles?: ProfileStore; phraseGroups?: boolean; requests?: RequestPort } = {}) {
+    this.session = new MotifSession({ speech: this.speech, clock: () => this.now, wallClock: () => this.now, profiles: options.profiles, phraseGroups: options.phraseGroups ?? true, requests: options.requests });
   }
 
   get snap(): SessionSnapshot { return this.session.getSnapshot(); }
@@ -179,10 +179,9 @@ export class Harness {
     this.run(11_000, (t) => ({ jawOpen: 0.1 + 0.3 * Math.abs(Math.sin(t / 300)), headYaw: 6 * Math.sin(t / 900) }));
   }
 
-  /** Full setup through comfort, mapping choice + approval and practice, all by gesture. */
+  /** Full setup through comfort, mapping choice + approval, all by gesture. */
   setUpToCommunication(): void {
     this.calibrate();
     this.selectByGesture('approve-comfortable');
-    this.selectByGesture('finish-practice');
   }
 }

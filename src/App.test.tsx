@@ -22,10 +22,7 @@ function twoMovements(): Harness {
   const h = new Harness();
   h.setUpToCommunication();
   h.addMovement(OPEN_MOUTH, (label) => (label === 'Open mouth' ? MOUTH : label ? BROW : REST));
-  h.selectByGesture('comfortable');
-  h.selectByGesture('map:0');
-  h.selectByGesture('approve-mapping');
-  h.stepTo('finish-practice');
+  h.selectByGesture('approve-comfortable');
   return h;
 }
 
@@ -86,6 +83,7 @@ describe('Motif app', () => {
     fireEvent.keyDown(window, { code: 'Space', key: ' ', ctrlKey: true });
     expect(screen.getByRole('region', { name: 'Message' }).textContent).toContain('Yes');
     expect(h.snap.message).toEqual(['Yes']);
+    fireEvent.click(screen.getByRole('button', { name: 'Helper' })); // these details live in the Helper panel
     expect(h.snap.lastSpoken).toBeNull();
     expect(screen.getByText(/No local speech voice is available/)).toBeTruthy();
   });
@@ -99,7 +97,7 @@ describe('Motif app', () => {
     expect(current?.textContent).toBe('Record this movement again');
     expect(document.querySelector('.comfort-preview')?.textContent).toMatch(/Raise left outer eyebrow.*selects the highlighted choice/);
     act(() => h.selectByGesture('approve-comfortable'));
-    expect(screen.getByText(/NOTHING IS SPOKEN/)).toBeTruthy();
+    expect(screen.getByText(/Choose a phrase to start your message/)).toBeTruthy(); // straight to the talking screen
   });
 
   it('reports a hidden tab and stops the camera on unmount', () => {
@@ -186,10 +184,10 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByText('Check 3 (cross-check: “Raise left outer eyebrow” still works): passed — 1 recognition')).toBeTruthy();
     expect(screen.getByText('Check 1 (new attempt: “Open mouth”): passed — 1 recognition')).toBeTruthy();
-    act(() => h.selectByGesture('comfortable'));
+    act(() => h.selectByGesture('choose-different'));
     const proposals = [...document.querySelectorAll('[data-scan-id^="map:"]')].map((node) => node.textContent);
     expect(proposals).toHaveLength(4);
-    expect(proposals[0]).toMatch(/Raise left outer eyebrow selects · Open mouth moves next/);
+    expect(proposals[0]).toMatch(/Raise left outer eyebrow: Select.*Open mouth: Move next/);
     act(() => { while (h.highlightedId() !== 'map:1') h.step(); });
     expect(document.querySelector('[aria-current="true"]')?.getAttribute('data-scan-id')).toBe('map:1');
     act(() => h.selectByGesture('map:1'));
@@ -208,6 +206,7 @@ describe('Motif app', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
     h.setUpToCommunication();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     expect(screen.getByText(/saved on this device automatically/)).toBeTruthy();
     expect(screen.queryByLabelText('Profile name')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Save on this device' })).toBeNull();
@@ -219,6 +218,7 @@ describe('Motif app', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => storage) });
     h.setUpToCommunication();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     expect(screen.getByText(/when your checks last passed/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
     expect(h.session.getSnapshot().stage).toBe('welcome');
@@ -227,26 +227,14 @@ describe('Motif app', () => {
     expect(h.session.getSnapshot().stage).toBe('mapping-confirm');
   });
 
-  it('offers back to start inside assisted input started from the start screen, but not in practice', () => {
+  it('offers back to start inside the Helper in assisted input started from the start screen', () => {
     const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Use assisted input (Space switch)' }));
-    act(() => h.click('practice')); // in More since C1 (R18)
-    expect(h.session.getSnapshot().stage).toBe('practice');
-    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
-    act(() => h.session.selectTarget('finish-practice'));
     expect(h.session.getSnapshot().stage).toBe('communication');
+    fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     fireEvent.click(screen.getByRole('button', { name: 'Done, back to start screen' }));
     expect(h.session.getSnapshot()).toMatchObject({ stage: 'welcome', inputMode: 'gesture' });
-  });
-
-  it('hides back to start during practice with a movement setup', () => {
-    const h = new Harness({ profiles: createLocalProfileStore(() => createMemoryStorage()) });
-    h.setUpToCommunication();
-    act(() => h.stepTo('practice'));
-    render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    expect(h.session.getSnapshot().stage).toBe('practice');
-    expect(screen.queryByRole('button', { name: 'Done, back to start screen' })).toBeNull();
   });
 
   it('offers Continue and a confirmed delete for the saved setup on the welcome screen', async () => {
@@ -274,6 +262,7 @@ describe('Motif app', () => {
   it('shows per-movement evidence with denominators in the evidence panel', () => {
     const h = twoMovements();
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Helper' }));
     const list = screen.getByRole('list', { name: 'Your movements' });
     const items = [...list.children].map((item) => item.textContent ?? '');
     expect(items[0]).toMatch(/^Raise left outer eyebrow3 of 3 required checks passed \(each had to pass\)0 accidental activations in [\d.]+ s over 2 everyday checks/);
@@ -283,13 +272,13 @@ describe('Motif app', () => {
 
   it('asks which movement is tiring, then explains the recommendation and offers a helper form', () => {
     const h = twoMovements();
-    act(() => h.stepTo('tiring'));
+    act(() => { h.stepTo('change-controls'); h.selectByGesture('report-tiring'); });
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Which movement/);
     expect(screen.getByRole('button', { name: '“Open mouth” is tiring' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: '“Open mouth” is tiring' }));
     expect(h.snap.stage).toBe('mapping');
-    expect(screen.getByLabelText('Why this is recommended').textContent).toMatch(/Open mouth is left unused because you reported it tiring once/);
+    expect(screen.getByText('Why recommended').closest('details')!.textContent).toMatch(/Open mouth is left unused because you reported it tiring once/);
     const [brow, mouth] = h.snap.approvedModels;
     fireEvent.change(screen.getByLabelText('Open mouth'), { target: { value: 'select' } });
     fireEvent.change(screen.getByLabelText('Raise left outer eyebrow'), { target: { value: 'pause' } });
@@ -306,11 +295,10 @@ describe('Motif app', () => {
     render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
     fireEvent.click(screen.getByRole('button', { name: 'Not sure? Find my movements' }));
     expect(screen.getByText('FINDING YOUR MOVEMENTS')).toBeTruthy();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Try what feels/);
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/Explore/);
     const start = h.now;
     act(() => h.run(20_500, (now) => ((now - start - 500) % 4_000 >= 0 && (now - start - 500) % 4_000 < 1_000 ? MOUTH : REST)));
-    const list = screen.getByRole('list', { name: 'Noticed movements' });
-    expect(list.textContent).toMatch(/Open mouth — seen 5 times/);
+    expect(screen.getByRole('button', { name: 'Open mouth' }).textContent).toMatch(/Open mouth.*seen 5 times/);
     expect(screen.getByText(/not proof of what you meant/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Open mouth' }));
     expect(h.snap.stage).toBe('training');
@@ -337,7 +325,7 @@ describe('Motif app', () => {
   it('gives every control on each screen an accessible name and keeps one app announcer', () => {
     const unnamed = () => ['button', 'textbox', 'combobox', 'checkbox', 'progressbar'].flatMap((role) =>
       screen.queryAllByRole(role, { name: (name) => name.trim() === '' }).map((element) => `${role}: ${element.outerHTML.slice(0, 80)}`));
-    const announcers = () => document.querySelectorAll('[aria-live]').length;
+    const announcers = () => document.querySelectorAll('[aria-live]:not([aria-live="off"])').length;
     const h = new Harness();
     h.session.editVocabulary({ kind: 'edit-phrase', group: 'g1', index: 0, text: 'Yes' });
     const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
@@ -347,12 +335,11 @@ describe('Motif app', () => {
       ['choose', () => h.run(9_000)],
       ['training', () => h.session.chooseMovement({ feature: 'browOuterUpLeft', direction: 1, label: 'Raise left outer eyebrow' })],
       ['comfort', () => { h.followPrompts((snap) => snap.stage === 'negative'); h.run(11_000, (t) => ({ headYaw: 6 * Math.sin(t / 900) })); }],
-      ['practice', () => h.selectByGesture('approve-comfortable')],
-      ['communication', () => h.selectByGesture('finish-practice')],
+      ['communication', () => h.selectByGesture('approve-comfortable')],
       ['recalibrate', () => h.selectByGesture('recalibrate')],
-      ['assisted', () => { h.selectByGesture('keep-current'); h.session.useAssisted(); }],
+      ['assisted', () => { h.selectByGesture('recalibrate-no'); h.session.useAssisted(); }],
     ];
-    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'practice', 'communication', 'recalibrate-confirm', 'communication'];
+    const stages = ['welcome', 'baseline', 'choose', 'training', 'comfort', 'communication', 'communication', 'communication'];
     for (const [index, [name, go]] of screens.entries()) {
       act(go);
       expect([name, h.snap.stage]).toEqual([name, stages[index]]);
@@ -370,7 +357,7 @@ describe('Motif app', () => {
     saver.setUpToCommunication();
     const h = twoMovements();
     const view = render(<App runtime={{ session: h.session, speech: localSpeech(h), tracker: fakeTracker() }} />);
-    act(() => h.stepTo('tiring'));
+    act(() => { h.stepTo('change-controls'); h.selectByGesture('report-tiring'); });
     expect([h.snap.stage, unnamed()]).toEqual(['tiring', []]);
     view.unmount();
 

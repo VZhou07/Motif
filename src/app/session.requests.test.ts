@@ -52,7 +52,7 @@ describe('caregiver requests in the communication session (W1)', () => {
     expect(h.snap.level?.kind).toBe('top');
   });
 
-  it('never sends from Speak, composing, Practice or a paused helper click', async () => {
+  it('never sends from Play, composing, the main list or a paused helper click', async () => {
     const { send, h, pair } = await world();
     await pair();
     h.selectByGesture('phrase:g1:0');
@@ -61,12 +61,9 @@ describe('caregiver requests in the communication session (W1)', () => {
     h.session.selectTarget('pause');
     h.session.selectRequest('request:water');
     h.session.resume();
-    h.reach('practice', (id) => h.session.selectTarget(id));
-    h.session.selectTarget('practice');
-    expect(h.snap.stage).toBe('practice');
-    expect(ids(h)).not.toContain('ask');
-    h.session.selectRequest('request:water');
-    h.session.selectTarget('request:water');
+    expect(h.snap.level?.kind).toBe('top');
+    expect(ids(h)).toContain('ask');
+    h.session.selectTarget('request:water'); // not offered on the main list
     await settle();
     expect(send).not.toHaveBeenCalled();
   });

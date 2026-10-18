@@ -4,7 +4,7 @@ import { describeEvidence } from '../app/scoring';
 import type { CycleEvidence, SessionSnapshot } from '../app/types';
 import { Icon } from './Icon';
 import { SavedProfiles } from './ProfileViews';
-import { DecisionList } from './ScanBoard';
+import { DecisionList, ScanButton, ScanHint } from './ScanBoard';
 import { Heading, type ViewProps } from './SetupViews';
 
 const seconds = (ms: number) => `${(ms / 1_000).toFixed(1)} s`;
@@ -18,7 +18,7 @@ function cycleSummary(cycle: CycleEvidence): string[] {
     recheck: (label: string) => `re-check of saved “${label}”` };
   cycle.heldOut.forEach((attempt) => lines.push(`Check ${attempt.attempt} (${kinds[attempt.kind](attempt.expected)}): ${attempt.passed ? 'passed' : 'did not pass'} — ${attempt.eventCount} recognition${attempt.eventCount === 1 ? '' : 's'}${attempt.passed ? '' : `; ${attempt.reasons[0] ?? ''}`}`));
   if (cycle.negative) {
-    lines.push(`Everyday activity: ${cycle.negative.eventCount} accidental selection${cycle.negative.eventCount === 1 ? '' : 's'} in ${seconds(cycle.negative.validDurationMs)} armed; ${cycle.negative.restarts} restart${cycle.negative.restarts === 1 ? '' : 's'}`);
+    lines.push(`Everyday activity: ${cycle.negative.eventCount} accidental selection${cycle.negative.eventCount === 1 ? '' : 's'} in ${seconds(cycle.negative.validDurationMs)}; paused ${cycle.negative.restarts} time${cycle.negative.restarts === 1 ? '' : 's'}`);
   }
   return lines;
 }
@@ -51,18 +51,24 @@ export function EvidencePanel({ snapshot }: { snapshot: SessionSnapshot }) {
 
 export function FailedView({ snapshot, session }: ViewProps) {
   const failure = snapshot.failure;
+  const ids = snapshot.decisions.map((decision) => decision.id);
+  // Exactly one main action: record again, else the fix for what failed, else choose another movement.
+  const key = ids.includes('record-again') ? 'record-again'
+    : failure?.kind === 'baseline' ? 'redo'
+      : failure?.kind === 'discovery' ? 'look'
+        : ids.includes('another-movement') ? 'another-movement' : 'redo';
   return (
     <>
       <Heading eyebrow="LET'S TAKE ANOTHER LOOK" title={<>No rush.<br /><em>{failure?.title ?? 'We can try again.'}</em></>}
-        lead="Nothing was approved from this attempt. You can record again, try another comfortable movement, redo the rest check, or use assisted input." />
+        lead="Nothing was approved from this attempt." />
       {failure && <div className="error-banner" role="alert"><strong>What we observed</strong>{failure.reasons.map((reason) => <p key={reason}>{reason}</p>)}</div>}
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} primaryId={key === 'redo' || key === 'look' ? null : key} />
       <div className="button-row" style={{ marginTop: 16 }}>
-        {failure?.kind === 'discovery' && <button type="button" className="button" onClick={() => session.startDiscovery()}>Look for movements again</button>}
-        <button type="button" className="button" onClick={() => session.startBaseline()}><Icon name="refresh" />Redo the rest check</button>
+        {failure?.kind === 'discovery' && <button type="button" className={`button ${key === 'look' ? 'button-primary' : 'button-quiet'}`} onClick={() => session.startDiscovery()}>Look for movements again</button>}
+        <button type="button" className={`button ${key === 'redo' ? 'button-primary' : 'button-quiet'}`} onClick={() => session.startBaseline()}><Icon name="refresh" />Redo the rest check</button>
         <button type="button" className="button button-quiet" onClick={() => session.useAssisted()}>Use assisted input (Space switch)</button>
       </div>
-      {!snapshot.approvedModels.length && <SavedProfiles snapshot={snapshot} session={session} />}
+      {!snapshot.approvedModels.length && <SavedProfiles snapshot={snapshot} session={session} quiet />}
       <EvidencePanel snapshot={snapshot} />
     </>
   );
@@ -97,7 +103,7 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         lead="The computer checked the signal. You decide whether this is a movement you are comfortable repeating." />
       <div className="result-card">
         <span className="result-icon"><Icon name="check" size={26} /></span>
-        <h2>{snapshot.restoring ? `Saved profile “${snapshot.restoring}”` : snapshot.candidate?.label ?? 'Your movement'}</h2>
+        <h2>{snapshot.restoring ? 'Your saved setup' : snapshot.candidate?.label ?? 'Your movement'}</h2>
         <div className="evidence-grid">
           <div><strong>{cycle?.heldOut.filter((attempt) => attempt.passed).length ?? 0} / {cycle?.heldOut.length ?? 0}</strong><span>separate checks passed</span></div>
           <div><strong>{cycle?.negative?.eventCount ?? '—'}</strong><span>accidental selections in {cycle?.negative ? seconds(cycle.negative.validDurationMs) : '—'} of everyday activity</span></div>
@@ -105,12 +111,15 @@ export function ComfortView({ snapshot, session }: ViewProps) {
         <p>Observations from this short session, not a guarantee of future accuracy.</p>
       </div>
       <h2 className="question-heading">{preview ? 'Comfortable enough to use?' : 'Comfortable enough to repeat?'}</h2>
-      {preview && snapshot.candidate && <MovementName initial={snapshot.candidate.label} session={session} />}
+      {preview && snapshot.candidate && snapshot.approvedModels.length === 0 && <MovementName initial={snapshot.candidate.label} session={session} />}
       {preview && (
-        <div id="comfort-preview" className="mapping-explainer comfort-preview"><Icon name="check" />
+        <div id="comfort-preview" className="mapping-explainer comfort-preview proposal-card-static">
+          <h2>{MODE_HEADINGS[preview.mode]}</h2>
+          <ControlChips parts={preview.parts} />
           <p>Approving turns on: <strong>{preview.label}</strong>. {preview.mode === 'auto'
             ? 'Choices highlight one at a time on their own, and your held movement selects the highlighted choice. Nothing is spoken until you choose it.'
-            : 'The highlight moves only when you make your movement.'} Nothing is on until you approve.</p>
+            : 'The highlight moves only when you make your movement.'} Nothing is on until you approve.
+            {snapshot.recalibrating && snapshot.approvedModels.length > 1 ? ' Your other movements will be turned off.' : ''}</p>
         </div>
       )}
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} describedBy={preview ? 'comfort-preview' : undefined} />
@@ -119,25 +128,49 @@ export function ComfortView({ snapshot, session }: ViewProps) {
   );
 }
 
+const ACTION_WORDS = { select: 'Select', next: 'Move next', previous: 'Move back', pause: 'Pause' } as const;
+const MODE_HEADINGS = { auto: 'Automatic: the highlight moves by itself', step: 'Step by step: no timer' } as const;
+
+function ControlChips({ parts }: { parts: Array<{ label: string; action: keyof typeof ACTION_WORDS }> }) {
+  return <span className="proposal-chips">{parts.map((part) => <span key={part.label} className="proposal-chip">{part.label}: {ACTION_WORDS[part.action]}</span>)}</span>;
+}
+
 export function MappingView({ snapshot, session }: ViewProps) {
-  const interval = ((snapshot.scan?.intervalMs ?? 2_000) / 1_000).toFixed(1);
-  const label = snapshot.candidate?.label ?? snapshot.approvedModel?.label ?? 'Your movement';
+  const cards = new Map(snapshot.proposals.map((card) => [card.id, card]));
+  const choose = (id: string) => session.chooseSetupTarget(id);
   return (
     <>
-      <Heading eyebrow="STEP 3 · MAKE IT YOURS" title={<>Your movements.<br /><em>Your controls.</em></>}
-        lead="Pick how your movements control Motif. Choosing here turns nothing on: you approve on the next screen. Nothing is spoken during setup." />
-      <div className="mapping-explainer"><Icon name="check" />
-        <p>With one movement, choices highlight one at a time every {interval} seconds and <strong>{label}</strong>, held briefly, selects the highlighted choice. With a “moves next” movement the highlight moves only when you make it — there is no timer. Rest briefly between movements.</p>
-      </div>
+      <Heading eyebrow="CHOOSE YOUR CONTROLS" title={<>Your movements.<br /><em>Your controls.</em></>}
+        lead="Choose how your movements control Motif. Choosing turns nothing on until you approve." />
       {snapshot.mappingLabel && <p className="status-notice">Current controls: {snapshot.mappingLabel}</p>}
       {snapshot.recommendation && (
-        <div className="result-card" aria-label="Why this is recommended">
-          <h2>Why we recommend these controls</h2>
+        <details className="settings-card">
+          <summary className="field-label">Why recommended</summary>
           <ul>{snapshot.recommendation.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>
           <p>Based only on what you told us and what was observed in this session. You can pick any option.</p>
-        </div>
+        </details>
       )}
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      {snapshot.decisions.length > 0 && <ScanHint snapshot={snapshot} />}
+      <div className="stacked-actions proposal-list" role="group" aria-label="Choices">
+        {snapshot.decisions.map((decision) => {
+          const card = cards.get(decision.id);
+          if (!card) {
+            return <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} onActivate={choose}>{decision.label}</ScanButton>;
+          }
+          return (
+            <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} onActivate={choose} label={decision.label} className="proposal-card">
+              <strong>{MODE_HEADINGS[card.mode]}</strong>
+              <ControlChips parts={card.parts} />
+              {(card.recommended || card.inUse) && (
+                <span className="proposal-badges">
+                  {card.recommended && <span className="proposal-badge">Recommended</span>}
+                  {card.inUse && <span className="proposal-badge">In use now</span>}
+                </span>
+              )}
+            </ScanButton>
+          );
+        })}
+      </div>
       <CustomControls snapshot={snapshot} session={session} />
     </>
   );
@@ -145,26 +178,16 @@ export function MappingView({ snapshot, session }: ViewProps) {
 
 export function MappingConfirmView({ snapshot, session }: ViewProps) {
   const pending = snapshot.pendingMapping;
+  const parts = pending ? snapshot.setupModels.flatMap((model) => { const action = pending.assignments[model.id]; return action ? [{ label: model.label, action }] : []; }) : [];
   return (
     <>
-      <Heading eyebrow="STEP 3 · CHECK YOUR CONTROLS" title={<>Turn these<br /><em>controls on?</em></>}
-        lead="Only Approve turns these controls on. You practice first; nothing is spoken in practice." />
-      <div className="result-card">
-        <h2>{pending?.label ?? 'No controls chosen yet'}</h2>
-        <p>{pending?.mode === 'step'
-          ? 'Step by step: no timer. The highlight moves only when you make your “moves next” movement. If no movement is seen for a minute, scanning becomes automatic again.'
-          : 'Automatic scanning: choices highlight one at a time and your select movement picks the highlighted one.'}</p>
+      <Heading eyebrow="CHECK YOUR CONTROLS" title={<>Turn these<br /><em>controls on?</em></>}
+        lead="Only Approve turns these controls on. Nothing is spoken when you approve." />
+      <div className="result-card proposal-card-static">
+        <h2>{pending ? MODE_HEADINGS[pending.mode] : 'No controls chosen yet'}</h2>
+        <ControlChips parts={parts} />
+        <p>{pending?.mode === 'step' ? 'If no movement is seen for a minute, scanning becomes automatic again.' : 'Your select movement picks the highlighted choice.'}</p>
       </div>
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
-    </>
-  );
-}
-
-export function RecalibrateView({ snapshot, session }: ViewProps) {
-  return (
-    <>
-      <Heading eyebrow="RECALIBRATE" title={<>Fresh start,<br /><em>same you.</em></>}
-        lead="Recording a new rest check and movement turns communication off until the new movement is verified and approved. You can keep your current setup at every decision point." />
       <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
     </>
   );
@@ -194,28 +217,35 @@ function CustomControls({ snapshot, session }: ViewProps) {
   );
 }
 
-/** Candidates from free exploration: suggestions only; choosing one starts the usual practice and checks (R9). */
+/** Candidates from free exploration: suggestions only; choosing one starts the usual recording and checks (R9). */
 export function DiscoveryResultsView({ snapshot, session }: ViewProps) {
   const result = snapshot.discovery;
   const candidates = result?.candidates ?? [];
+  const choose = (id: string) => session.chooseSetupTarget(id);
   return (
     <>
       <Heading eyebrow="FINDING YOUR MOVEMENTS" title={candidates.length ? <>Movements we<br /><em>noticed.</em></> : <>Nothing clear<br /><em>this time.</em></>}
-        lead="These are suggestions from what the camera saw, not proof of what you meant. Choosing one starts the usual practice and checks; nothing works until you approve it." />
+        lead="Suggestions from what the camera saw, not proof of what you meant. Nothing works until you approve it." />
       {result?.reason && <p className="status-notice">{result.reason}</p>}
-      {candidates.length > 0 && (
-        <ul className="movement-evidence" aria-label="Noticed movements">
-          {candidates.map((candidate) => (
-            <li key={`${candidate.feature}:${candidate.direction}`}>
-              <strong>{candidate.label}</strong> — seen {candidate.episodes} times
-              {candidate.companions.length > 0 && <> · moves together with: {candidate.companions.map((channel) => channel.label).join(', ')}</>}
-              {candidate.alsoMoves.length > 0 && <> · often at the same time as: {candidate.alsoMoves.map((channel) => channel.label).join(', ')}</>}
-              {candidate.interferesWith.map((label) => <span key={label}> · may interfere with “{label}” — the cross-check will test this</span>)}
-            </li>
-          ))}
-        </ul>
-      )}
-      <DecisionList snapshot={snapshot} onChoose={(id) => session.chooseSetupTarget(id)} />
+      <ScanHint snapshot={snapshot} />
+      <div className="stacked-actions" role="group" aria-label="Choices">
+        {snapshot.decisions.map((decision) => {
+          const main = /^discovered:(\d+)$/.exec(decision.id);
+          const candidate = main ? candidates[Number(main[1])] : undefined;
+          if (!main || !candidate) return <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} onActivate={choose}>{decision.label}</ScanButton>;
+          const notes = [
+            candidate.companions.length > 0 ? `moves together with ${candidate.companions.map((channel) => channel.label).join(', ')}` : '',
+            candidate.alsoMoves.length > 0 ? `often with ${candidate.alsoMoves.map((channel) => channel.label).join(', ')}` : '',
+            ...candidate.interferesWith.map((label) => `may interfere with “${label}”; the cross-check will test this`),
+          ].filter(Boolean);
+          return (
+            <ScanButton key={decision.id} id={decision.id} snapshot={snapshot} onActivate={choose} label={decision.label} className="discovery-choice">
+              <strong>{candidate.label}</strong><span>seen {candidate.episodes} times</span>
+              {notes.length > 0 && <span className="discovery-note">{notes.join(' · ')}</span>}
+            </ScanButton>
+          );
+        })}
+      </div>
     </>
   );
 }

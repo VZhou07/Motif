@@ -106,7 +106,7 @@ export function CameraDiagnostics({ snapshot }: { snapshot: SessionSnapshot }) {
           <p>Separation: {format(report.margin, report.feature)} · needed: {format(report.minimumMargin, report.feature)}.</p>
         </>}
         {failedAttempt && <p>Check {failedAttempt.attempt}: {failedAttempt.eventCount} recognition events; exactly 1 intended event is required.</p>}
-        {negative && <p>Everyday check: {negative.eventCount} activation events in {(negative.validDurationMs / 1_000).toFixed(1)} armed seconds.</p>}
+        {negative && <p>Everyday check: {negative.eventCount} activation events in {(negative.validDurationMs / 1_000).toFixed(1)} seconds.</p>}
       </div>}
       {feature && <>
         <p className="diagnostics-feature"><strong>{movementName}</strong> · {direction === 1 ? 'increase' : 'decrease'}<span>{definition?.label}</span></p>

@@ -13,7 +13,7 @@ export type RecorderUpdate<T> =
   | { kind: 'interrupted'; reason: string }
   | { kind: 'complete'; value: T };
 
-const TRACKING_LOST = 'Tracking was interrupted, so this recording does not count. It restarts from rest.';
+const TRACKING_LOST = 'Tracking was interrupted, so this recording does not count. It starts again from rest.';
 
 /** Collects ten seconds of contiguous valid processed frames; any interruption restarts the window. */
 export class BaselineRecorder {
@@ -143,7 +143,7 @@ export class NegativeMonitor {
   }
 
   push(frame: FeatureFrame): RecorderUpdate<VerificationResult> {
-    if (frame.tracking !== 'tracked') return this.restart('Tracking was interrupted; the check restarts from rest.');
+    if (frame.tracking !== 'tracked') return this.restart('Tracking was interrupted; the check starts again from rest.');
     const update = this.runtime.step(frame);
     if (update.event) {
       // An observed activation is a failure on its own; no duration can offset it.

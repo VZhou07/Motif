@@ -16,7 +16,7 @@ function mouthSetup(): Harness {
   h.followPrompts((snap) => snap.stage === 'negative' || snap.stage === 'setup-failed', MOUTH);
   expect(h.snap.stage).toBe('negative');
   h.run(11_000);
-  for (const id of ['approve-comfortable', 'finish-practice']) h.selectByGesture(id, MOUTH);
+  h.selectByGesture('approve-comfortable', MOUTH);
   expect(h.snap.stage).toBe('communication');
   return h;
 }
@@ -73,8 +73,7 @@ describe('Open mouth plus head controls with Rest preparation (R15)', () => {
     expect(h.snap.stage).toBe('comfort');
     expect(h.snap.cycles.at(-1)!.negative).toMatchObject({ passed: true, eventCount: 0 });
     h.session.setSpokenPrompts(false);
-    for (const id of ['comfortable', 'map:0', 'approve-mapping']) h.selectByGesture(id, MOUTH);
-    h.stepTo('finish-practice', physicalMotion(head.label, head), MOUTH);
+    h.selectByGesture('approve-comfortable', MOUTH); // R18: one approve screen
     expect(h.snap.stage).toBe('communication');
     expect(h.snap.mapping?.mode).toBe('step');
     h.stepTo('group:g1', physicalMotion(head.label, head), MOUTH); // phrases are in groups (R18)

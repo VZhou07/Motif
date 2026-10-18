@@ -61,7 +61,7 @@ export function evaluatePositiveAttempt(
       reasons.push(`No recognition of “${label}” occurred during Action.`)
       if (expectedModel && Number.isFinite(peak)) {
         const unit = expectedModel.feature.startsWith('head') ? '°' : ''
-        reasons.push(`Observed peak ${peak.toFixed(3)}${unit}; activation needs ${expectedModel.activationThreshold.toFixed(3)}${unit}. Longest unambiguous hold ${Math.round(longestSoloMs)} ms; required ${expectedModel.activationMs} ms. This measurement does not establish that fresh rest armed the recognizer.`)
+        reasons.push(`Observed peak ${peak.toFixed(3)}${unit}; activation needs ${expectedModel.activationThreshold.toFixed(3)}${unit}. Longest unambiguous hold ${Math.round(longestSoloMs)} ms; required ${expectedModel.activationMs} ms. This measurement does not show that you were fully at rest before the movement.`)
       }
     } else if (observed.length > 1) {
       reasons.push(`Detected ${observed.length} recognitions during Action; one “${label}” recognition is required. Relax between holds.`)
@@ -109,9 +109,9 @@ export function evaluateNegativeWindow(
   }
   const duration = armedAt === undefined ? 0 : frames[frames.length - 1]!.timestampMs - armedAt
   const reasons: string[] = []
-  if (armedAt === undefined) reasons.push('Fresh neutral never armed the negative check.')
-  if (duration < minimumMs) reasons.push(`Observe at least ${minimumMs / 1_000} seconds after fresh neutral arms the check.`)
+  if (armedAt === undefined) reasons.push('The everyday check never started: it needs a moment of rest first.')
+  if (duration < minimumMs) reasons.push(`Watch at least ${minimumMs / 1_000} seconds of everyday activity after the check starts.`)
   if (events.length > 0) reasons.push('An accidental activation occurred during ordinary activity.')
-  if (interrupted) reasons.push('Recognition was interrupted after the negative check armed. Restart the check from rest.')
+  if (interrupted) reasons.push('Recognition was interrupted during the everyday check. Restart the check from rest.')
   return { passed: reasons.length === 0, eventCount: events.length, validDurationMs: duration, reasons, events }
 }

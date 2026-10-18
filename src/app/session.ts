@@ -6,15 +6,15 @@ import { GestureRuntime } from '../engine/recognition';
 import { ScanController } from '../engine/scanner';
 import { evaluatePositiveAttempt, type ActionWindow } from '../engine/verification';
 import { BaselineRecorder, CAPTURE_TIMING, NegativeMonitor, TrialRecorder } from './capture';
-import { describeMapping, MAX_GESTURES, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
+import { describeMapping, MAX_GESTURES, type ControlAction, proposeMappings, sameMapping, validateMapping, type Mapping, type MappingProposal, type ScanMode } from './mapping';
 import { discoverCandidates, DISCOVERY, type Channel, type DiscoveryResult } from './discovery';
 import { movementEvidence, recommendMapping, type Effort, type MovementNotes, type MovementUse } from './scoring';
-import { buildLevel, effectiveLevel, isConfirmLevel, isGroupLevel, type Level, type LevelContext } from './navigation';
+import { buildLevel, effectiveLevel, isClearLevel, isConfirmLevel, isGroupLevel, isRecalibrateLevel, type Level, type LevelContext } from './navigation';
 import { addFavourite, addProblem, applyEdit, defaultVocabulary, FAVOURITES_ID, type Vocabulary, type VocabularyEdit } from './vocabulary';
 import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, VERIFICATION_POLICY_VERSION, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
 import {
   type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
-  type InputMode, type LevelView, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
+  type InputMode, type LevelView, type MovementChoice, type ProfilesView, type ProposalCard, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
 } from './types';
 
 export const SESSION_LIMITS = {
@@ -35,8 +35,11 @@ export const SESSION_LIMITS = {
 export const DECISION_LABELS = {
   comfortable: 'Yes, comfortable and easy',
   'comfortable-effort': 'Comfortable, but it takes effort',
-  'approve-comfortable': 'Approve and practice',
+  'approve-comfortable': 'Approve and start',
   'approve-effort': 'Approve, but it takes effort',
+  'effort-choose': 'It takes effort: choose controls',
+  'approve-saved': 'Turn on saved controls',
+  'report-tiring': 'A movement is tiring',
   'record-again': 'Record this movement again',
   'another-movement': 'Choose another movement',
   'keep-current': 'Keep current setup',
@@ -58,6 +61,8 @@ export type DecisionId = keyof typeof DECISION_LABELS;
 /** R14: a check that passed less than this long ago on this page is not repeated when the same profile is restored. */
 export const RECENT_CHECK_MS = 60 * 60 * 1000;
 
+const CANNOT_APPROVE = 'These controls can\'t be turned on yet: the checks did not finish.';
+
 const silentSpeech: SpeechPort = { status: () => ({ available: false, voiceName: null }), speak: () => false, cancel: () => {} };
 const CAPTURE_STAGES: readonly Stage[] = ['baseline', 'training', 'verify', 'negative', 'discover'];
 
@@ -77,7 +82,9 @@ export interface RequestPort {
   subscribe(listener: () => void): () => void;
 }
 
-export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'>; requests?: RequestPort }
+export interface SessionOptions { speech?: SpeechPort; clock?: () => number; wallClock?: () => number; profiles?: ProfileStore; cues?: Pick<CueAudio, 'play' | 'stop'>; requests?: RequestPort;
+  /** Phrase groups and Favourites on the board. Off by default for now (R19); saved Favourites are kept either way. */
+  phraseGroups?: boolean }
 
 /**
  * Browser-independent orchestrator (R5). React renders `getSnapshot()` and forwards input.
@@ -153,8 +160,9 @@ export class MotifSession {
   private vocabulary: Vocabulary = defaultVocabulary();
   private message: string[] = [];
   private lastSpoken: string | null = null;
+  private lastMovementAt: number | null = null;
+  private movementSeenShown = false;
   private spokenPrompts = false;
-  private practice = { selections: 0, last: null as string | null };
   private announcement = '';
 
   private baselineRecorder: BaselineRecorder | null = null;
@@ -174,12 +182,13 @@ export class MotifSession {
   private requestBuild = { ids: '', generation: -1 };
   /** Requests changed while paused: Resume starts from a rebuilt main list instead of rebuilding under Pause (W1 B1). */
   private requestsStale = false;
-  /** Communication/practice scan level (R14); reset to top on every stage entry. */
+  /** Communication scan level (R14); reset to top on every stage entry. */
   private level: Level = 'top';
   /** Counted scanner wraps (via tick) in a sub-level with nothing in between; two return to top. */
   private idleWraps = 0;
   /** The vocabulary when the scan was paused, so Resume can tell whether it changed. */
   private pausedVocabulary: Vocabulary | null = null;
+  private readonly phraseGroups: boolean;
   private runtime: GestureRuntime | null = null;
   private scanDriver: 'gesture' | 'assisted' | 'none' = 'none';
   private intervalMs: number = SESSION_LIMITS.scanDefaultMs;
@@ -190,6 +199,7 @@ export class MotifSession {
     this.wallClock = options.wallClock ?? (() => Date.now());
     this.store = options.profiles ?? createMemoryProfileStore();
     this.cues = options.cues ?? null;
+    this.phraseGroups = options.phraseGroups ?? false;
     this.requests = options.requests ?? null;
     this.requests?.subscribe(() => this.onRequestsChanged());
     this.refreshProfiles();
@@ -280,6 +290,7 @@ export class MotifSession {
       changed ||= this.scanner.snapshot.index !== before;
       this.afterTick(before, nowMs);
     }
+    if (this.movementSeenShown && !this.movementSeen()) changed = true;
     if (changed) this.publish();
   }
 
@@ -445,7 +456,7 @@ export class MotifSession {
     }
     if (this.stageValidMs > SESSION_LIMITS.negativeCapMs) {
       cycle.negative = { passed: false, eventCount: 0, validDurationMs: monitor.armedMs, restarts: monitor.restarts,
-        reasons: [...monitor.lastReasons, 'Ten armed seconds were not observed within one minute.'] };
+        reasons: [...monitor.lastReasons, 'Ten seconds of everyday activity were not recorded within one minute.'] };
       this.fail('negative', 'The everyday-activity check could not finish', cycle.negative.reasons);
     }
   }
@@ -510,17 +521,24 @@ export class MotifSession {
   private allowedDecisions(): DecisionId[] {
     const keep = (this.recalibrating || this.adding) && this.hasApproved;
     switch (this.stage) {
-      case 'comfort':
-        if (!this.restoring && this.singleMovementProposal()) return ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement'];
-        return this.restoring ? ['comfortable', 'another-movement', 'reject-profile']
-        : ['comfortable', 'comfortable-effort', 'record-again', 'another-movement', ...(keep ? ['keep-current' as const] : [])];
+      case 'comfort': {
+        if (this.restoring) return ['choose-different', 'approve-saved', 'another-movement'];
+        const proposal = this.comfortProposal();
+        if (proposal) {
+          const several = this.mappingSet().length > 1;
+          return [...(several ? ['record-again', 'approve-comfortable', 'effort-choose', 'choose-different', 'another-movement'] as const
+            : ['record-again', 'approve-comfortable', 'approve-effort', 'another-movement'] as const), ...(keep ? ['keep-current' as const] : [])];
+        }
+        return ['comfortable', 'comfortable-effort', 'record-again', 'another-movement', ...(keep ? ['keep-current' as const] : [])];
+      }
       case 'tiring': return ['never-mind'];
-      case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []), ...(this.candidate ? ['reject' as const] : []),
+      case 'mapping': return [...(this.hasApproved ? ['keep-current' as const] : []),
+        ...(this.changingControls() && this.approvedModels.length > 1 ? ['report-tiring' as const] : []),
+        ...(!this.candidate && !this.restoring && this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous' as const] : []),
+        ...(this.candidate ? ['reject' as const] : []),
         ...(this.restoring ? ['reject-profile' as const] : [])];
       // With one movement there is only one possible set of controls: offer a different movement instead.
       case 'mapping-confirm': return [this.mappingSet().length === 1 ? 'another-movement' as const : 'choose-different' as const, 'approve-mapping'];
-      case 'recalibrate-confirm': return ['start-recalibration', 'keep-current'];
-      case 'practice': return this.previousMapping && validateMapping(this.approvedModels, this.previousMapping.assignments).ok ? ['use-previous'] : [];
       case 'choose': return keep ? [...(this.recalibrating ? ['same-movement' as const] : []), 'discover', 'keep-current'] : [];
       case 'discover-results': return ['discover-again', 'full-list', ...(keep ? ['keep-current' as const] : [])];
       case 'setup-failed': {
@@ -566,26 +584,50 @@ export class MotifSession {
     if (this.recalibrating || this.adding) this.restrictedScanner(this.approvedModels);
   }
 
+  /** Change controls: the approved set is being edited (no candidate, restore, add or recalibration in progress). */
+  private changingControls(): boolean {
+    return this.hasApproved && !this.candidate && !this.restoring && !this.adding && !this.recalibrating;
+  }
+
   /**
-   * A new setup with exactly one fresh movement and a verified cycle can be approved from the comfort
-   * screen. Pure: the only valid mapping for one movement is select-only, so no effort or
-   * recommendation is consulted and no state changes while the screen is showing.
+   * The controls Approve turns on from the comfort screen: a fresh verified movement (first, added or recalibrated).
+   * Pure, so the preview equals what is approved. One movement can only select; with several, the recommendation is
+   * computed as if the new movement was comfortable and easy (exactly what Approve records). Nothing is stored.
    */
-  private singleMovementProposal(): MappingProposal | null {
-    if (this.stage !== 'comfort' || this.restoring || this.adding || this.recalibrating || this.approvedModels.length || !this.candidate) return null;
+  private comfortProposal(): MappingProposal | null {
+    const candidate = this.candidate;
+    if (this.stage !== 'comfort' || this.restoring || !candidate) return null;
     if (this.cycles[this.cycles.length - 1]?.outcome !== 'verified') return null;
     const set = this.mappingSet();
-    const first = proposeMappings(set)[0];
+    const base = proposeMappings(set);
+    const first = base[0];
     if (!first) return null;
+    if (set.length > 1) {
+      const notes = { ...this.notes, [candidate.id]: { ...this.notes[candidate.id], effort: 'easy' as const } };
+      const recommended = recommendMapping(set, movementEvidence(set, this.cycles, notes, this.use));
+      const valid = recommended ? validateMapping(set, recommended.assignments) : null;
+      if (valid?.ok) return { ...valid.value, id: 'recommended', label: describeMapping(set, valid.value) };
+    }
     const valid = validateMapping(set, first.assignments);
     return valid.ok ? { ...valid.value, id: first.id, label: first.label } : null;
   }
 
   private approveFromComfort(effort: Effort): void {
-    const proposal = this.singleMovementProposal();
+    const proposal = this.comfortProposal();
     if (!proposal) return;
     this.noteEffort(effort);
     this.pendingMapping = proposal;
+    this.approveMapping();
+    this.pendingMapping = null;
+  }
+
+  /** Continue (full re-check): turn on the saved controls from the comfort screen, through the same guards as any approval. */
+  private approveSaved(): void {
+    const restoring = this.restoring;
+    if (!restoring) return;
+    const valid = validateMapping(restoring.models, restoring.profile.mapping.assignments);
+    if (!valid.ok) { this.enterMapping(); this.announce('The saved controls no longer fit these movements. Choose controls again.'); return; }
+    this.pendingMapping = { ...valid.value, id: 'saved', label: `Saved controls: ${describeMapping(restoring.models, valid.value)}` };
     this.approveMapping();
     this.pendingMapping = null;
   }
@@ -611,9 +653,11 @@ export class MotifSession {
     this.announce(`Review: ${proposal.label}.`);
   }
 
-  private enterRecalibrateConfirm(): void {
-    this.setStage('recalibrate-confirm');
+  private enterTiring(): void {
+    if (this.stage !== 'mapping' || !this.changingControls() || this.approvedModels.length < 2) return;
+    this.setStage('tiring');
     this.restrictedScanner(this.approvedModels);
+    this.announce('Which movement is tiring? Nothing changes until you approve new controls.');
   }
 
   private fail(kind: FailureKind, title: string, reasons: string[]): void {
@@ -674,8 +718,9 @@ export class MotifSession {
     if (restored) {
       // R7 B1: only a fully re-checked restore of exactly this set can arm.
       const ids = set.map((model) => model.id).sort();
-      if (!cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified') return;
-      if (!cycle.quick && (cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index]))) return;
+      const incomplete = !cycle || cycle.source !== 'restored' || cycle.outcome !== 'verified'
+        || (!cycle.quick && (cycle.verifiedIds.length !== ids.length || [...cycle.verifiedIds].sort().some((id, index) => id !== ids[index])));
+      if (incomplete) { this.announce(CANNOT_APPROVE); return; }
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
@@ -683,7 +728,7 @@ export class MotifSession {
       this.vocabulary = restored.profile.vocabulary;
       this.intervalMs = restored.profile.scanIntervalMs;
     } else if (this.candidate) {
-      if (!cycle || cycle.outcome !== 'verified') return;
+      if (!cycle || cycle.outcome !== 'verified') { this.announce(CANNOT_APPROVE); return; }
       cycle.outcome = 'approved';
       this.approvedBaseline = this.baseline;
       this.approvedBaselineAt = this.baselineAt;
@@ -709,8 +754,9 @@ export class MotifSession {
       this.refreshProfiles();
     }
     this.autoSaveProfile();
-    this.enterPractice();
-    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. Practice first: nothing here is spoken.${
+    this.enterCommunication();
+    this.announce(`Approved: ${describeMapping(this.approvedModels, valid.value)}. You're ready to talk. Return to rest before selecting.${
+      this.previousMapping ? ' Change controls can bring back your previous controls.' : ''}${
       replacedPhrases ? ` Your phrases were replaced by the ones saved with “${restoredName}”.` : ''}`);
   }
 
@@ -756,7 +802,10 @@ export class MotifSession {
       case 'comfortable-effort': this.noteEffort('effort'); this.enterMapping(); break;
       case 'approve-comfortable': this.approveFromComfort('easy'); break;
       case 'approve-effort': this.approveFromComfort('effort'); break;
-      case 'never-mind': this.enterCommunication(); this.announce('Nothing changed. Return to rest before selecting.'); break;
+      case 'effort-choose': this.noteEffort('effort'); this.enterMapping(); break;
+      case 'approve-saved': this.approveSaved(); break;
+      case 'report-tiring': this.enterTiring(); break;
+      case 'never-mind': this.enterMapping(); this.announce('Nothing changed. Choose controls, or keep your current setup.'); break;
       case 'discover': case 'discover-again': this.beginDiscovery(); break;
       case 'full-list': this.enterChoose(); break;
       case 'record-again': if (this.choice) this.startTraining(this.choice); break;
@@ -773,10 +822,9 @@ export class MotifSession {
       case 'reject-profile': {
         const cycle = this.cycles[this.cycles.length - 1];
         if (cycle) cycle.outcome = 'rejected';
-        this.fail('rejected', 'Profile not used', ['You chose not to use this saved profile. Nothing was changed.']);
+        this.fail('rejected', 'Profile not used', ['You chose not to use this saved setup. Nothing was changed.']);
         break;
       }
-      case 'start-recalibration': this.recalibrating = true; this.adding = false; this.beginBaseline(); break;
       case 'restart-recalibration': this.beginBaseline(); break;
       case 'keep-current': this.keepCurrent(); break;
       case 'same-movement': {
@@ -932,7 +980,7 @@ export class MotifSession {
     this.discovery = result;
     if ((this.recalibrating || this.adding) && this.hasApproved) this.restrictedScanner(this.approvedModels);
     this.announce(result.candidates.length
-      ? `Noticed ${result.candidates.length} movement${result.candidates.length === 1 ? '' : 's'}. Choosing one starts the usual practice and checks.`
+      ? `Noticed ${result.candidates.length} movement${result.candidates.length === 1 ? '' : 's'}. Choosing one starts the usual recording and checks.`
       : result.reason ?? 'No movement was found.');
   }
 
@@ -960,7 +1008,7 @@ export class MotifSession {
     this.announce(`Noted: “${model.label}” is tiring. The recommended controls use it less; nothing changes until you approve.`);
   }
 
-  /** Completed holds and holds released before completion, in practice and communication only. */
+  /** Completed holds and holds released before completion, in communication only. */
   private countUse(completedId: string | undefined, unfinishedId: string | undefined): void {
     const bump = (id: string, key: keyof MovementUse) => {
       const current = this.use[id] ?? { completed: 0, unfinished: 0 };
@@ -991,9 +1039,19 @@ export class MotifSession {
     this.recommendation = { id: proposal.id, reasons: recommended.reasons };
   }
 
-  private comfortPreview(): { label: string; mode: ScanMode } | null {
-    const proposal = this.singleMovementProposal();
-    return proposal ? { label: describeMapping(this.mappingSet(), proposal), mode: proposal.mode } : null;
+  private comfortPreview(): { label: string; mode: ScanMode; parts: Array<{ label: string; action: ControlAction }> } | null {
+    const restoring = this.restoring;
+    if (this.stage === 'comfort' && restoring) {
+      const valid = validateMapping(restoring.models, restoring.profile.mapping.assignments);
+      return valid.ok ? { label: describeMapping(restoring.models, valid.value), mode: valid.value.mode, parts: this.partsOf(restoring.models, valid.value) } : null;
+    }
+    const proposal = this.comfortProposal();
+    const set = this.mappingSet();
+    return proposal ? { label: describeMapping(set, proposal), mode: proposal.mode, parts: this.partsOf(set, proposal) } : null;
+  }
+
+  private partsOf(models: readonly GestureModel[], mapping: Mapping): Array<{ label: string; action: ControlAction }> {
+    return models.flatMap((model) => { const action = mapping.assignments[model.id]; return action ? [{ label: model.label, action }] : []; });
   }
 
   /** Caregiver form: any valid assignment for the movements in play; still needs approval. */
@@ -1048,7 +1106,7 @@ export class MotifSession {
   /** Explicit, caregiver-assisted Save of the approved setup. Never reachable from the scanner. */
   saveProfile(name: string, replace = false): StoreResult {
     const refuse = (reason: string): StoreResult => { this.announce(reason); this.publish(); return { ok: false, code: 'invalid', reason }; };
-    if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from practice or communication.');
+    if (!this.isRoutedStage() || !this.hasApproved || !this.mapping) return refuse('Save is available once your controls are approved, from the talking screen.');
     const built = buildProfile({ name, models: this.approvedModels, mapping: this.mapping, vocabulary: this.vocabulary, scanIntervalMs: this.intervalMs, checks: this.storedChecks() });
     if (!built.ok) return refuse(built.reasons[0] ?? 'This setup cannot be saved.');
     const result = this.store.save(built.value, replace);
@@ -1071,6 +1129,7 @@ export class MotifSession {
       this.cues?.stop();
       this.message = [];
       this.lastSpoken = null;
+      this.lastMovementAt = null;
       this.candidate = null;
       this.diagnosticModel = null;
       this.calibrationReport = null;
@@ -1122,7 +1181,7 @@ export class MotifSession {
     // R19: phrases stay (they were just kept in Last setup), so Set up again never loses favourites.
     this.message = [];
     this.lastSpoken = null;
-    this.practice = { selections: 0, last: null };
+    this.lastMovementAt = null;
     this.trials = [];
     this.notice = null;
     this.lastPrompt = null;
@@ -1210,7 +1269,7 @@ export class MotifSession {
       return [rest.low, rest.center, rest.high].some((value) => !(Math.abs(value - model.baselineCenter) < model.releaseThreshold));
     });
     if (misfits.length) {
-      this.fail('profile-mismatch', 'This saved profile does not fit today\'s rest', [
+      this.fail('profile-mismatch', 'This saved setup does not fit today\'s rest', [
         ...misfits.map((model) => `“${model.label}” reads differently at rest than when the profile was saved.`),
         'Today\'s rest check can still be used to set up a movement again, or use assisted input.',
       ]);
@@ -1225,13 +1284,13 @@ export class MotifSession {
       ? ` (${skipped} movement${skipped === 1 ? '' : 's'} checked within the last hour; not repeated)`
       : ' (all checked within the last hour; no attempts or everyday check this time)';
     if (!due.length) {
-      this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
+      this.cycles.push({ cycle: this.cycles.length + 1, movement: `Your saved setup${note}`, training: null, heldOut: [], negative: null,
         outcome: 'verified', source: 'restored', verifiedIds: [], profile: profile.name, quick: true });
       this.offerSavedControls();
-      this.announce('Your movements were checked within the last hour. Review your saved controls, then approve; practice comes first and nothing is spoken.');
+      this.announce('Your movements were checked within the last hour. Review your saved controls, then approve. Nothing is spoken when you approve.');
       return;
     }
-    this.cycles.push({ cycle: this.cycles.length + 1, movement: `Saved profile “${profile.name}”${note}`, training: null, heldOut: [], negative: null,
+    this.cycles.push({ cycle: this.cycles.length + 1, movement: `Your saved setup${note}`, training: null, heldOut: [], negative: null,
       outcome: 'in-progress', source: 'restored', verifiedIds: [], profile: profile.name });
     this.verifyPlan = due.flatMap((model) => (assignments[model.id] ? [model.id, model.id] : [model.id]));
     this.diagnosticModel = due[0] ?? null;
@@ -1285,19 +1344,18 @@ export class MotifSession {
 
   private levelContext(): LevelContext {
     return {
-      stage: this.stage === 'practice' ? 'practice' : 'communication',
       inputMode: this.inputMode,
       timed: this.inputMode === 'assisted' || this.scanMode() === 'auto',
       movements: this.approvedModels.length,
       hasApproved: this.hasApproved,
-      decisions: this.stage === 'practice' ? this.decisionTargets(this.allowedDecisions()) : [],
+      groups: this.phraseGroups,
       requests: this.stage === 'communication' ? this.requestTargets() : [],
     };
   }
 
   private levelTargets(): ScanTarget[] {
     const context = this.levelContext();
-    this.level = effectiveLevel(this.level, this.vocabulary, context.stage, context.requests.length > 0);
+    this.level = effectiveLevel(this.level, this.vocabulary, this.phraseGroups, context.requests.length > 0);
     const view = this.requests?.view;
     this.requestBuild = { ids: this.requestIds(), generation: view?.identityGeneration ?? -1 };
     return buildLevel(this.level, this.vocabulary, context);
@@ -1357,12 +1415,6 @@ export class MotifSession {
     this.publish();
   }
 
-  private enterPractice(): void {
-    this.setStage('practice');
-    this.practice = { selections: 0, last: null };
-    this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
-  }
-
   private enterCommunication(): void {
     this.setStage('communication');
     this.startScanner(this.levelTargets(), this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
@@ -1388,8 +1440,9 @@ export class MotifSession {
     this.idleWraps += 1;
     if (this.idleWraps < 2) return;
     const confirming = isConfirmLevel(this.level);
+    const asking = isClearLevel(this.level) || isRecalibrateLevel(this.level);
     this.setLevel('top', nowMs);
-    this.announce(confirming ? 'Not saved. Back to the main list.' : 'Back to the main list.');
+    this.announce(confirming ? 'Not saved. Back to the main list.' : asking ? 'Nothing changed. Back to the main list.' : 'Back to the main list.');
     this.publish();
   }
 
@@ -1403,11 +1456,12 @@ export class MotifSession {
 
   /** Opens a group tile; an empty group only announces, so the list the user has learned never shifts. */
   private openLevel(groupId: string, nowMs: number): void {
+    if (!this.phraseGroups && groupId !== FAVOURITES_ID) return;
     const group = this.vocabulary.groups.find((entry) => entry.id === groupId);
     if (!group) return;
     if (!group.phrases.length) {
       this.idleWraps = 0;
-      this.announce(group.id === 'favourites' ? 'No favourites yet. Use More, then Save message to Favourites.' : `${group.name} has no phrases yet.`);
+      this.announce(group.id === 'favourites' ? 'No favourites yet. Use Helper, then Save message to Favourites.' : `${group.name} has no phrases yet.`);
       return;
     }
     this.setLevel({ group: group.id }, nowMs);
@@ -1419,6 +1473,7 @@ export class MotifSession {
    * A gesture dwell in progress is cancelled with no action. Gesture and Space input never use this.
    */
   openGroup(id: string | 'top'): void {
+    if (!this.phraseGroups && id !== 'top' && id !== FAVOURITES_ID) return;
     const scanner = this.scanner;
     if (!scanner || !this.isRoutedStage() || scanner.snapshot.paused) return;
     const nowMs = this.clock();
@@ -1436,7 +1491,7 @@ export class MotifSession {
     this.publish();
   }
 
-  private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
+  private isRoutedStage(): boolean { return this.stage === 'communication'; }
 
   private isStepping(): boolean { return this.scanDriver === 'gesture' && this.isRoutedStage() && this.scanMode() === 'step'; }
 
@@ -1459,6 +1514,7 @@ export class MotifSession {
     if (this.isRoutedStage()) this.countUse(update.event?.gestureId, update.cancelCause === 'released' || update.cancelCause === 'band' ? update.cancelledId : undefined);
     // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
     const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
+    if (this.isRoutedStage() && (update.started || update.event)) this.lastMovementAt = nowMs;
     if (update.started) {
       this.idleValidMs = 0;
       this.idleWraps = 0;
@@ -1493,7 +1549,7 @@ export class MotifSession {
   private fallBackToAutomatic(): void {
     this.stepFallback = true;
     const confirming = isConfirmLevel(this.level);
-    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
+    this.enterCommunication();
     this.announce(`${confirming ? 'Not saved. ' : ''}No movement for a minute, so scanning is now automatic, starting from the main list. Your select movement still selects; helpers can use the buttons.`);
   }
 
@@ -1525,20 +1581,10 @@ export class MotifSession {
     if (!this.isRoutedStage()) return;
     this.idleWraps = 0;
     const phrase = this.phraseFor(id);
-    // Navigation and Pause work the same in practice and communication (R14 M2).
     if (id.startsWith('group:')) { this.openLevel(id.slice('group:'.length), nowMs); return; }
     if (id === 'back') { this.setLevel('top', nowMs); this.announce('Main list.'); return; }
     if (id === 'pause') { this.pauseScan(nowMs); return; }
-    if (this.stage === 'practice') {
-      if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
-      if (phrase) {
-        this.practice = { selections: this.practice.selections + 1, last: phrase };
-        this.setLevel('top', nowMs);
-        this.announce(`Practice: selected "${phrase}". Back to the main list.`);
-      }
-      return;
-    }
-    // A phrase goes into the message and the highlight returns to Speak, the likely next step: one announcement.
+    // A phrase goes into the message and the highlight returns to Play, the likely next step: one announcement.
     if (phrase) { this.message = [...this.message, phrase]; this.setLevel('top', nowMs); this.announce(`Added "${phrase}". Back to the main list.`); return; }
     // Only an explicit request selection reaches the controller; its own announcement stands (W1).
     if (id.startsWith('request:')) { if (this.requests?.activate(id)) this.setLevel('top', nowMs); return; }
@@ -1551,18 +1597,16 @@ export class MotifSession {
       case 'save-favourite': this.askToSaveFavourite(nowMs); break;
       case 'confirm-favourite': this.confirmFavourite(nowMs); break;
       case 'cancel-favourite': this.setLevel('top', nowMs); this.announce('Not saved.'); break;
-      case 'clear': this.message = []; this.announce('Message cleared.'); break;
+      case 'clear':
+        if (!this.message.length) { this.announce('Nothing to clear.'); break; }
+        this.setLevel({ clear: true }, nowMs);
+        this.announce('Clear the whole message? Keep it is first.');
+        break;
+      case 'clear-no': this.setLevel('top', nowMs); this.announce('Message kept.'); break;
+      case 'clear-yes': this.message = []; this.setLevel('top', nowMs); this.announce('Message cleared.'); break;
       case 'slower': this.changeInterval(SESSION_LIMITS.scanStepMs, nowMs); break;
       case 'faster': this.changeInterval(-SESSION_LIMITS.scanStepMs, nowMs); break;
-      case 'practice': this.enterPractice(); this.announce('Practice: selections are not spoken.'); break;
       case 'change-controls': if (this.hasApproved && this.inputMode === 'gesture') this.enterMapping(); break;
-      case 'tiring':
-        if (this.hasApproved && this.inputMode === 'gesture' && this.approvedModels.length > 1) {
-          this.setStage('tiring');
-          this.restrictedScanner(this.approvedModels);
-          this.announce('Which movement is tiring? Nothing changes until you approve new controls.');
-        }
-        break;
       case 'add-movement':
         if (this.hasApproved && this.inputMode === 'gesture' && this.approvedModels.length < MAX_GESTURES) {
           this.adding = true;
@@ -1570,7 +1614,19 @@ export class MotifSession {
           this.announce('Add a movement: a helper chooses it on screen, or keep your current setup.');
         }
         break;
-      case 'recalibrate': if (this.hasApproved && this.inputMode === 'gesture') this.enterRecalibrateConfirm(); break;
+      case 'recalibrate':
+        if (this.hasApproved && this.inputMode === 'gesture') {
+          this.setLevel({ recalibrate: true }, nowMs);
+          this.announce('Recalibrating turns communication off until the new movement is approved. Keep current setup is first.');
+        }
+        break;
+      case 'recalibrate-no': this.setLevel('more', nowMs); this.announce('Nothing changed.'); break;
+      case 'recalibrate-yes':
+        if (this.camera !== 'running') { this.setLevel('more', nowMs); this.announce('Start the camera first. Nothing was changed.'); break; }
+        this.recalibrating = true;
+        this.adding = false;
+        this.beginBaseline();
+        break;
       case 'use-gesture': this.useGesture(); break;
       case 'setup-gesture': this.setStage('welcome'); this.announce('Set up a movement: start the camera, then the rest check.'); break;
     }
@@ -1599,6 +1655,13 @@ export class MotifSession {
     this.announce(spoken ? `Speaking again: ${text}` : `Local speech is not available on this device. Your message is shown on screen: ${text}`);
   }
 
+  /** The message bar's "Say it again": communication only, only in communication, never while paused; the scan list is unaffected. */
+  repeatLast(): void {
+    if (this.stage !== 'communication' || !this.scanner || this.scanner.snapshot.paused || !this.lastSpoken) return;
+    this.sayAgain();
+    this.publish();
+  }
+
   /** Checks first, so the person is never asked to confirm something that cannot be saved. */
   private askToSaveFavourite(nowMs: number): void {
     if (!this.message.length) { this.announce('Nothing to save yet. Add a phrase first.'); return; }
@@ -1624,10 +1687,11 @@ export class MotifSession {
   }
 
   private speakMessage(): void {
-    if (!this.message.length) { this.announce('Nothing to speak yet. Add a phrase first.'); return; }
+    if (!this.message.length) { this.announce('Nothing to play yet. Add a phrase first.'); return; }
     const text = this.message.join('. ');
     const spoken = this.speech.speak(text);
     this.lastSpoken = text;
+    this.message = [];
     this.announce(spoken ? `Speaking: ${text}` : `Local speech is not available on this device. Your message is shown on screen: ${text}`);
   }
 
@@ -1667,6 +1731,8 @@ export class MotifSession {
       return { kind: 'group', group: group ? { id: group.id, name: group.name, phrases: group.phrases.length } : null, confirm: null };
     }
     if (isConfirmLevel(level)) return { kind: 'confirm', group: null, confirm: level.confirm };
+    if (isClearLevel(level)) return { kind: 'clear', group: null, confirm: null };
+    if (isRecalibrateLevel(level)) return { kind: 'recalibrate', group: null, confirm: null };
     return { kind: level, group: null, confirm: null };
   }
 
@@ -1711,6 +1777,20 @@ export class MotifSession {
     return null;
   }
 
+  private proposalCards(): ProposalCard[] {
+    const set = this.mappingSet();
+    return this.proposals.map((proposal) => ({
+      id: proposal.id, mode: proposal.mode, recommended: this.recommendation?.id === proposal.id,
+      inUse: !!this.mapping && sameMapping(proposal, this.mapping),
+      parts: set.flatMap((model) => { const action = proposal.assignments[model.id]; return action ? [{ label: model.label, action }] : []; }),
+    }));
+  }
+
+  private movementSeen(): boolean {
+    this.movementSeenShown = this.scanDriver === 'gesture' && this.isRoutedStage() && this.lastMovementAt !== null && this.clock() - this.lastMovementAt < 1_000;
+    return this.movementSeenShown;
+  }
+
   private publish(): void {
     const scanner = this.scanner?.snapshot;
     const runtime = this.runtime?.snapshot;
@@ -1729,11 +1809,13 @@ export class MotifSession {
         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,
       level: this.levelView(), vocabulary: this.vocabulary, message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
-      spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
+      spokenPrompts: this.spokenPrompts, announcement: this.announcement,
       profiles: this.profilesView(), restoring: this.restoring?.profile.name ?? null,
       evidence: movementEvidence(this.evidenceModels(), this.cycles, this.notes, this.use), setupModels: [...this.mappingSet()],
       discovery: this.discovery,
       recommendation: this.stage === 'mapping' ? this.recommendation : null,
+      proposals: this.stage === 'mapping' ? this.proposalCards() : [],
+      helperOpen: this.isRoutedStage() && this.level === 'more', confirmingClear: isClearLevel(this.level), confirmingRecalibrate: isRecalibrateLevel(this.level), movementSeen: this.movementSeen(), phraseGroups: this.phraseGroups,
       comfortPreview: this.comfortPreview(),
     };
     for (const listener of this.listeners) listener();

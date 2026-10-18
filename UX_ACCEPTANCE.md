@@ -62,3 +62,134 @@ Software verified: 2.1-2.7, 2.9-2.12 PASS (25 acceptance tests), 2.8 PASS (tsc, 
 
 ### Slice 3 result (round 1 of 3)
 Software verified: 3.1-3.7 PASS (19 acceptance tests), 3.8 PASS (tsc, 431 tests, build). Mutations: partial rename, blur-only apply, no-trim and input remount are all caught; allowing rename while restoring survives as an equivalent mutant (`candidate` is null then). **Human acceptance pending:** 3.H.
+
+# Branch ux-comm-screen: communication screen
+
+Design: reasoning.md "UX comm screen". Mockup the user approved: https://claude.ai/artifact/W8t4tg1TKfoiHHrk9SZ4Cr. Baseline: 461 tests. QA owns `src/app/ux-comm.acceptance.test.ts` and `src/ux-comm-ui.acceptance.test.tsx`; the developer may not edit them.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| C1 | TEST | Scan order in communication (gesture and assisted). Empty message: the 6 phrases, `repeat` only after something was spoken, `pause`, `helper`. With a message: `speak`, `undo`, the 6 phrases, `pause`, `helper`. No other control is in the top-level list. |
+| C2 | TEST | With a synthetic gesture stream in automatic scanning: "Please help me" spoken in 2 selections (phrase, Speak); a 5-phrase message spoken in 6. After every communication selection the highlight is back on the first item. |
+| C3 | TEST | Undo removes only the last phrase; it is not offered with an empty message; it never changes lastSpoken, scan speed, mapping or phrases. |
+| C4 | TEST | "Say it again" is absent until something is spoken; it speaks exactly the last spoken text through the speech port, also after Clear, and leaves the message unchanged. |
+| C5 | TEST | Clear is only in the Helper panel and only with a message. Selecting it shows `clear-no`, `clear-yes` in that order; Keep it leaves the message; Yes empties it. With the confirmation open, 5 minutes of scanner ticks discard nothing. |
+| C6 | TEST | Selecting Helper opens the panel: `close-helper`, the controls (gesture: change-controls, add-movement below the limit, recalibrate, tiring with 2+ movements; assisted: use-gesture or setup-gesture), slower/faster when they apply today, clear (with a message), practice, pause. Opening and closing changes no setting (speed, mapping, phrases, message). Close returns to the C1 list. Slower/Faster keep the panel open. |
+| C7 | TEST | A helper id selected while the panel is closed does nothing. From the panel, change-controls, add-movement, recalibrate, tiring and practice behave as before. |
+| C8 | TEST | Pause works from the board and the panel, stops the highlight, and resumes by movement, Space or the button; message and panel state are kept through Pause, tracking loss and the step-idle fallback. A hold that started before the list changed selects nothing. |
+| C9 | TEST | `movementSeen` is true within 1 s of a recognised movement in communication or practice and false after 1 s with none; always false in assisted mode. |
+| C10 | TEST | UI: the message region comes before the phrase grid; Speak and Undo render only with a message; "Say it again" only after speaking; the Helper panel shows the "Your controls" group (Change controls, Add a movement, Recalibrate as tiles with descriptions) before "Scanning and message"; camera diagnostics and the signal dashboard are not rendered on the communication screen unless "Camera diagnostics" is opened in the panel; no beeps checkbox there; a "Movement seen" status exists. Practice shows Finish practice and no Helper. |
+| C11 | TEST | Message text ≥ 24px and new text ≥ 14px (stylesheet checks); every control has an accessible name. |
+| C12 | CHROME | Assisted mode at 1470×762 and 1280×720: message bar, Speak (with a message), all 6 tiles, Pause and Helper visible without scrolling; at 390×844 the message bar and Speak are visible without scrolling. |
+| C13 | TEST | tsc, full vitest and build pass; existing tests change only to open Helper before a moved control, or because Speak now empties the message (C15). |
+| C15 | TEST | Speak moves the message to lastSpoken and empties it, with or without a local voice (the text stays visible as last spoken). Choosing Change controls from the panel leaves the mapping decisions in the scan list (no communication list overwrites another stage). |
+| C16 | TEST | Focus: opening Helper focuses the panel heading; Close helper returns focus to the Helper button; the Clear confirmation focuses its question; Keep it and Yes return focus to the Helper button. |
+| C14 | TEST | The saved profile never contains the message, lastSpoken or panel state. |
+| CH | HUMAN | With a real camera: the screen is easy to follow, the Movement seen light matches the movement, and a helper finds the options. |
+
+### Result (round 1 of 3)
+Software verified: C1-C11, C13-C16 PASS (51 acceptance tests: 40 session, 11 UI); C12 PASS in assisted mode at 1470×762, 1280×720 and 390×844 (QA screenshots, same-origin frames; camera never started). Coordinator rerun: vitest 36 files/513 PASS, tsc clean, build OK. Mutations caught: refresh without stage/scanner guard, Yes before Keep it, Undo clearing everything, no scan-list guard, no focus on open. Developer deviations accepted: diagnostics toggle is a button with `aria-expanded`; the no-voice note is in the Helper panel; Harness gesture selections open Helper for a moved control (C5/C7 use `selectTarget` directly). Not clicked in the browser: "Done, back to start screen" from the panel (covered by existing App tests). **Human acceptance pending:** CH.
+
+# Branch ux-simplify, slice A: one setup screen, plainer copy
+
+Design: reasoning.md "UX simplify, slice A". Baseline 513 tests. QA owns `src/ux-simplify.acceptance.test.tsx`; the developer may not edit it.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| U1 | TEST | No setup screen shows "STEP" or the old 3-step stepper. Where the bar is shown (reasoning.md slice A revision 2, B1) it lists the flow's segments (Rest, Movement, Record, Checks, Everyday, Approve; adding: no Rest; restoring: Rest, Re-check, Everyday, Approve) with at most one `aria-current="step"`; it is hidden on tiring, recalibrate-confirm and Change controls mapping/confirm. |
+| U2 | TEST | `setupProgress` unit tests cover the whole table: every stage × flow (first, add, recalibrate, restoring, quick restore straight to Approve) and every failure kind; passed segments carry no "done" claim. |
+| U3 | TEST | No setup screen text, evidence details included, matches `/armed|interruptions|restarts|×\s*rest|Saved profile/i`. With interruptions > 0 the capture screen says "Paused N time(s) because your face wasn't clear"; "Communication is off while recording." stays. |
+| U4 | TEST | Choose: the lead is one sentence; each tile has a signal meter with an accessible label (none yet when no signal; none < 1.5; some 1.5 to < 3; strong ≥ 3, boundaries tested) and "Seen now" at ≥ 3; no rhythm, "Next:" or head-direction developer paragraphs; clicking a tile still starts training. |
+| U5 | TEST | Setup failed, for every failure kind: reasons shown; exactly one primary action (record-again, else Redo rest for baseline, Look again for discovery, else another movement); no paragraph listing the options. |
+| U6 | TEST | Mapping: each proposal is a card with a mode heading and one chip per movement; "Recommended" and "In use now" badges match `recommendation` and the current mapping; card ids and scan order equal the previous decision order; Keep current setup is not primary. |
+| U7 | TEST | Practice shows "Practice · nothing is spoken" and a "Start talking" button that finishes practice. |
+| U8 | TEST | Setup camera panel: diagnostics and signal dashboard hidden until "Details" is expanded (`aria-expanded` false → true); beeps toggle visible on capture stages. |
+| U9 | TEST | Every setup stage lead is at most 140 characters. |
+| U10 | TEST | Failure reasons, accidental-selection counts with the observation disclaimer, and "nothing turns on until you approve" wording are still present where they were. |
+| U11 | TEST | tsc, full vitest and build pass; existing tests change only for removed copy, the removed stepper, or renamed labels ("Start talking"). |
+| U12 | TEST | Accessible names on every control; new text ≥ 14px (stylesheet checks). |
+| UH | HUMAN | With the camera: setup feels like one flow, the progress bar matches what you are doing, the signal meter and "Seen now" help pick a movement. |
+
+### Slice A result (round 1 of 3)
+Software verified: U1-U12 PASS (57 acceptance tests plus 24 `progress.ts` unit tests). Coordinator rerun: vitest 38 files/595 PASS, tsc clean. QA: build OK; out-of-list edits (capture.ts, CameraDiagnostics.tsx, session.ts strings) are wording plus the additive `proposals` field; edits to existing tests follow removed or renamed copy only. Mutations caught: Rest current on quick restore, two primaries on failure, "armed" in evidence, diagnostics always shown, cards out of scan order (after QA strengthened that test). Accepted deviation: `record-again` is never primary, so Approve is primary on the comfort screen; scan order unchanged. **Human acceptance pending:** UH.
+
+# Branch ux-simplify, slice B: one Approve screen; Recalibrate and Tiring inside Helper
+
+Design: reasoning.md "UX simplify, slice B". Baseline 595 tests. QA owns `src/app/ux-approve-all.acceptance.test.ts`.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| V1 | TEST | Adding a second movement: after the checks, the comfort screen offers `record-again`, `approve-comfortable`, `effort-choose`, `choose-different`, `another-movement`, `keep-current` in that order (no `approve-effort` with 2+ movements); Approve turns on exactly the previewed controls and reaches practice with no mapping or confirm screen. Recalibrate: same flow; with 2+ approved movements the card says the others will be turned off. One movement: the slice 2 list is unchanged. |
+| V2 | TEST | The preview equals the approved mapping even when notes or tiring reports change between showing and approving; computing the preview writes no session state (proposals and recommendation unchanged). |
+| V3 | TEST | `effort-choose` records effort "effort" and opens the cards with a recommendation that leaves that movement unused; `choose-different` records no effort and opens the cards; nothing is armed until a card is confirmed. Any refused approval announces a plain reason. |
+| V4 | TEST | Continue with a full re-check: the comfort screen offers `choose-different`, `approve-saved`, `another-movement` in that order, so the first item arms nothing (no `reject-profile`); approve-saved arms the saved controls; an invalid saved mapping opens mapping instead; an unverified or partial restore still cannot arm. Quick restore still goes straight to the confirm screen. |
+| V5 | TEST | Helper Recalibrate shows `recalibrate-no`, `recalibrate-yes` (No first) with no stage change; No returns to the panel with nothing changed; Yes starts the rest check with `recalibrating` true; with the camera off, Yes changes nothing (no flags, stays in the panel, plain message). The state resets on Close helper, entering communication and back to start; it survives Pause, tracking loss and the step-idle fallback. |
+| V6 | TEST | Helper no longer lists `tiring`. Change controls with 2+ movements lists `report-tiring` after the proposals; it opens the tiring stage; choosing a movement returns to mapping with the recommendation updated; never-mind returns to mapping. With 1 movement, no `report-tiring`. |
+| V7 | TEST | First accidental selection safety: `record-again` first on every fresh-movement comfort list, `choose-different` first on the restore comfort list; `recalibrate-no` first; `keep-current` first on Change controls (unchanged). |
+| V8 | TEST | UI: comfort shows the controls card (mode heading + chips) for first, add, recalibrate and restore; the Helper recalibrate confirmation shows its one-line warning and moves focus to the question; no page titled "Recalibrate" remains. |
+| V9 | TEST | tsc, full vitest and build pass; existing tests change only where the comfort → mapping → confirm path, the recalibrate-confirm stage or the Helper tiring item is intentionally replaced. |
+| V10 | TEST | Nothing new is stored in profiles; effort/tiring notes behave as before for recommendations (scoring tests unchanged). |
+| VH | HUMAN | With the camera: adding a movement or continuing goes straight from "how does it feel" to practice, and recalibrating from Helper is clear. |
+
+### Slice B result (round 1 of 3)
+Software verified: V1-V10 PASS (43 acceptance tests in `ux-approve-all.acceptance.test.ts`). Coordinator rerun: vitest 39 files/638 PASS, tsc clean; QA: build OK. QA diff review: the developer's edits to older acceptance tests (2.4, 2.6, 2.11, 3.7, C6, C7, C15) follow the replaced path and are not weaker. Mutations caught: preview effort differing from approval, `approve-saved` first, `recalibrating` set before the camera check, never-mind returning to communication, approve-effort with 2+ movements. Equivalent mutant: skipping the verified-cycle check in `comfortProposal` (comfort is reachable only after a verified cycle; `approveMapping` still guards). Safety fix found by QA: the restore comfort list starts with `choose-different`, so the first item arms nothing. **Not observed in a browser:** the Helper → Recalibrate confirmation (needs the camera). **Human acceptance pending:** VH.
+
+# Merge of main into ux-simplify (R18): combined talking screen
+
+Design: reasoning.md R18. Baselines: ux-simplify 638 tests, main 857. QA owns `src/app/ux-merge.acceptance.test.ts` and may edit `ux-comm.acceptance.test.ts` / `ux-comm-ui.acceptance.test.tsx` to the combined contract; the developer may not edit QA files, and edits main's tests only for replaced behaviour.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| M1 | TEST | Top list: `speak`, `undo`, group tiles, `pause`, `more`, identical with an empty or non-empty message and before/after speaking. Group list: phrases, `back`, `pause`. |
+| M2 | TEST | Helper level (`more`): label "Helper" on the tile; list = `clear`, `save-favourite`, `say-again`, slower/faster (as today), `practice`, `change-controls`, `add-movement` (< MAX), `recalibrate`, `back` ("Close helper"), `pause`; no `tiring`; assisted variant has `use-gesture`/`setup-gesture`. |
+| M3 | TEST | Clear: selecting `clear` opens a level whose list starts `clear-no`, `clear-yes`, `pause`; Keep it keeps the message; Yes empties it; two idle wraps return to the main list with the message kept; derived `confirmingClear` is true only in that level. |
+| M4 | TEST | Recalibrate: selecting `recalibrate` opens `recalibrate-no`, `recalibrate-yes`, `pause`; No returns to the Helper level unchanged; Yes with the camera running starts the rest check (`recalibrating` true); with the camera off it changes nothing and returns to the Helper level with a plain message; auto-return changes nothing. |
+| M5 | TEST | Speak moves the message into `lastSpoken` and empties it; `say-again` (Helper scan target) and the message-bar "Say it again" via `repeatLast()` repeat exactly `lastSpoken` (also after Clear), change nothing else, and `repeatLast()` is refused while paused, in practice, or with nothing spoken; Undo removes only the last phrase; counts: Favourites tile → phrase → Speak is 3 selections, and the highlight returns to Speak after a phrase. |
+| M6 | TEST | Favourites flow from main still works end to end (save-favourite → confirm → saved with the Last setup; cancel; auto-return "Not saved"); phrase editing, vocabulary persistence and Continue restoring phrases still pass main's existing tests. |
+| M7 | TEST | Pause is in every level; a hold begun before any level swap selects nothing; message, favourites and `lastSpoken` survive Pause, tracking loss and the step-idle fallback; the fallback (and entering communication) resets the level to the main list, tested with a clear level open. Snapshot `level.kind` is correct for top, group, more, confirm, clear, recalibrate, and `helperOpen`/`confirmingClear`/`confirmingRecalibrate` are derived from it. |
+| M8 | TEST | Slice A/B behaviour intact: progress bar, proposal cards, comfort approve lists (including `choose-different` first on restore), `effort-choose`, Change controls `report-tiring`, "Start talking"; their acceptance tests pass unchanged except for list/ids replaced by M1-M2. |
+| M9 | TEST | UI: while paused at the Helper level the panel stays visible under a Resume banner and Edit phrases is usable; the message bar precedes the grid; Speak/Undo always present; "Say it again" button only when the message is empty and something was spoken; the Helper panel shows "Your controls" tiles first, then buttons, then the click-only sections (Jump to a phrase group, Edit phrases, Camera diagnostics, Setup evidence); main's group tabs and operation toolbar are not on the main screen; diagnostics hidden until opened; Movement seen status present; focus rules (heading on open, Helper button on close, question on confirm). |
+| M10 | TEST | Caregiver route `#/caregiver`, Root/care client and Supabase config tests pass unchanged; no `.env*` file or key appears in `git diff` of the merge commit(s). |
+| M11 | TEST | tsc, full vitest (main's tests plus mine) and build pass. Test changes are limited to replaced behaviour, each listed. |
+| M12 | CHROME | Assisted mode at 1470×762 and 1280×720: message bar, Speak, Undo, the 3 group tiles, Pause and Helper are visible without scrolling; at 390×844 the bar and Speak are visible. Open Helper and a group once. |
+| MH | HUMAN | With a real camera: the combined talking screen reads clearly and scanning through Favourites/Quick/Needs, Helper and Clear feels right. |
+
+### Merge result (round 1 of 3)
+Software verified: M1-M7, M9, M10, M11 PASS; M12 PASS (assisted mode on `localhost:5173`, no account or Supabase gate; the `127.0.0.1` origin held an older saved setup). Coordinator rerun: vitest 70 files/1091 PASS, tsc clean, build OK. New: 33 session + 9 UI merge tests; four earlier acceptance files updated to the merged contract without weakening. QA found one real failure (a verification reason still said "armed the recognizer"); reworded (`a9eb7ae`). Mutations caught: clear auto-return discarding the message, `clear-yes` before `clear-no`, `repeatLast` while paused, a dynamic top list, recalibrate flags before the camera check, "Not saved" wording on clear. M10: `src/care`, `src/Root.tsx`, `src/features` identical to origin/main; the merge adds only `.env.example` with empty values; no secrets committed. Known trade-off: Speak is first and empties the message into "Last spoken". **Human acceptance pending:** MH (also UH, VH, CH).
+
+# Hide phrase groups and Favourites (R19)
+
+Design: reasoning.md R19. Baseline 1091 tests. QA owns `src/app/ux-flat.acceptance.test.ts`.
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| F1 | TEST | Default app session (`phraseGroups` false): top list = `speak`, `undo`, the Quick + Needs phrases (6, ids `phrase:<group>:<n>`), `pause`, `more`; no `group:*` target; identical for an empty/non-empty message. Practice list = `finish-practice`, the flat phrases, `pause`. |
+| F2 | TEST | Flat mode: selecting a phrase adds it and the highlight returns to `speak`; Speak, Undo, say-again, Clear/Recalibrate confirmations, Pause and the Helper levels behave as in the merge tests; the `more` list has no `save-favourite`; `openGroup`/`askToSaveFavourite` do nothing; a stale `{group}` or `{confirm}` level falls back to top. |
+| F3 | TEST | Favourites survive: a profile with saved favourites loads, a flat-mode autosave keeps them byte-for-byte in the stored vocabulary, and with `phraseGroups` true they reappear. Editing phrases in the Helper still works and edits any group. |
+| F4 | TEST | With `phraseGroups` true (test support default) all of main's existing group/Favourites tests pass unchanged. |
+| F5 | TEST | UI flat mode: the phrase tiles show directly (tile count equals the flat phrase count, 6 by default and after an edit; numbered), Edit phrases does not offer the Favourites group, the saving note does not mention favourites, there are no "Favourites", "Open Quick"/"Open Needs" or "(empty)" texts, no "Jump to a phrase group", no "Save message to Favourites". Grouped mode (`phraseGroups` true): group tile visible text is the group name with the count as a second line, never "Open X, N phrases"/"(empty)" as visible text, accessible name still describes it. |
+| F6 | TEST/CHROME | tsc, full vitest and build pass; assisted mode at 1470×762, 1280×720, 390×844 shows the bar, Speak, Undo, 6 phrase tiles, Pause and Helper without scrolling. |
+
+### R19 result (round 1 of 3)
+Software verified: F1-F6 PASS (25 acceptance tests: 17 session, 8 UI). Coordinator rerun: vitest 74 files/1126 PASS, tsc clean; QA: build OK. F6 in assisted mode on `localhost:5173` at 1470×762, 1280×720 and 390×844: bar, Speak, Undo, 6 phrase tiles, Pause and Helper visible without scrolling; Helper opens without Favourites or group-jump text. Mutations caught: Favourites phrases in the flat list, autosave dropping favourites, list reordered by message, app default groups on, editor offering Favourites. Equivalent mutant: skipping the save-favourite guard (it is guarded twice and the stale-level fallback also blocks it). Phrase order is now Quick then Needs (Yes, No, Thank you, I need water, Please help me, I am uncomfortable). Turning groups back on: change the `phraseGroups` default in `useMotif`. **Human acceptance pending:** whether the flat board reads clearly with a real person.
+
+# Remove practice; Speak → Play (R20)
+
+Design: reasoning.md R20. Baseline 1126 tests. QA owns `src/app/ux-nopractice.acceptance.test.ts` (+ a .tsx for UI parts).
+
+| ID | Tag | Criterion |
+| --- | --- | --- |
+| P1 | TEST | Every approval path (first movement, add, recalibrate, Continue with `approve-saved`, quick restore confirm, mapping-confirm Approve) ends in stage `communication`; the `Stage` type, snapshot and scan lists contain no practice (`practice` stage, `finish-practice`, `snapshot.practice`). Approving speaks nothing. |
+| P2 | TEST | After approval by gesture, the approving hold adds no phrase and does not Play; the scanner needs fresh neutral before the next selection; one action per hold unchanged. |
+| P3 | TEST | The Helper (gesture and assisted) has no Practice item; no practice banner or text anywhere on the communication screen; the step-idle fallback and Helper levels work as before. |
+| P4 | TEST | `use-previous` is offered in Change controls (`mapping`) only when a valid previous mapping exists and there is no candidate; it sits after the proposal cards and before `reject`; selecting it opens mapping-confirm and arms nothing until Approve; it is not offered in communication or in a first setup. |
+| P5 | TEST | Use counting (completed/unfinished holds) still happens in communication; the recommendation/scoring tests pass unchanged. |
+| P6 | TEST | The setup progress bar and approval flows are otherwise unchanged (no Practice segment existed after R18's rename; nothing mentions it). |
+| P7 | TEST | The control with id `speak` is labelled "Play" in the message bar, scan target, announcements, hints and accessible names, and no visible "Speak" button label remains; behaviour is unchanged (message moves to Last spoken, speech port called, empty message announces nothing to play). "Last spoken" and "Say it again" text unchanged. |
+| P8 | TEST | tsc, full vitest and build pass; edits to existing tests are limited to practice removal and the Play label, each listed. |
+| PH | HUMAN | With a real camera: approving goes straight to the board and it feels clear that Play speaks aloud. |
+| P9 | TEST | No user-visible text anywhere (buttons, labels, announcements, refusals, hints, Helper copy) contains "practice" except the movement-recording stage's own wording (training attempts); the first-setup approve button reads "Approve and start". |
+
+### R20 results (QA, branch ux-simplify)
+
+P1-P5, P7, P9: PASS (`src/app/ux-nopractice.acceptance.test.ts` 25 tests, `src/ux-nopractice-ui.acceptance.test.tsx` 20 tests). P6, P8: PASS (tsc clean, full vitest 76 files / 1162 tests, build OK). PH: PENDING (human, real camera). Chrome (assisted, camera off): "Play" button and no "Speak" button; no "practice" text on the board or in the opened Helper. Edits to existing acceptance tests (commit 13f9a95): removed `finish-practice` steps after approval, stage `practice` expectations became `communication`, the Helper `practice` control and the practice-only assertions (practice banner, `snapshot.practice`, repeatLast in practice) were dropped or replaced by the equivalent on the board, "Approve and practice" became "Approve and start", the Speak button label became Play. Wording note: the evidence lines "Weakest practice attempt" and "Practice strength" in `src/app/scoring.ts` (shown in the Helper's Setup evidence) still say practice; they describe the recorded training attempts and are tolerated by P9, but should be reworded to "recording" because the practice page no longer exists.

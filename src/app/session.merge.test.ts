@@ -28,7 +28,7 @@ function withFavourite(storage: Storage = createMemoryStorage()): { h: Harness; 
 function setUpAgain(h: Harness): void {
   h.calibrate();
   h.selectByGesture('approve-comfortable');
-  expect(h.snap.stage).toBe('practice');
+  expect(h.snap.stage).toBe('communication');
 }
 
 describe('favourites survive the ways back to a fresh setup (R19 B1)', () => {
@@ -84,7 +84,7 @@ describe('one autosave rule while a setup is approved (R19)', () => {
   it('a setup-stage edit during recalibration is kept at once', () => {
     const { h, storage } = withFavourite();
     h.selectByGesture('recalibrate');
-    h.selectByGesture('start-recalibration');
+    h.selectByGesture('recalibrate-yes');
     h.run(10_500);
     expect(h.snap.stage).toBe('choose');
     expect(h.session.editVocabulary({ kind: 'remove-phrase', group: 'favourites', index: 0 }).ok).toBe(true);
@@ -119,7 +119,6 @@ describe('one autosave rule while a setup is approved (R19)', () => {
     expect(h.session.restoreProfile(LAST, true)).toBe(true);
     expect(h.snap.stage).toBe('mapping-confirm');
     h.selectByGesture('approve-mapping', BROW, 60_000, 600, 0);
-    h.selectByGesture('finish-practice');
     h.click('phrase:g1:1');
     h.click('save-favourite');
     h.click('confirm-favourite');

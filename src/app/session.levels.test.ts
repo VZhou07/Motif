@@ -17,10 +17,7 @@ function ready(): Harness {
 function twoGestureStep(): Harness {
   const h = ready();
   h.addMovement(OPEN_MOUTH, (label) => MOVES[label ?? ''] ?? REST);
-  h.selectByGesture('comfortable');
-  h.selectByGesture('map:0');
-  h.selectByGesture('approve-mapping');
-  h.stepTo('finish-practice');
+  h.selectByGesture('approve-comfortable'); // R18: adding approves from the comfort screen
   expect(h.snap.scanMode).toBe('step');
   return h;
 }
@@ -69,13 +66,15 @@ describe('one select movement, automatic scanning', () => {
     expect(groupId(h)).toBe('g2');
     h.run(600, BROW); h.run(600);
     expect(h.snap.scan?.paused).toBe(false);
-    // Scan steps to Recalibrate: More is 7th on the main list, Recalibrate 9th inside More.
+    // Scan steps to Recalibrate: More is 7th on the main list, Recalibrate 8th inside More.
     h.selectByGesture('back');
     expect(ids(h).indexOf('more')).toBe(6);
     h.selectByGesture('more');
-    expect(ids(h).indexOf('recalibrate')).toBe(8);
+    expect(ids(h).indexOf('recalibrate')).toBe(7);
     h.selectByGesture('recalibrate');
-    expect(h.snap.stage).toBe('recalibrate-confirm');
+    expect(h.snap.stage).toBe('communication'); // asks first, inside the Helper (R18)
+    expect(levelKind(h)).toBe('recalibrate');
+    expect(ids(h)).toEqual(['recalibrate-no', 'recalibrate-yes', 'pause']);
   });
 
   it('a phrase returns to the main list with Speak highlighted, in one announcement', () => {
@@ -157,33 +156,13 @@ describe('auto-return after two counted wraps', () => {
     expect(levelKind(h)).toBe('top');
   });
 
-  it('practice follows the same rule and never adds or speaks', () => {
-    const h = new Harness();
-    h.calibrate();
-    h.selectByGesture('approve-comfortable'); // first movement: one approve screen (main UX slice 2)
-    expect(h.snap.stage).toBe('practice');
-    expect(ids(h)).toEqual(['finish-practice', 'group:favourites', 'group:g1', 'group:g2', 'pause']);
-    h.selectByGesture('phrase:g2:0');
-    expect(h.snap.practice).toEqual({ selections: 1, last: 'I need water' });
-    expect(levelKind(h)).toBe('top');
-    const at = enterByGesture(h, 'group:g1');
-    restUntil(h, at, 19_700);
-    expect(groupId(h)).toBe('g1');
-    restUntil(h, at, 20_300);
-    expect(levelKind(h)).toBe('top');
-    h.selectByGesture('pause');
-    expect(h.snap.scan?.paused).toBe(true);
-    expect(h.snap.message).toEqual([]);
-    expect(h.spoken).toEqual([]);
-  });
-
-  it('More (11 targets) returns after two full passes', () => {
+  it('More (10 targets) returns after two full passes', () => {
     const h = ready();
     const at = enterByGesture(h, 'more');
-    expect(ids(h)).toHaveLength(11);
-    restUntil(h, at, 43_700);
+    expect(ids(h)).toHaveLength(10);
+    restUntil(h, at, 39_700);
     expect(levelKind(h)).toBe('more');
-    restUntil(h, at, 44_300);
+    restUntil(h, at, 40_300);
     expect(levelKind(h)).toBe('top');
   });
 
@@ -205,13 +184,13 @@ describe('auto-return after two counted wraps', () => {
     const at = enterByGesture(h, 'slower');
     expect(h.snap.scan?.intervalMs).toBe(2_500);
     expect(levelKind(h)).toBe('more');
-    // From Slower (4th) the next wrap is 8 × 2.5 s = 20 s away, then a full 27.5 s pass. Without the reset
-    // the earlier wrap would already count, and this would return at the 20 s wrap.
+    // From Slower (4th) the next wrap is 7 × 2.5 s = 17.5 s away, then a full 25 s pass. Without the reset
+    // the earlier wrap would already count, and this would return at the 17.5 s wrap.
     restUntil(h, at, 30_000);
     expect(levelKind(h)).toBe('more');
-    restUntil(h, at, 46_500);
+    restUntil(h, at, 41_500);
     expect(levelKind(h)).toBe('more');
-    restUntil(h, at, 48_500);
+    restUntil(h, at, 43_500);
     expect(levelKind(h)).toBe('top');
   });
 
@@ -276,16 +255,16 @@ describe('auto-return after two counted wraps', () => {
     const h = new Harness();
     h.session.useAssisted();
     h.switchTo('more');
-    expect(ids(h)).toHaveLength(9);
+    expect(ids(h)).toHaveLength(8);
     const at = h.now;
-    waitUntil(h, at, 18_100); // one full pass of More counted
+    waitUntil(h, at, 16_100); // one full pass of More counted
     h.switchTo('say-again');
     const pressed = h.now;
     expect(levelKind(h)).toBe('more');
-    // From Say again (3rd) the next wrap is 7 × 2 s = 14 s away; a leftover count would return there.
-    waitUntil(h, pressed, 20_000);
+    // From Say again (3rd) the next wrap is 6 × 2 s = 12 s away; a leftover count would return there.
+    waitUntil(h, pressed, 14_000);
     expect(levelKind(h)).toBe('more');
-    waitUntil(h, pressed, 33_000);
+    waitUntil(h, pressed, 29_000);
     expect(levelKind(h)).toBe('top');
   });
 
@@ -390,7 +369,7 @@ describe('helper shortcuts and clicks', () => {
     expect(h.snap.message).toEqual([]);
   });
 
-  it('is unavailable outside communication and practice', () => {
+  it('is unavailable outside communication', () => {
     const h = new Harness();
     h.session.openGroup('g1');
     expect(h.snap.level).toBeNull();

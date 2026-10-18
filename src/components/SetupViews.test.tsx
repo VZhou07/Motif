@@ -1,8 +1,8 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import App from '../App';
 import { BROW, Harness } from '../app/session.test-support';
-import { CaptureView, ChooseView } from './SetupViews';
+import { CaptureView, ChooseView, signalLevel } from './SetupViews';
 
 function renderApp(h: Harness) {
   return render(<App runtime={{
@@ -32,30 +32,31 @@ describe('calibration pacing presentation (R13)', () => {
   it('alternates five-second Rest and Action cues without another ready or return step', () => {
     const h = startTrial();
     renderApp(h);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest comfortably.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest');
+    fireEvent.click(screen.getByRole('button', { name: /Details/ })); // diagnostics sit behind Details
     const preview = document.querySelector('.camera-preview');
     const diagnostics = screen.getByRole('region', { name: 'Live camera diagnostics' });
     expect(preview?.contains(diagnostics)).toBe(false);
-    expect(screen.getByText('Next: Action. Stay relaxed until the Action cue.')).toBeTruthy();
+    expect(screen.getByText('Next: Move. Stay relaxed until the cue.')).toBeTruthy();
     expect(countdown().firstChild?.textContent).toBe('5');
-    expect(screen.getByText('seconds until action')).toBeTruthy();
+    expect(screen.getByText('seconds')).toBeTruthy();
 
     act(() => h.run(1_000));
     expect(countdown().firstChild?.textContent).toBe('4');
     act(() => h.run(4_000));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Make your movementand hold it.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Move');
     expect(countdown().firstChild?.textContent).toBe('5');
-    expect(screen.getByText('seconds until rest')).toBeTruthy();
-    expect(screen.getByText('Next: Rest. Relax when the Rest cue appears.')).toBeTruthy();
+    expect(screen.getByText('seconds')).toBeTruthy();
+    expect(screen.getByText('Next: Rest. Relax when the cue appears.')).toBeTruthy();
 
     act(() => h.run(5_000, BROW));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest comfortably.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest');
     expect(countdown().firstChild?.textContent).toBe('5');
-    expect(screen.getByText('Next: Action. Stay relaxed until the Action cue.')).toBeTruthy();
+    expect(screen.getByText('Next: Move. Stay relaxed until the cue.')).toBeTruthy();
 
     act(() => h.run(5_000));
     expect(h.snap.capture?.index).toBe(2);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Make your movementand hold it.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Move');
     expect(countdown().firstChild?.textContent).toBe('5');
     expect(screen.queryByText('Get ready')).toBeNull();
     expect(screen.queryByText('Return to rest')).toBeNull();
@@ -67,7 +68,7 @@ describe('calibration pacing presentation (R13)', () => {
     h.session.startBaseline();
     h.step();
     renderApp(h);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest comfortably.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest');
     expect(countdown().firstChild?.textContent).toBe('10');
     expect(screen.queryByText(/^Next:/)).toBeNull();
     act(() => h.run(3_000));
@@ -93,11 +94,11 @@ describe('calibration pacing presentation (R13)', () => {
     const h = startTrial();
     h.run(5_500);
     renderApp(h);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Make your movementand hold it.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Move');
     act(() => h.step({}, 'missing'));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest comfortably.');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Rest');
     expect(countdown().firstChild?.textContent).toBe('5');
-    expect(screen.getByText('Next: Action. Stay relaxed until the Action cue.')).toBeTruthy();
+    expect(screen.getByText('Next: Move. Stay relaxed until the cue.')).toBeTruthy();
     expect(h.snap.capture?.index).toBe(1);
     expect(h.snap.capture?.interruptions).toBe(1);
   });
@@ -118,11 +119,23 @@ describe('calibration pacing presentation (R13)', () => {
     expect(announcer?.textContent).not.toMatch(/\d/);
   });
 
-  it('explains the same two-cue rhythm before recording', () => {
+  it('keeps the choose screen to one short sentence before recording', () => {
     const h = new Harness();
     render(<ChooseView snapshot={h.snap} session={h.session} />);
-    expect(screen.getByText(/5 seconds of Rest, then 5 seconds of Action/)).toBeTruthy();
+    expect(screen.getByText(/recording starts right away/)).toBeTruthy();
     expect(screen.queryByText(/hold for about two seconds/)).toBeNull();
-    expect(screen.getByText(/hold until the Rest cue/)).toBeTruthy();
+    expect(screen.queryByText(/5 seconds of Rest/)).toBeNull();
+  });
+});
+
+describe('signal meter levels', () => {
+  it('maps live deviation to none yet, none, some and strong at exact boundaries', () => {
+    expect(signalLevel(null)).toBe('none yet');
+    expect(signalLevel(Number.NaN)).toBe('none yet');
+    expect(signalLevel(-2)).toBe('none');
+    expect(signalLevel(1.49)).toBe('none');
+    expect(signalLevel(1.5)).toBe('some');
+    expect(signalLevel(2.99)).toBe('some');
+    expect(signalLevel(3)).toBe('strong');
   });
 });

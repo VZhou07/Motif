@@ -17,7 +17,7 @@ export interface MovementEvidence {
   /** Required checks in verified/approved setups that included this movement (each had to pass). */
   checks: { passed: number; total: number };
   everyday: { events: number; armedMs: number; windows: number };
-  /** Weakest practice attempt as a multiple of resting variation, from the frozen thresholds; null if not derivable. */
+  /** Weakest recorded attempt as a multiple of resting variation, from the frozen thresholds; null if not derivable. */
   separation: number | null;
   effort: Effort;
   tiringReports: number;
@@ -111,7 +111,7 @@ export function describeEvidence(item: MovementEvidence): string[] {
   return [
     `${item.checks.passed} of ${item.checks.total} required checks passed (each had to pass)`,
     `${plural(item.everyday.events, 'accidental activation')} in ${(item.everyday.armedMs / 1_000).toFixed(1)} s over ${plural(item.everyday.windows, 'everyday check')}`,
-    item.separation === null ? 'Practice strength: not available' : `Weakest practice attempt: ${item.separation.toFixed(1)}× your resting variation`,
+    item.separation === null ? 'Recorded strength: not available' : `Weakest recorded attempt: ${item.separation.toFixed(1)}× your resting variation`,
     `Effort: ${item.effort === 'easy' ? 'easy' : item.effort === 'effort' ? 'takes effort' : 'not rated'}${item.tiringReports ? `; reported tiring ${plural(item.tiringReports, 'time')}` : ''}`,
     `This session: ${plural(item.use.completed, 'completed hold')}, ${item.use.unfinished} unfinished`,
   ];

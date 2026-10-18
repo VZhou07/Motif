@@ -28,6 +28,17 @@ describe('stylesheet legibility', () => {
     expect(small).toEqual([]);
   });
 
+  it('keeps communication-screen text at 14 px or more and the message at 24 px or more', () => {
+    const block = css.slice(css.indexOf('/* Communication screen (UX comm)'));
+    const sizes = [...block.matchAll(/([^{}]+)\{[^}]*?font-size:\s*(\d+(?:\.\d+)?)px/g)].map((match) => [match[1]!.trim(), Number(match[2])] as const);
+    expect(sizes.length).toBeGreaterThan(10);
+    expect(sizes.filter(([, size]) => size < 14)).toEqual([]);
+    for (const selector of ['.message-text', '.message-ask']) {
+      expect(sizes.find(([name]) => name === selector)?.[1]).toBeGreaterThanOrEqual(24);
+    }
+    expect(sizes.find(([name]) => name === '.message-text.message-placeholder')?.[1]).toBeGreaterThanOrEqual(24);
+  });
+
   // Text on backgrounds only reachable after calibration (the fake camera never shows a face).
   const pairs: Array<[selector: string, background: string, where: string]> = [
     ['.message-placeholder', '#edf2e7', 'empty message in the composer'],
