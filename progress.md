@@ -7,7 +7,7 @@
 - Checks at `ce066d8`: `npx tsc --noEmit` PASS; `npx vitest run` 64 files / 869 PASS; `npm run build` PASS; `npm run test:browser` 83/83 PASS. Mutation: removing the paused guard in `onRequestsChanged` fails the 3 B1 tests.
 - Local `.env.local` renamed from `NEXT_PUBLIC_*` to `VITE_SUPABASE_URL` / `VITE_SUPABASE_PUBLISHABLE_KEY` (gitignored; no secret stored here).
 - Hosted project `axjqywgyzjkltexbnhld`: migration applied (tables and RPCs exist and deny signed-out callers); one group "GG" with 3 unpaired participants (from the user's screenshots). Auth settings still report `anonymous_users: false` at 19:53 EDT — user must save the toggle. Not yet observed: hosted pair → send → acknowledge loop, two devices, camera.
-- Independent testing review of W1: pending (w1_testing running).
+- Independent testing review (w1_testing): FAIL at `ce066d8` on coverage only (B-T1: no test for an unpaused identity change; code correct). Fixed by `8c5b1ea` (revoke and generation-only switch mid-hold, label update, stale reset). Re-check at `8c5b1ea`: **PASS**; the four previously surviving mutations are caught. Full suite 64 files / 873 PASS, tsc PASS; `npm run test:browser` 83/83 at `ce066d8` (no source change since). Open non-blocking: Root wiring has no direct test (N4); Root never disposes the controller (N3, recorded).
 - Known limits: one Auth identity per browser profile (use separate profiles/incognito); two controller announcements in one update — only the last is heard.
 
 ## STAGING BRANCH — all open PRs merged (2026-10-17)
