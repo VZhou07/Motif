@@ -10,3 +10,6 @@
 .request-acknowledged{border-color:#79a069}
 .pairing-identity{font-size:13px;color:#214c38;line-height:1.7;margin:0 0 14px}
 .pairing-error{font-size:12px;color:#803d17;background:#fff0e1;border:1px solid #d7af88;border-radius:10px;padding:10px 13px;margin:0 0 14px}
+
+.request-status-line{display:grid;gap:4px;margin:0 0 12px;padding:10px 14px;border:1px solid #d3dfcb;border-radius:12px;background:#fdfefa;font-size:14px}
+.request-status-line p{margin:0}

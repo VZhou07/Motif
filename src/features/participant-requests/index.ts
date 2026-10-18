@@ -3,3 +3,4 @@ export type { ControllerOptions, DisplayStatus, IdentityState, ParticipantReques
 export { ParticipantRequestsPanel, useParticipantRequests } from './ParticipantRequestsPanel';
 export type { ParticipantRequestsPanelProps } from './ParticipantRequestsPanel';
 export { ParticipantPairing } from './ParticipantPairing';
+export { RequestStatusLine } from './RequestStatusLine';

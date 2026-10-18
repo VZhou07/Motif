@@ -5,6 +5,7 @@ import { ScanButton, ScanHint } from './ScanBoard';
 import type { ViewProps } from './SetupViews';
 import type { ParticipantRequestController } from '../features/participant-requests/controller';
 import { ParticipantRequestsPanel } from '../features/participant-requests/ParticipantRequestsPanel';
+import { RequestStatusLine } from '../features/participant-requests/RequestStatusLine';
 
 /** Visible group tile text: the name with the count as a quiet second line. The accessible name keeps the long form. */
 function GroupTileText({ snapshot, id, fallback }: { snapshot: ViewProps['snapshot']; id: string; fallback: string }) {
@@ -87,6 +88,7 @@ export function CommunicationView({ snapshot, session, requests }: ViewProps & {
           )}
         </div>
       </section>
+      {requests && !asking && !panel && <RequestStatusLine controller={requests} />}
       {paused && panel && <div className="pause-banner">{pauseCard}</div>}
       <div className="board">
         {panel

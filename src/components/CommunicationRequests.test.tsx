@@ -8,10 +8,11 @@ import { CommunicationView } from './CommunicationView';
 /** W1 screen wiring. A stand-in client publishes snapshots (PGlite cannot load in jsdom); delivery is covered in session.requests.test.ts. */
 const PID = '00000000-0000-4000-8000-0000000000a1';
 const participant = { id: PID, group_id: '00000000-0000-4000-8000-0000000000b1', alias: 'Alex', user_id: '00000000-0000-4000-8000-0000000000c1', revoked_at: null, created_at: '2026-10-17T12:00:00Z' };
-const snapshot: CareSnapshot = { epoch: 1, connection: 'online', error: null, participants: [participant], requests: [],
+let snapshot: CareSnapshot = { epoch: 1, connection: 'online', error: null, participants: [participant], requests: [],
   access: { version: 1, role: 'participant', group: null, participant, receiver_name: 'Ward A' } };
 
-function paired() {
+function paired(rows: CareRequest[] = []) {
+  snapshot = { ...snapshot, requests: rows };
   const client = {
     get snapshot() { return snapshot; },
     watch: (listener: (s: CareSnapshot) => void) => { listener(snapshot); return () => {}; },
@@ -51,5 +52,21 @@ describe('communication screen with caregiver requests (W1)', () => {
     expect(screen.getAllByRole('group', { name: 'Requests' })).toHaveLength(1);
     act(() => { fireEvent.click(screen.getByRole('button', { name: 'Ask for water' })); });
     expect(client.sendRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows request status on the main board and while paused, and leaves it to the panel inside Ask caregiver (W2 Q4)', () => {
+    const water: CareRequest = { id: '00000000-0000-4000-8000-0000000000d1', group_id: participant.group_id, participant_id: PID, kind: 'water',
+      status: 'acknowledged', revision: 2, created_at: '2026-10-17T12:01:00Z', updated_at: '2026-10-17T12:02:00Z' };
+    const { requests, h } = paired([water]);
+    const view = render(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
+    const board = () => document.querySelector('.request-status-line');
+    expect(board()?.textContent).toBe('Water: Ward A acknowledged it.');
+    act(() => { h.session.selectTarget('pause'); });
+    view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
+    expect(board()).not.toBeNull();
+    act(() => { h.session.resume(); h.session.selectTarget('ask'); });
+    view.rerender(<CommunicationView snapshot={h.snap} session={h.session} requests={requests} />);
+    expect(board()).toBeNull();
+    expect(screen.getAllByRole('group', { name: 'Requests' })).toHaveLength(1);
   });
 });
