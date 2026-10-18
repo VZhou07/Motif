@@ -48,4 +48,38 @@ describe('database check script', () => {
     ]);
     await db.close();
   });
+  it.each([
+    ['an extra open policy', `create policy anyone on public.care_requests for select to authenticated using (true)`],
+    ['a reader policy opened up', `alter policy care_request_reader on public.care_requests using (true)`],
+    ['a dropped policy', `drop policy care_group_owner on public.care_groups`],
+  ])('catches %s', async (_name, change) => {
+    const { db, run } = await setup();
+    await db.exec(change);
+    expect((await run()).filter((row) => !row.ok).map((row) => row.check)).toEqual(['only the three read-only policies exist, for signed-in callers']);
+    await db.close();
+  });
+
+  it('catches truncate rights, private-schema access, a non-definer function and an unconfirmed group owner', async () => {
+    const { db, run } = await setup();
+    const owner = '00000000-0000-4000-8000-0000000000bb';
+    await db.query(`insert into auth.users (id) values ($1)`, [owner]); // e-mail never confirmed
+    await rpc(db, { id: owner, anonymous: false }, 'motif_create_group', ['Unconfirmed']);
+    await db.exec(`grant truncate on public.care_requests to authenticated;
+      grant usage on schema care_private to authenticated;
+      alter function public.motif_access() security invoker;`);
+    expect((await run()).filter((row) => !row.ok).map((row) => row.check)).toEqual([
+      'signed-in callers can only read, never write directly',
+      'invitations are private (no access to care_private)',
+      'all nine motif_ functions exist, run as definer with an empty search path',
+      'every care group belongs to a confirmed e-mail account',
+    ]);
+    await db.close();
+  });
+
+  it('catches a function whose search path was reset', async () => {
+    const { db, run } = await setup();
+    await db.exec(`alter function public.motif_send_request(uuid, text) reset search_path`);
+    expect((await run()).filter((row) => !row.ok).map((row) => row.check)).toEqual(['all nine motif_ functions exist, run as definer with an empty search path']);
+    await db.close();
+  });
 });

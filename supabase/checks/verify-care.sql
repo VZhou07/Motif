@@ -1,5 +1,6 @@
 -- Motif care database check. Read-only: paste into the Supabase SQL Editor and Run.
 -- Every row should say ok = true; the "data:" rows describe what is stored right now.
+-- An error such as "relation ... does not exist" means the migration was never applied.
 with
 tables as (
   select c.relname, c.relrowsecurity
@@ -7,7 +8,7 @@ tables as (
   where n.nspname = 'public' and c.relname in ('care_groups', 'participants', 'care_requests')
 ),
 funcs as (
-  select p.oid, p.proname, p.prosecdef
+  select p.oid, p.proname, p.prosecdef, p.proconfig
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'public' and p.proname in ('motif_access', 'motif_create_group', 'motif_create_participant',
     'motif_create_invite', 'motif_redeem_invite', 'motif_revoke_participant', 'motif_send_request',
@@ -19,25 +20,29 @@ checks(sort, name, ok, detail) as (
   union all
   select 2, 'row-level security is on for all three', (select count(*) = 3 and bool_and(relrowsecurity) from tables), null
   union all
-  select 3, 'exactly the three reader policies exist',
-    (select count(*) = 3 from pg_policies where schemaname = 'public'
-      and policyname in ('care_group_owner', 'care_participant_reader', 'care_request_reader')),
+  select 3, 'only the three read-only policies exist, for signed-in callers',
+    (select count(*) = 3
+      and count(*) filter (where policyname in ('care_group_owner', 'care_participant_reader', 'care_request_reader')) = 3
+      and bool_and(cmd = 'SELECT' and roles = '{authenticated}' and permissive = 'PERMISSIVE')
+      and bool_and(qual is not null and qual not in ('true', '(true)'))
+     from pg_policies where schemaname = 'public' and tablename in ('care_groups', 'participants', 'care_requests')),
     (select string_agg(policyname, ', ' order by policyname) from pg_policies where schemaname = 'public'
       and tablename in ('care_groups', 'participants', 'care_requests'))
   union all
   select 4, 'signed-out callers (anon) cannot read the tables',
-    (select bool_and(not has_table_privilege('anon', format('public.%I', relname), 'select')) from tables), null
+    (select bool_and(not has_table_privilege('anon', format('public.%I', relname), 'select, insert, update, delete, truncate, references, trigger')) from tables), null
   union all
   select 5, 'signed-in callers can only read, never write directly',
     (select bool_and(has_table_privilege('authenticated', format('public.%I', relname), 'select')
       and not has_table_privilege('authenticated', format('public.%I', relname), 'insert')
       and not has_table_privilege('authenticated', format('public.%I', relname), 'update')
-      and not has_table_privilege('authenticated', format('public.%I', relname), 'delete')) from tables), null
+      and not has_table_privilege('authenticated', format('public.%I', relname), 'delete, truncate, references, trigger')) from tables), null
   union all
   select 6, 'invitations are private (no access to care_private)',
     not has_schema_privilege('anon', 'care_private', 'usage') and not has_schema_privilege('authenticated', 'care_private', 'usage'), null
   union all
-  select 7, 'all nine motif_ functions exist and run as definer', (select count(*) = 9 and bool_and(prosecdef) from funcs),
+  select 7, 'all nine motif_ functions exist, run as definer with an empty search path',
+    (select count(*) = 9 and bool_and(prosecdef and coalesce(proconfig, '{}') @> array['search_path=""']) from funcs),
     (select count(*)::text || ' found' from funcs)
   union all
   select 8, 'functions: signed-in may call, signed-out may not',

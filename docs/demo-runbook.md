@@ -10,14 +10,14 @@ The steps to show: a person uses a comfortable movement to ask for water, a care
    VITE_SUPABASE_URL=https://axjqywgyzjkltexbnhld.supabase.co
    VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_…
    ```
-3. **Supabase:** Authentication → Sign In / Providers → **Allow anonymous sign-ins** on, then **Save changes** at the bottom. Each caregiver account is listed under Authentication → Users with a confirmed e-mail.
+3. **Supabase:** Authentication → Sign In / Providers → **Allow anonymous sign-ins** on, then **Save changes** at the bottom. This is required: each person's device signs in anonymously and the invitation code ties it to that one person; patients never make accounts. Each caregiver account is listed under Authentication → Users with a confirmed e-mail.
 4. **Check the service:** `npm run check:care`. Every line must say PASS.
-5. **Check the database:** paste [supabase/checks/verify-care.sql](../supabase/checks/verify-care.sql) into the Supabase SQL Editor and Run. Every row must say `ok = true`. The `data:` rows show how many caregivers, people and requests exist.
+5. **Check the database:** paste [supabase/checks/verify-care.sql](../supabase/checks/verify-care.sql) into the Supabase SQL Editor and Run. Every row must say `ok = true`. The `data:` rows show how many caregivers, people and requests exist. An error such as "relation … does not exist" means the migration in `supabase/migrations/` was never run.
 6. **Tidy the people list:** on the caregiver dashboard, **Remove** test people you do not want on screen. They move to "Removed people"; that cannot be undone, so make a new person instead of reusing a removed one.
 
 ## Run it
 
-Use **two separate browsers or windows that do not share sign-in** (for example a normal window and an incognito window, or two laptops). One browser profile holds one account: pairing the person in the caregiver's window signs the caregiver out.
+Use **two browsers or profiles that do not share sign-in** (for example a normal window and an incognito window, or two laptops). All tabs in one browser profile share one account. Pairing in a window that holds the caregiver is refused ("Signed in as a caregiver"). The opposite is the real trap: signing in as the caregiver in a window that holds a paired person replaces that device's pairing for good, and the person then needs a new invitation.
 
 1. Start Motif: `npm run dev`, then open `http://127.0.0.1:5173/`.
 2. **Caregiver window:** open `http://127.0.0.1:5173/#/caregiver`, sign in. Under People, **Add person** (for example "Alex"), then **Create invitation**. The code works once and expires in 10 minutes.
@@ -25,7 +25,7 @@ Use **two separate browsers or windows that do not share sign-in** (for example 
 4. **Person window:** **Get started**, rest for the short check, pick a movement (for example tilting the head), **Approve and practice**, then finish practice. The main list now shows **Ask caregiver** after Pause.
 5. Select **Ask caregiver**, then **Ask for water**. The person's screen says it is sending, then sent.
 6. **Caregiver window:** the request appears within about 2 seconds; the tab title shows `(1) Caregiver dashboard · Motif`. Press **Acknowledge** — the person's screen says it was acknowledged — then **Mark complete**.
-7. Optional: pair a second person in a third window and send **Ask for general help** to show two people kept apart.
+7. Optional: pair a second person in a **different browser or profile** (a second incognito window shares the first one's sign-in) and send **Ask for general help** to show two people kept apart.
 
 Requests can also be sent with a helper's mouse: the request buttons under the message work like the scanned ones (not while paused).
 
@@ -39,8 +39,8 @@ Requests can also be sent with a helper's mouse: the request buttons under the m
 | Pairing: "Signed in as a caregiver" | This window holds the caregiver account. Use another browser/incognito for the person. |
 | Sign-in: "That e-mail and password do not match" / "not confirmed yet" | Check the account under Authentication → Users. |
 | No **Ask caregiver** tile | The device is not paired, or you are in Practice. Finish practice; check the pairing card. |
-| Request stays "Sending — not confirmed" | No connection to the service. Select it again to retry; the same request is reused, never duplicated. |
+| Request card says "Not confirmed — it may not have reached your caregiver" | The service could not be reached. Press **Retry** or select it again; the same request is reused, never duplicated. |
 
 ## After the demo
 
-On the caregiver dashboard, **Clear everything** deletes the requests and invitations and unpairs every device, keeping the group. The data stays in Supabase until then; nothing is deleted automatically. Video and movement data never leave the person's computer.
+On the caregiver dashboard, **Clear everything** deletes every request (open and finished) and every invitation, and unpairs every device. The group, the removed people's names and the device sign-ins stay in Supabase (delete anonymous users under Authentication → Users if wanted). Nothing is deleted automatically. Video and movement data never leave the person's computer.
