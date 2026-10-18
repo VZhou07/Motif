@@ -15,7 +15,7 @@ async function localEnv() {
   try {
     const text = await readFile(path.join(root, '.env.local'), 'utf8');
     return Object.fromEntries(text.split(/\r?\n/).filter((line) => /^[A-Z_]+=/.test(line))
-      .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1).trim()]));
+      .map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1).trim().replace(/^(['"])(.*)\1$/, '$2')]));
   } catch { return {}; }
 }
 
@@ -84,6 +84,7 @@ for (const table of ['care_groups', 'participants', 'care_requests']) {
 }
 const access = await call('/rest/v1/rpc/motif_access', { method: 'POST', body: '{}' });
 if (access.body?.code === '42501') pass('database functions exist and refuse signed-out callers');
+else if (access.status === 200) fail('database functions refuse signed-out callers', 'motif_access answered without sign-in; re-check the migration grants');
 else fail('database functions exist', 'run supabase/migrations/202610170001_care_foundation.sql once in the SQL Editor');
 
 console.log(`\nRows: https://supabase.com/dashboard/project/${new URL(origin).hostname.split('.')[0]}/editor`);

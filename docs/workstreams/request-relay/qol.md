@@ -1,6 +1,6 @@
 # W2 — Care setup quality of life, revision 1
 
-Status: design for independent reasoning review. Coordinator acting as Agent 3 (offline), at the user's request ("make sure it's working and add any quality of life stuff", 2026-10-17). Branch `feature/care-qol` from `main` `2619391`. Never push without the user's OK.
+Status: revision 1 APPROVED by w2_review before code; implemented in `ae82621`, `c171bcd`, `3c9eaa9`; w2_testing PASS at `3c9eaa9` (non-blocking follow-ups in the next commit). Deviations from revision 1, from review suggestions: `over_request_rate_limit` also maps to `rate_limited`; the `email_not_confirmed` text speaks to the caregiver (open the confirmation e-mail, or ask whoever set up Motif); `check:care` strips quotes around `.env.local` values and reports an RPC open to signed-out callers separately. Coordinator acting as Agent 3 (offline), at the user's request ("make sure it's working and add any quality of life stuff", 2026-10-17). Branch `feature/care-qol` from `main` `2619391`. Never push without the user's OK.
 
 ## Evidence that motivated it
 

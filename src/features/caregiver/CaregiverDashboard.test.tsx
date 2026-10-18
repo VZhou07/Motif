@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { CareError, type CareSnapshot } from '../../care';
 import { CaregiverDashboard } from './CaregiverDashboard';
+import { STALE_AFTER_MS } from './model';
 import { FakeCareClient, fakeSound, manualClock } from './client.test-support';
 import { OTHER_GROUP_ID, caregiverAccess, group, iso, person, request, signedOut, snapshot } from './fixtures.test-support';
 
@@ -407,5 +408,19 @@ describe('tab title (W2 Q2)', () => {
     expect(document.title).toBe('Caregiver dashboard · Motif');
     unmount();
     expect(document.title).toBe('Motif — Your movement, your voice');
+  });
+
+  it('drops the count while offline or out of date, and brings it back with fresh data', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: false, toFake: ['setInterval', 'clearInterval'] });
+    const alex = person('Alex');
+    const live = snapshot({ participants: [alex], requests: [request(alex)] });
+    const { client, clock } = await mount(live);
+    expect(document.title).toBe('(1) Caregiver dashboard · Motif');
+    await emit(client, signedOut({ epoch: 1, connection: 'offline', error: 'x' }));
+    expect(document.title).toBe('Caregiver dashboard · Motif');
+    await emit(client, live);
+    expect(document.title).toBe('(1) Caregiver dashboard · Motif');
+    await act(async () => { clock.advance(STALE_AFTER_MS + 1_000); vi.advanceTimersByTime(1_000); });
+    expect(document.title).toBe('Caregiver dashboard · Motif');
   });
 });
