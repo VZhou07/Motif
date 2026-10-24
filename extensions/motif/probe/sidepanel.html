@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self' blob: data:; base-uri 'none'" />
+    <title>Motif probe harness (NOT the real session)</title>
+  </head>
+  <body>
+    <h1>Motif probe harness</h1>
+    <p><strong>Not the real MotifSession.</strong> A stand-in scan list used only by the machine probe.</p>
+    <p id="notice" role="alert" hidden></p>
+    <ul id="tiles"></ul>
+    <p id="identity"></p>
+    <p id="message" role="status"></p>
+    <input id="site" aria-label="Site to allow" />
+    <button id="allow" type="button">Allow this site</button>
+    <script type="module" src="./src/harness.ts"></script>
+  </body>
+</html>

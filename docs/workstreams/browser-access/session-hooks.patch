@@ -1,0 +1,505 @@
+diff --git a/src/app/session.browser.test.ts b/src/app/session.browser.test.ts
+new file mode 100644
+index 0000000..f6a6430
+--- /dev/null
++++ b/src/app/session.browser.test.ts
+@@ -0,0 +1,256 @@
++import { describe, expect, it } from 'vitest';
++import type { BrowserRequest } from './types';
++import { BROW, CHEEK, Harness, MOUTH, PUCKER, REST, type Values } from './session.test-support';
++import type { MovementChoice } from './types';
++
++function ready() {
++  const h = new Harness();
++  h.setUpToCommunication();
++  const requests: BrowserRequest[] = [];
++  h.session.setBrowserSink((request) => requests.push(request));
++  return { h, requests };
++}
++const ids = (h: Harness) => h.snap.scan?.targets.map((target) => target.id);
++
++describe('browser companion hooks', () => {
++  it('adds nothing to communication until a controller is attached', () => {
++    const h = new Harness();
++    h.setUpToCommunication();
++    expect(ids(h)).not.toContain('browse');
++    expect(h.snap.scope).toBe('communication');
++    expect(h.snap.browserAvailable).toBe(false);
++  });
++
++  it('offers Browse, binds only through the controller, and builds the five-tile list without speed controls', () => {
++    const { h, requests } = ready();
++    expect(ids(h)).toContain('browse');
++    h.selectByGesture('browse');
++    expect(requests).toEqual(['browse']);
++    expect(h.snap.scope).toBe('communication');
++    expect(h.session.enterBrowserScope()).toBe(true);
++    expect(ids(h)).toEqual(['browser:scroll-down', 'browser:scroll-up', 'browser:back', 'pause', 'browser:return']);
++    expect(h.snap.scan?.targets.some((target) => target.id === 'slower' || target.id === 'faster')).toBe(false);
++  });
++
++  it('one hold is one request, and Return and Pause are reachable with a select-only mapping', () => {
++    const { h, requests } = ready();
++    expect(h.session.enterBrowserScope()).toBe(true);
++    h.selectByGesture('browser:scroll-down', undefined, 60_000, 4_000);
++    expect(requests).toEqual(['scroll-down']);
++    const before = h.session.getInputEpoch();
++    h.selectByGesture('pause');
++    expect(h.snap.scan?.paused).toBe(true);
++    expect(h.snap.scope).toBe('browser');
++    expect(h.session.getInputEpoch()).toBeGreaterThan(before);
++    h.selectByGesture('pause'); // the same movement resumes after neutral
++    expect(h.snap.scan?.paused).toBe(false);
++    h.selectByGesture('browser:return');
++    expect(h.snap.scope).toBe('communication');
++    expect(ids(h)).toContain('phrase:0');
++    expect(requests).toEqual(['scroll-down']);
++  });
++
++  it('every non-tracked frame, hidden change and rebuild changes the epoch and calls listeners', () => {
++    const { h } = ready();
++    let calls = 0;
++    h.session.onFailClosed(() => { calls += 1; });
++    for (const tracking of ['invalid', 'stale', 'missing', 'multiple'] as const) {
++      const epoch = h.session.getInputEpoch();
++      h.step(REST, tracking);
++      expect(h.session.getInputEpoch()).toBeGreaterThan(epoch);
++    }
++    const hidden = h.session.getInputEpoch();
++    h.session.setHidden(true, h.now);
++    expect(h.session.getInputEpoch()).toBeGreaterThan(hidden);
++    expect(calls).toBeGreaterThan(3);
++  });
++
++  it('detaching the controller while browsing returns to communication; listener errors are contained', () => {
++    const { h } = ready();
++    h.session.onFailClosed(() => { throw new Error('consumer bug'); });
++    expect(h.session.enterBrowserScope()).toBe(true);
++    h.session.setBrowserSink(null);
++    expect(h.snap.scope).toBe('communication');
++    expect(ids(h)).not.toContain('browse');
++  });
++
++  it('refuses browser scope when hidden, paused, or outside communication', () => {
++    const { h } = ready();
++    h.session.setHidden(true, h.now);
++    expect(h.session.enterBrowserScope()).toBe(false);
++    expect(h.session.returnToCommunication()).toBe(true);
++  });
++
++  it('works with the assisted driver: Pause and Return are reachable and each press is one request', () => {
++    const h = new Harness();
++    h.session.useAssisted();
++    const requests: BrowserRequest[] = [];
++    h.session.setBrowserSink((request) => requests.push(request));
++    expect(h.session.enterBrowserScope()).toBe(true);
++    const reach = (id: string) => {
++      for (let guard = 0; h.highlightedId() !== id; guard += 1) { if (guard > 400) throw new Error(`never highlighted ${id}`); h.step(REST); }
++      h.session.switchPress(h.now);
++    };
++    reach('browser:scroll-up');
++    expect(requests).toEqual(['scroll-up']);
++    reach('pause');
++    expect(h.snap.scan?.paused).toBe(true);
++    expect(h.snap.scope).toBe('browser');
++    h.session.switchPress(h.now); // resume
++    expect(h.snap.scan?.paused).toBe(false);
++    reach('browser:return');
++    expect(h.snap.scope).toBe('communication');
++    expect(requests).toEqual(['scroll-up']);
++  });
++
++  describe.each(['gesture', 'assisted'] as const)('Pause survives scope changes (%s driver)', (driver) => {
++    function pausedInBrowser() {
++      const h = new Harness();
++      if (driver === 'gesture') h.setUpToCommunication(); else h.session.useAssisted();
++      const requests: BrowserRequest[] = [];
++      const sink = (request: BrowserRequest) => { requests.push(request); };
++      h.session.setBrowserSink(sink);
++      expect(h.session.enterBrowserScope()).toBe(true);
++      const reach = (id: string) => {
++        if (driver === 'gesture') { h.selectByGesture(id); return; }
++        for (let guard = 0; h.highlightedId() !== id; guard += 1) { if (guard > 400) throw new Error(`never highlighted ${id}`); h.step(REST); }
++        h.session.switchPress(h.now);
++      };
++      reach('pause');
++      expect(h.snap.scan?.paused).toBe(true);
++      return { h, sink, requests };
++    }
++
++    it('pause then Return', () => {
++      const { h } = pausedInBrowser();
++      expect(h.session.returnToCommunication()).toBe(true);
++      expect(h.snap.scope).toBe('communication');
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('pause then tracking loss and automatic return', () => {
++      const { h } = pausedInBrowser();
++      h.step(REST, 'invalid');
++      expect(h.session.returnToCommunication()).toBe(true);
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('pause then attach and detach', () => {
++      const { h, sink } = pausedInBrowser();
++      h.session.setBrowserSink(sink); // same identity: no-op, no rebuild
++      expect(h.snap.scan?.paused).toBe(true);
++      expect(h.snap.scope).toBe('browser');
++      h.session.setBrowserSink(() => {});
++      expect(h.snap.scan?.paused).toBe(true);
++      h.session.setBrowserSink(null);
++      expect(h.snap.scope).toBe('communication');
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('pause then idle return keeps Pause', () => {
++      const { h } = pausedInBrowser();
++      h.stall(200_000);
++      expect(h.session.returnToCommunication()).toBe(true);
++      expect(h.snap.scan?.paused).toBe(true);
++    });
++
++    it('an unchanged sink is a no-op that does not rebuild the scanner or change the epoch', () => {
++      const { h, sink } = pausedInBrowser();
++      const epoch = h.session.getInputEpoch();
++      h.session.setBrowserSink(sink);
++      expect(h.session.getInputEpoch()).toBe(epoch);
++    });
++  });
++});
++
++const OPEN_MOUTH = { feature: 'jawOpen', direction: 1, label: 'Open mouth' } as const;
++const MOVES: Record<string, Values> = { 'Raise left outer eyebrow': BROW, 'Open mouth': MOUTH, 'Pucker lips': PUCKER, 'Puff cheeks': CHEEK };
++const perform = (label: string | null): Values => MOVES[label ?? ''] ?? REST;
++function addAndApprove(h: Harness, choice: MovementChoice): void {
++  h.addMovement(choice, perform);
++  h.selectByGesture('comfortable');
++  h.selectByGesture('map:0');
++  h.selectByGesture('approve-mapping');
++}
++/** Brow selects, mouth moves next (step scanning), in communication. */
++function twoGestureStep(): Harness {
++  const h = new Harness();
++  h.setUpToCommunication();
++  addAndApprove(h, OPEN_MOUTH);
++  h.stepTo('finish-practice');
++  return h;
++}
++
++describe('scope-aware rebuilds and epoch bumps', () => {
++  it('the step-idle fallback to automatic scanning keeps the browser scope and its five tiles', () => {
++    const h = twoGestureStep();
++    h.session.setBrowserSink(() => {});
++    h.stepTo('browse');
++    expect(h.session.enterBrowserScope()).toBe(true);
++    expect(h.snap.scanMode).toBe('step');
++    h.run(61_000);
++    expect(h.snap.stepFallback).toBe(true);
++    expect(h.snap.scope).toBe('browser');
++    expect(ids(h)).toEqual(['browser:scroll-down', 'browser:scroll-up', 'browser:back', 'pause', 'browser:return']);
++  });
++
++  it('leaving the communication stage resets the scope', () => {
++    const { h } = ready();
++    expect(h.session.enterBrowserScope()).toBe(true);
++    (h.session as unknown as { enterPractice(): void }).enterPractice();
++    h.session.refresh();
++    expect(h.snap.stage).toBe('practice');
++    expect(h.snap.scope).toBe('communication');
++    expect(ids(h)).not.toContain('browser:return');
++  });
++
++  it('useAssisted / useGesture rebuilds start in the communication scope', () => {
++    const { h } = ready();
++    expect(h.session.enterBrowserScope()).toBe(true);
++    h.session.useAssisted();
++    expect(h.snap.scope).toBe('communication');
++    expect(ids(h)).toContain('browse');
++  });
++
++  it('every kind of change bumps the input epoch: resume, hidden on and off, scanner rebuild, cancelled hold', () => {
++    const { h } = ready();
++    let epoch = h.session.getInputEpoch();
++    const bumped = (label: string) => { const now = h.session.getInputEpoch(); expect(now, label).toBeGreaterThan(epoch); epoch = now; };
++    h.session.enterBrowserScope(); bumped('enter browser scope');
++    h.session.returnToCommunication(); bumped('return');
++    h.session.setBrowserSink(() => {}); bumped('new sink rebuilds the scanner');
++    h.session.setHidden(true, h.now); bumped('hidden on');
++    h.session.setHidden(false, h.now); bumped('hidden off');
++    h.selectByGesture('pause'); bumped('pause');
++    h.selectByGesture('pause'); bumped('resume');
++    h.step(REST); // let the recognizer settle
++    epoch = h.session.getInputEpoch();
++    h.run(150, BROW); // too short to emit: started, then cancelled
++    h.run(600);
++    bumped('cancelled hold');
++  });
++
++  it('a completed selection does not bump the epoch, so the command it issues stays current', () => {
++    const { h } = ready();
++    h.run(600);
++    const before = h.session.getInputEpoch();
++    h.selectByGesture('phrase:0');
++    expect(h.session.getInputEpoch()).toBe(before);
++  });
++
++  it('browser and Browse ids are rejected in the wrong scope', () => {
++    const { h, requests } = ready();
++    const activate = (id: string) => (h.session as unknown as { activate(id: string, now: number): void }).activate(id, h.now);
++    activate('browser:scroll-down');
++    activate('browser:back');
++    expect(requests).toEqual([]); // communication scope: only Browse is a valid browser id
++    expect(h.session.enterBrowserScope()).toBe(true);
++    activate('browse');
++    expect(requests).toEqual([]);
++    h.session.selectTarget('request:water'); // not a tile of any list
++    h.session.selectTarget('browse'); // not in the browser list
++    expect(requests).toEqual([]);
++    h.session.selectTarget('browser:scroll-down');
++    expect(requests).toEqual(['scroll-down']);
++  });
++});
+diff --git a/src/app/session.ts b/src/app/session.ts
+index 22f10da..7f77c85 100644
+--- a/src/app/session.ts
++++ b/src/app/session.ts
+@@ -12,7 +12,7 @@ import { movementEvidence, recommendMapping, type Effort, type MovementNotes, ty
+ import { AUTO_PROFILE_NAME, buildProfile, createMemoryProfileStore, modelKey, VERIFICATION_POLICY_VERSION, type ProfileList, type ProfileStore, type StoredChecks, type StoredProfile, type StoreResult, sameName } from './profiles';
+ import {
+   STARTER_PHRASES, type CameraStatus, type CapturePrompt, type CaptureStatus, type CycleEvidence, type Failure, type FailureKind,
+-  type InputMode, type MovementChoice, type ProfilesView, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
++  type InputMode, type BrowserRequest, type MovementChoice, type ProfilesView, type ScanScope, type ScanTarget, type SessionSnapshot, type SpeechPort, type Stage,
+ } from './types';
+ 
+ export const SESSION_LIMITS = {
+@@ -58,6 +58,7 @@ const CONTROL_LABELS: Record<string, string> = {
+   practice: 'Practice', recalibrate: 'Recalibrate', 'finish-practice': 'Finish practice',
+   'setup-gesture': 'Set up a movement', 'use-gesture': 'Use my movement',
+   'change-controls': 'Change controls', 'add-movement': 'Add a movement', tiring: 'A movement is tiring',
++  browse: 'Browse a web page', 'browser:scroll-down': 'Scroll down', 'browser:scroll-up': 'Scroll up', 'browser:back': 'Back', 'browser:return': 'Return to messages',
+ };
+ 
+ /** R14: a check that passed less than this long ago on this page is not repeated when the same profile is restored. */
+@@ -167,6 +168,12 @@ export class MotifSession {
+   private scanDriver: 'gesture' | 'assisted' | 'none' = 'none';
+   private intervalMs: number = SESSION_LIMITS.scanDefaultMs;
+ 
++  // Browser companion hooks. Additive: with no sink attached none of this changes behavior.
++  private scope: ScanScope = 'communication';
++  private browserSink: ((request: BrowserRequest) => void) | null = null;
++  private inputEpoch = 0;
++  private readonly failClosedListeners = new Set<() => void>();
++
+   constructor(options: SessionOptions = {}) {
+     this.speech = options.speech ?? silentSpeech;
+     this.clock = options.clock ?? (() => performance.now());
+@@ -184,6 +191,52 @@ export class MotifSession {
+ 
+   readonly getSnapshot = (): SessionSnapshot => this.snap;
+ 
++  // ── Browser companion hooks ─────────────────────────────────────────────
++
++  /** Counter that changes whenever input must be treated as new: lost/stale/ambiguous frames, hidden changes, pause/resume, any scan rebuild. */
++  getInputEpoch(): number { return this.inputEpoch; }
++
++  /** Called synchronously after every input-epoch change. Listener errors never affect the session. */
++  onFailClosed(listener: () => void): () => void {
++    this.failClosedListeners.add(listener);
++    return () => { this.failClosedListeners.delete(listener); };
++  }
++
++  private bumpInput(): void {
++    this.inputEpoch += 1;
++    for (const listener of this.failClosedListeners) { try { listener(); } catch { /* A consumer cannot break fail-closed handling. */ } }
++  }
++
++  /** Attach or detach the browser controller. Detaching while browsing returns to communication. */
++  setBrowserSink(sink: ((request: BrowserRequest) => void) | null): void {
++    if (this.browserSink === sink) return;
++    this.browserSink = sink;
++    if (!sink && this.scope === 'browser') this.scope = 'communication';
++    if (this.stage === 'communication') this.rebuildRouted(true);
++    this.publish();
++  }
++
++  /** Called by the controller after it bound a supported page. False leaves everything unchanged. */
++  enterBrowserScope(): boolean {
++    if (!this.browserSink || this.stage !== 'communication' || this.scope !== 'communication' || this.hidden || !this.scanner || this.scanner.snapshot.paused) return false;
++    this.scope = 'browser';
++    this.rebuildRouted(true);
++    this.announce('Browser controls. Return to messages is the last item.');
++    this.publish();
++    return true;
++  }
++
++  /** Idempotent: true when the communication list is (now) active. */
++  returnToCommunication(): boolean {
++    if (this.stage !== 'communication') return false;
++    if (this.scope === 'communication') return true;
++    this.scope = 'communication';
++    this.rebuildRouted(true);
++    this.announce('Back to your messages.');
++    this.publish();
++    return true;
++  }
++
+   /** Republish after an external status change (for example, voices finished loading). */
+   refresh(): void { this.publish(); }
+ 
+@@ -257,6 +310,7 @@ export class MotifSession {
+   setHidden(hidden: boolean, nowMs: number = this.clock()): void {
+     if (this.hidden === hidden) return;
+     this.hidden = hidden;
++    this.bumpInput();
+     if (hidden) { this.cues?.stop(); this.failClosed(nowMs, 'stale'); }
+     if (this.scanner && this.scanDriver === 'assisted') this.scanner.setSuspended(hidden, nowMs);
+     this.publish();
+@@ -282,6 +336,7 @@ export class MotifSession {
+   }
+ 
+   private route(frame: FeatureFrame, nowMs: number): void {
++    if (frame.tracking !== 'tracked') this.bumpInput();
+     switch (this.stage) {
+       case 'baseline': this.captureBaseline(frame); break;
+       case 'training':
+@@ -442,6 +497,7 @@ export class MotifSession {
+     this.scanner = null;
+     this.scanTargets = [];
+     this.scanDriver = 'none';
++    this.scope = 'communication';
+     this.baselineRecorder = null;
+     this.trialRecorder = null;
+     this.negativeMonitor = null;
+@@ -457,6 +513,7 @@ export class MotifSession {
+   }
+ 
+   private startScanner(targets: ScanTarget[], driver: 'gesture' | 'assisted', models: readonly GestureModel[]): void {
++    this.bumpInput();
+     const nowMs = this.clock();
+     this.scanTargets = targets;
+     this.scanner = new ScanController(targets.map((target) => target.id), this.intervalMs, nowMs);
+@@ -1243,18 +1300,40 @@ export class MotifSession {
+     this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+   }
+ 
+-  private enterCommunication(): void {
++  private routedDriver(): 'gesture' | 'assisted' { return this.inputMode === 'assisted' ? 'assisted' : 'gesture'; }
++
++  /** Entering communication always starts in the communication scope unless a rebuild asks to keep the current one. */
++  private enterCommunication(keepScope = false): void {
++    const scope = keepScope ? this.scope : 'communication';
+     this.setStage('communication');
++    this.scope = scope;
++    this.rebuildRouted();
++  }
++
++  /** The single path that builds the communication-stage scanner for the active scope. */
++  private rebuildRouted(keepPause = false): void {
++    // A scope switch or sink attach/detach must not silently clear Pause (a new scanner starts unpaused).
++    const paused = keepPause && this.scanner?.snapshot.paused === true;
++    this.startScanner(this.routedTargets(), this.routedDriver(), this.approvedModels);
++    if (paused) this.scanner?.setPaused(true, this.clock());
++  }
++
++  private routedTargets(): ScanTarget[] {
++    if (this.scope === 'browser') {
++      // Five tiles, no speed controls. Pause is fourth and Return to messages is last: both are reachable within one scan cycle.
++      return ['browser:scroll-down', 'browser:scroll-up', 'browser:back', 'pause', 'browser:return']
++        .map((id) => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' as const }));
++    }
+     const speed = this.inputMode === 'assisted' || this.scanMode() === 'auto' ? ['slower', 'faster'] : [];
++    const browse = this.browserSink ? ['browse'] : [];
+     const controls = this.inputMode === 'assisted'
+-      ? ['speak', 'clear', 'pause', ...speed, 'practice', this.hasApproved ? 'use-gesture' : 'setup-gesture']
+-      : ['speak', 'clear', 'pause', ...speed, 'practice', 'change-controls', ...(this.approvedModels.length > 1 ? ['tiring'] : []),
++      ? ['speak', 'clear', 'pause', ...browse, ...speed, 'practice', this.hasApproved ? 'use-gesture' : 'setup-gesture']
++      : ['speak', 'clear', 'pause', ...browse, ...speed, 'practice', 'change-controls', ...(this.approvedModels.length > 1 ? ['tiring'] : []),
+         ...(this.approvedModels.length < MAX_GESTURES ? ['add-movement'] : []), 'recalibrate'];
+-    const targets: ScanTarget[] = [
++    return [
+       ...this.phrases.map((label, index) => ({ id: `phrase:${index}`, label, kind: 'phrase' as const })),
+       ...controls.map((id) => ({ id, label: CONTROL_LABELS[id]!, kind: 'control' as const })),
+     ];
+-    this.startScanner(targets, this.inputMode === 'assisted' ? 'assisted' : 'gesture', this.approvedModels);
+   }
+ 
+   private isRoutedStage(): boolean { return this.stage === 'communication' || this.stage === 'practice'; }
+@@ -1277,6 +1356,7 @@ export class MotifSession {
+     if (this.lastScanFrameTimestamp !== undefined && !scanner.snapshot.paused) this.idleValidMs += frame.timestampMs - this.lastScanFrameTimestamp;
+     this.lastScanFrameTimestamp = frame.timestampMs;
+     const update = this.runtime.step(frame, nowMs);
++    if (update.cancelled) this.bumpInput();
+     if (this.isRoutedStage()) this.countUse(update.event?.gestureId, update.cancelCause === 'released' || update.cancelCause === 'band' ? update.cancelledId : undefined);
+     // Setup scanners: any verified movement selects. Communication: route by the approved mapping (R6 B1).
+     const actionOf = (id: string) => (this.isRoutedStage() ? this.mapping?.assignments[id] : 'select');
+@@ -1310,17 +1390,19 @@ export class MotifSession {
+   /** R6 B2: step mode with no movement for a minute of valid tracking becomes automatic scanning. */
+   private fallBackToAutomatic(): void {
+     this.stepFallback = true;
+-    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication();
++    if (this.stage === 'practice') this.enterPractice(); else this.enterCommunication(true);
+     this.announce('No movement for a minute, so scanning is now automatic. Your select movement still selects; helpers can use the buttons.');
+   }
+ 
+   private pauseScan(nowMs: number): void {
++    this.bumpInput();
+     this.idleValidMs = 0;
+     this.scanner?.setPaused(true, nowMs);
+     this.announce(this.inputMode === 'assisted' ? 'Paused. Press Space to resume.' : 'Paused. Rest, then use your select or pause movement to resume.');
+   }
+ 
+   private resumeScan(nowMs: number): void {
++    this.bumpInput();
+     this.idleValidMs = 0;
+     this.scanner?.setPaused(false, nowMs);
+     this.announce('Resumed.');
+@@ -1328,6 +1410,14 @@ export class MotifSession {
+ 
+   private activate(id: string, nowMs: number): void {
+     if (Object.hasOwn(DECISION_LABELS, id) || id.startsWith('map:') || id.startsWith('tiring:') || id.startsWith('discovered:')) { this.chooseSetupTarget(id); return; }
++    if (this.stage === 'communication' && this.browserSink) {
++      if (this.scope === 'browser' && id === 'browser:return') { this.returnToCommunication(); return; }
++      if (this.scope === 'browser' && (id === 'browser:scroll-up' || id === 'browser:scroll-down' || id === 'browser:back')) {
++        this.browserSink(id.slice('browser:'.length) as BrowserRequest);
++        return;
++      }
++      if (this.scope === 'communication' && id === 'browse') { this.browserSink('browse'); return; }
++    }
+     const phrase = this.phraseFor(id);
+     if (this.stage === 'practice') {
+       if (id === 'finish-practice') { this.enterCommunication(); this.announce('Practice finished. Your selections now build a message.'); return; }
+@@ -1467,6 +1557,7 @@ export class MotifSession {
+       failure: this.failure, decisions: this.setupTargets(),
+       scan: scanner ? { targets: this.scanTargets, index: scanner.index, latched: scanner.latchedTarget ?? null, paused: scanner.paused,
+         suspended: scanner.suspended, intervalMs: scanner.intervalMs, driver: this.scanDriver } : null,
++      scope: this.scope, browserAvailable: this.browserSink !== null,
+       runtime: runtime ? { phase: runtime.phase, armed: runtime.armed, neutral: runtime.neutral } : null,
+       phrases: [...this.phrases], message: [...this.message], lastSpoken: this.lastSpoken, speech: this.speech.status(),
+       spokenPrompts: this.spokenPrompts, practice: { ...this.practice }, announcement: this.announcement,
+diff --git a/src/app/types.ts b/src/app/types.ts
+index 135b0e3..b217c89 100644
+--- a/src/app/types.ts
++++ b/src/app/types.ts
+@@ -68,6 +68,10 @@ export type FailureKind = 'baseline' | 'training' | 'verification' | 'negative'
+ export interface Failure { kind: FailureKind; title: string; reasons: string[] }
+ 
+ export interface ScanTarget { id: string; label: string; kind: 'phrase' | 'control' | 'decision' }
++/** Browser companion (feature/browser-access): which scan list is active in the communication stage. */
++export type ScanScope = 'communication' | 'browser';
++/** What a selected browser tile asks the attached browser controller to do. `browse` asks it to bind a page first. */
++export type BrowserRequest = 'browse' | 'scroll-up' | 'scroll-down' | 'back';
+ export interface ScanView {
+   targets: ScanTarget[];
+   index: number;
+@@ -117,6 +121,10 @@ export interface SessionSnapshot {
+   /** Setup decisions currently offered; each is both scanned (when a model exists) and a button. */
+   decisions: ScanTarget[];
+   scan: ScanView | null;
++  /** Active scan list; `browser` only after the attached controller bound a supported page. */
++  scope: ScanScope;
++  /** True when a browser controller is attached, which adds the Browse tile to communication. */
++  browserAvailable: boolean;
+   runtime: { phase: RuntimePhase; armed: boolean; neutral: boolean } | null;
+   phrases: string[];
+   message: string[];
