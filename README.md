@@ -1,6 +1,6 @@
 # Motif
 
-## [Devpost](https://devpost.com/software/motif-wcmv8y)
+**[Devpost](https://devpost.com/software/motif-wcmv8y)**
 
 Motif is a browser app that lets a person communicate with movements they can comfortably repeat: an eyebrow raise, opening the mouth, a small head turn, or anything else the camera can measure. It learns each movement from that person's own rest and practice, checks it with separate attempts and an everyday-activity check, and only then lets it pick phrases, build a message and speak it.
 
